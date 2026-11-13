@@ -34,11 +34,32 @@ try{var _fs=+localStorage.getItem("ml_fs");if(_fs>=88&&_fs<=125&&_fs!==100)docum
   .bike-stage{position:relative;overflow:hidden;border-radius:1.25rem;height:260px;
     background:url(/garage-bg.svg) center/cover no-repeat,linear-gradient(180deg,rgb(var(--ink-rgb) / .5),rgb(var(--ink-rgb) / .95));box-shadow:inset 0 0 0 1px rgb(var(--a4) / .22)}
   .bike-img{position:absolute;left:50%;top:0;height:100%;width:auto;max-width:none;transform:translateX(-50%);-webkit-mask-image:linear-gradient(90deg,transparent,#000 13%,#000 87%,transparent);mask-image:linear-gradient(90deg,transparent,#000 13%,#000 87%,transparent)}
-  .bike-colors{display:flex;justify-content:center;gap:.5rem;padding:.15rem 0 .1rem}
-  .bike-colors button{position:relative;width:2.75rem;height:2.75rem;border-radius:9999px;border:0;padding:0;background:transparent;display:flex;align-items:center;justify-content:center}
-  .bike-colors i{display:block;width:1.9rem;height:1.9rem;border-radius:9999px;box-shadow:inset 0 0 0 1px rgb(255 255 255 / .28),inset 0 -5px 8px rgb(0 0 0 / .35),inset 0 4px 6px rgb(255 255 255 / .22)}
-  .bike-colors button[aria-checked=true]::after{content:"";position:absolute;inset:.18rem;border-radius:9999px;box-shadow:0 0 0 2px rgb(var(--a3))}
-  .bike-colors button:active i{transform:scale(.92)}
+  .bike-edit.bike-look-btn{top:3.85rem}
+  .bike-sheet{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-end;justify-content:center}
+  .bike-sheet[hidden]{display:none}
+  .bike-sheet-bg{position:absolute;inset:0;background:rgb(0 0 0 / .6)}
+  .bike-sheet-panel{position:relative;width:100%;max-width:28rem;max-height:86dvh;overflow:auto;padding:1rem 1rem calc(1rem + env(safe-area-inset-bottom));border-radius:1.25rem 1.25rem 0 0;background:linear-gradient(180deg,rgb(var(--ink-rgb)),rgb(var(--panel)));box-shadow:0 -10px 30px rgb(0 0 0 / .5),inset 0 1px 0 rgb(var(--a4) / .3)}
+  .bike-sheet-x{width:2.75rem;height:2.75rem;border-radius:9999px;border:0;color:rgb(var(--z2));background:rgb(255 255 255 / .08);font-size:1.1rem}
+  .bike-row-btn{display:flex;align-items:center;justify-content:space-between;gap:.75rem;width:100%;min-height:3.25rem;padding:.5rem .9rem;border:0;border-radius:1rem;color:#fff;text-align:left;font-size:1rem;background:rgb(255 255 255 / .06);box-shadow:inset 0 0 0 1px rgb(255 255 255 / .1)}
+  .bike-row-btn:disabled{opacity:.5}
+  .bike-row-btn[aria-expanded=true]{box-shadow:inset 0 0 0 2px rgb(var(--a3))}
+  .bike-row-val{display:flex;align-items:center;gap:.5rem;color:rgb(var(--a3));min-width:0}
+  .bike-chev{font-size:.9rem;color:rgb(var(--z3));transition:transform .15s}
+  .bike-row-btn[aria-expanded=true] .bike-chev{transform:rotate(180deg)}
+  .bike-opts{list-style:none;margin:.4rem 0 0;padding:0;overflow:hidden;border-radius:1rem;background:rgb(255 255 255 / .05);box-shadow:inset 0 0 0 1px rgb(255 255 255 / .1)}
+  .bike-opts[hidden]{display:none}
+  .bike-opts button{display:flex;align-items:center;gap:.7rem;width:100%;min-height:2.9rem;padding:.35rem .9rem;border:0;color:rgb(var(--z2));background:transparent;text-align:left;font-size:.98rem}
+  .bike-opts button+button,.bike-opts li+li button{box-shadow:inset 0 1px 0 rgb(255 255 255 / .07)}
+  .bike-opts button:active{background:rgb(255 255 255 / .07)}
+  .bike-opts button[aria-selected=true]{background:rgb(var(--a4) / .15);color:#fff}
+  .bike-opts button b{margin-left:auto;color:rgb(var(--a3))}
+  .bike-sw{display:inline-block;flex:none;width:1.4rem;height:1.4rem;border-radius:9999px;box-shadow:inset 0 0 0 1px rgb(255 255 255 / .28),inset 0 -4px 6px rgb(0 0 0 / .35),inset 0 3px 5px rgb(255 255 255 / .22)}
+  .moto-info{margin:0;display:grid}
+  .moto-info>div{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;min-height:2.6rem;padding:.45rem 0;border-top:1px solid rgb(255 255 255 / .08)}
+  .moto-info>div:first-child{border-top:0}
+  .moto-info dt{flex:none;color:rgb(var(--z4));font-size:.9rem}
+  .moto-info dd{margin:0;min-width:0;text-align:right;font-weight:600;color:#fff;overflow-wrap:anywhere}
+  .moto-info dd.none{font-weight:400;color:rgb(var(--z5))}
   .bike-none{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgb(var(--a3));font-size:.9rem;opacity:.8}
   .bike-edit{position:absolute;z-index:3;top:.6rem;right:.6rem;width:2.75rem;height:2.75rem;border-radius:9999px;display:flex;align-items:center;justify-content:center;font-size:1.35rem;line-height:1;background:rgb(var(--ink-rgb) / .8);box-shadow:inset 0 0 0 1px rgb(var(--a3) / .6),0 4px 12px rgb(0 0 0 / .4)}
   .bike-edit:active{background:rgb(var(--a4) / .35)}
@@ -302,15 +323,35 @@ try{var _fs=+localStorage.getItem("ml_fs");if(_fs>=88&&_fs<=125&&_fs!==100)docum
       <img id="bikeImg" class="bike-img" alt="" width="307" height="374" decoding="async" hidden>
       <p id="bikeNone" class="bike-none" hidden>Tip Seçilmedi</p>
       <button id="motoEdit" class="bike-edit" type="button" aria-label="Motosiklet Bilgilerini Güncelle" title="Motosiklet Bilgilerini Güncelle">🛠️</button>
+      <button id="motoLook" class="bike-edit bike-look-btn" type="button" aria-label="Görünüm Ayarları" title="Görünüm Ayarları" aria-haspopup="dialog">🎨</button>
     </div>
-    <p id="motoName" class="road text-center text-2xl font-semibold leading-tight"></p>
-    <div id="bikeColors" class="bike-colors" role="radiogroup" aria-label="Motosiklet Rengi" hidden></div>
   </section>
+  <section id="motoInfo" class="card" aria-label="Motosiklet Bilgileri"><dl id="motoInfoList" class="moto-info"></dl></section>
+  <div id="bikeSheet" class="bike-sheet" hidden>
+    <div class="bike-sheet-bg" data-close></div>
+    <div class="bike-sheet-panel" role="dialog" aria-modal="true" aria-labelledby="bikeSheetTitle">
+      <div class="flex items-center justify-between gap-3">
+        <h2 id="bikeSheetTitle" class="road text-xl font-semibold">Görünüm Ayarları</h2>
+        <button type="button" class="bike-sheet-x" data-close aria-label="Kapat">✕</button>
+      </div>
+      <div class="mt-3 space-y-2">
+        <div>
+          <button id="bikeTypeRow" class="bike-row-btn" type="button" aria-expanded="false" aria-controls="bikeTypes"><span>Motosiklet Tipi</span><span class="bike-row-val"><span id="bikeTypeVal">Seçilmedi</span><b class="bike-chev" aria-hidden="true">▾</b></span></button>
+          <ul id="bikeTypes" class="bike-opts" role="listbox" aria-label="Motosiklet Tipi" hidden></ul>
+        </div>
+        <div>
+          <button id="bikeColorRow" class="bike-row-btn" type="button" aria-expanded="false" aria-controls="bikeColors"><span>Renk</span><span class="bike-row-val"><i id="bikeColorSw" class="bike-sw"></i><span id="bikeColorVal">Orijinal</span><b class="bike-chev" aria-hidden="true">▾</b></span></button>
+          <ul id="bikeColors" class="bike-opts" role="listbox" aria-label="Motosiklet Rengi" hidden></ul>
+        </div>
+      </div>
+      <p id="bikeColorHint" class="mt-2 text-xs text-zinc-400" hidden>Renk seçmek için önce bir motosiklet tipi seç.</p>
+      <p id="bikeLookMsg" class="mt-2 text-sm text-rose-300" role="status" hidden></p>
+    </div>
+  </div>
   <section class="card flex flex-col gap-1.5">
     <h2 class="road text-lg tracking-wide text-zinc-300">Günlük Bilgiler</h2>
     <ul id="tips" class="space-y-1.5"></ul>
   </section>
-  <div id="mymoto-root"></div>
 </main>
 
 <main id="world" class="hidden fixed inset-x-0 top-0 overflow-hidden" style="bottom:var(--nav)">
@@ -707,15 +748,16 @@ function openSensors() {                    // Kalibrasyon → harita ekranını
   goTab('world'); let n = 0;
   const t = setInterval(() => { if (mapH && mapH.openSensors) { clearInterval(t); setTimeout(() => mapH.openSensors(), 500); } else if (++n > 60) clearInterval(t); }, 200);
 }
+async function bikeSave(brand, model, more = {}) {          // yalnızca motosiklet alanları değişir; profil alanları mevcut değerleriyle gider
+  const u = (await api('account', { username: me.username, firstName: me.firstName, lastName: me.lastName, gender: me.gender, email: me.email, phone: me.phone, emergencyName: me.emergencyName, emergencyPhone: me.emergencyPhone, bikeBrand: brand, bikeModel: model, bikeYear: more.year, bikeType: more.type, bikeCc: more.cc })).user;
+  me = u; remember(me); renderProfile(); renderMotor(); return u;
+}
 function mountSettings() {
   return window.Settings.mount($('settings-root'), {
     me: () => me, ask, logout: doLogout,
     mapPrefs: () => { if (mapH && mapH.prefs) mapH.prefs(); }, openSensors, openAnalysis: () => showScreen('analysis'),
-    motoRefresh: () => { if (myMotoH) myMotoH.refresh(); }, maintChanged: () => paintMaintTip(),
-    saveBike: async (brand, model, more = {}) => {          // yalnızca motosiklet alanları değişir; profil alanları mevcut değerleriyle gider
-      const u = (await api('account', { username: me.username, firstName: me.firstName, lastName: me.lastName, gender: me.gender, email: me.email, phone: me.phone, emergencyName: me.emergencyName, emergencyPhone: me.emergencyPhone, bikeBrand: brand, bikeModel: model, bikeYear: more.year, bikeType: more.type, bikeCc: more.cc })).user;
-      me = u; remember(me); renderProfile(); renderMotor(); return u;
-    }
+    motoRefresh: () => { renderMotor(); }, maintChanged: () => paintMaintTip(),
+    saveBike: (brand, model, more = {}) => bikeSave(brand, model, more)
   });
 }
 function paintMaintTip() {                  // ana sayfa ipuçlarının başına: zamanı gelen/yaklaşan bakım (My Moto verisinden)
@@ -732,35 +774,66 @@ function paintMaintTip() {                  // ana sayfa ipuçlarının başına
 function renderMotor() {
   if (!me) return;
   renderTips(); paintMaintTip();
-  paintBike();
-  if (!window.MyMoto) return;
-  if (!myMotoH || myMotoUser !== me.username) { myMotoUser = me.username; myMotoH = window.MyMoto.mount($('mymoto-root'), { user: me.username }); }
+  paintBike(); paintMotoInfo();
 }
-let myMotoH = null, myMotoUser = '';
+function paintMotoInfo() {                         // yalnızca okunur bilgi kartı; veriler Ayarlar › Motosiklet Ayarları'nda girilir
+  const list = $('motoInfoList'), MM = window.MyMoto, D = MM && MM.read ? MM.read(me.username) : { owner: '', km: null, dates: {} };
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])), nf = x => Number(x).toLocaleString('tr-TR'), name = [me.bikeBrand, me.bikeModel].filter((x, i, a) => x && a.indexOf(x) === i).join(' '), owner = D.owner || [me.firstName, me.lastName].filter(Boolean).join(' ');
+  const insp = D.dates && D.dates.inspection, dl = insp && MM ? MM.daysLeft(insp) : null;
+  let ins = '';
+  if (insp) { const d = new Date(insp + 'T00:00:00'), txt = d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' }), st = dl == null ? '' : dl < 0 ? Math.abs(dl) + ' gün önce bitti' : dl === 0 ? 'Bugün bitiyor' : dl + ' gün kaldı', cls = dl != null && dl < 0 ? 'text-rose-400' : dl != null && dl <= 30 ? 'text-amber-400' : 'text-zinc-400'; ins = `${txt}${st ? `<small class="block text-xs font-normal ${cls}">${st}</small>` : ''}`; }
+  const rows = [['Motor Sahibi', owner ? esc(owner) : ''], ['Motor Adı', name ? esc(name) : ''], ['Model Yılı', me.bikeYear ? esc(me.bikeYear) : ''], ['Km', D.km == null ? '' : nf(D.km) + ' km'], ['Motor Hacmi', me.bikeCc ? esc(me.bikeCc) + ' cc' : ''], ['Muayene Tarihi', ins]];
+  list.innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd${v ? '' : ' class="none"'}>${v || 'Girilmedi'}</dd></div>`).join('');
+}
 let bikeColKey = '', bikeColTok = 0;
 const bikeColorGet = () => { try { return localStorage.getItem('ml_bikecolor:' + (me && me.username)) || 'orijinal'; } catch { return 'orijinal'; } };
-function paintBikeColors(t) {                     // renk düğmeleri + seçilen rengi fotoğrafa uygula (fotoğraf dosyası değişmez)
+function paintBikeColors(t) {                     // renk satırı + liste; seçilen rengi fotoğrafa uygula (fotoğraf dosyası değişmez)
   const box = $('bikeColors'), BC = window.BikeColor, im = $('bikeImg'); if (!box || !BC) return;
-  box.hidden = !t; if (!t) return;
   let k = bikeColorGet(); if (!BC.COLORS.some(c => c.k === k)) k = 'orijinal';
-  if (box.dataset.k !== k || !box.children.length) {
-    box.dataset.k = k;
-    box.innerHTML = BC.COLORS.map(c => `<button type="button" role="radio" aria-checked="${c.k === k}" aria-label="${c.n}" title="${c.n}" data-c="${c.k}"><i style="background:${c.c || 'conic-gradient(#e9eef2 0 25%,#1c2026 0 50%,#ea8621 0 75%,#2f6fa0 0)'}"></i></button>`).join('');
-  }
+  const cur = BC.COLORS.find(c => c.k === k), swatch = c => c.c || 'conic-gradient(#e9eef2 0 25%,#1c2026 0 50%,#ea8621 0 75%,#2f6fa0 0)';
+  $('bikeColorRow').disabled = !t; $('bikeColorHint').hidden = !!t; $('bikeColorVal').textContent = cur.n; $('bikeColorSw').style.background = swatch(cur);
+  if (!t) { listOpen('bikeColors', false); return; }
+  box.innerHTML = BC.COLORS.map(c => `<li role="presentation"><button type="button" role="option" aria-selected="${c.k === k}" aria-label="${c.n}" data-c="${c.k}"><i class="bike-sw" style="background:${swatch(c)}"></i><span>${c.n}</span>${c.k === k ? '<b aria-hidden="true">✓</b>' : ''}</button></li>`).join('');
   const base = window.Bikes.src({ model: me.bikeModel, type: me.bikeType }), id = t + ':' + k, tok = ++bikeColTok;
   if (k === 'orijinal') { im.dataset.col = ''; if (base && im.getAttribute('src') !== base) im.src = base; bikeColKey = id; return; }
   if (bikeColKey === id && im.dataset.col === k) return;
   BC.url(t, k).then(u => { if (tok === bikeColTok && u) { im.src = u; im.dataset.col = k; bikeColKey = id; } }).catch(() => {});
 }
-$('bikeColors').onclick = e => { const b = e.target.closest('button[data-c]'); if (!b) return; try { localStorage.setItem('ml_bikecolor:' + me.username, b.dataset.c); } catch {} $('bikeColors').dataset.k = ''; paintBike(); };
+function listOpen(id, open) {                     // tek satırlık ayar → seçenek listesi (açılır/kapanır, aynı anda yalnız biri açık)
+  const ul = $(id), row = $(id === 'bikeTypes' ? 'bikeTypeRow' : 'bikeColorRow'); ul.hidden = !open; row.setAttribute('aria-expanded', String(open));
+  if (open) { const o = id === 'bikeTypes' ? 'bikeColors' : 'bikeTypes'; $(o).hidden = true; $(o === 'bikeTypes' ? 'bikeTypeRow' : 'bikeColorRow').setAttribute('aria-expanded', 'false'); const s = ul.querySelector('[aria-selected=true]'); if (s) s.scrollIntoView({ block: 'nearest' }); }
+}
+$('bikeColors').onclick = e => { const b = e.target.closest('button[data-c]'); if (!b) return; try { localStorage.setItem('ml_bikecolor:' + me.username, b.dataset.c); } catch {} paintBike(); listOpen('bikeColors', false); $('bikeColorRow').focus(); };
+$('bikeColorRow').onclick = () => listOpen('bikeColors', $('bikeColors').hidden);
+$('bikeTypeRow').onclick = () => listOpen('bikeTypes', $('bikeTypes').hidden);
 function paintBike() {
   const o = { model: me.bikeModel, type: me.bikeType }, t = window.Bikes ? window.Bikes.typeOf(o) : '', u = t ? window.Bikes.src(o) : '', im = $('bikeImg');
   if (u && bikeColorGet() === 'orijinal' && im.getAttribute('src') !== u) im.src = u; else if (u && !im.getAttribute('src')) im.src = u;
   im.hidden = !u; $('bikeNone').hidden = !!u;
-  $('motoName').textContent = [me.bikeBrand, me.bikeModel].filter(Boolean).join(' ') || 'Motosiklet Bilgisi Girilmedi';
   im.alt = t ? 'Motosiklet: ' + window.Bikes.TYPES[t] : '';
   paintBikeColors(t ? t : '');
 }
+
+// --- My Moto görünüm ayarları (tip + renk) ---
+function paintBikeTypes() {
+  const T = window.Bikes.TYPES, sel = window.Bikes.typeOf({ type: me.bikeType, model: '' });   // eski tipler (sport/classic/enduro) yeni karşılığı seçili görünür
+  $('bikeTypeVal').textContent = sel ? T[sel] : 'Seçilmedi';
+  $('bikeTypes').innerHTML = [['', 'Seçilmedi']].concat(Object.keys(T).map(k => [k, T[k]])).map(([k, n]) => `<li role="presentation"><button type="button" role="option" aria-selected="${k === sel}" data-t="${k}"><span>${n}</span>${k === sel ? '<b aria-hidden="true">✓</b>' : ''}</button></li>`).join('');
+}
+function bikeSheet(open) {
+  const sh = $('bikeSheet'); sh.hidden = !open;
+  if (open) { $('bikeLookMsg').hidden = true; listOpen('bikeTypes', false); listOpen('bikeColors', false); paintBikeTypes(); paintBike(); $('bikeTypeRow').focus(); }
+  else $('motoLook').focus();
+}
+$('motoLook').onclick = () => bikeSheet(true);
+$('bikeSheet').addEventListener('click', e => { if (e.target.closest('[data-close]')) bikeSheet(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('bikeSheet').hidden) bikeSheet(false); });
+$('bikeTypes').onclick = async e => {
+  const b = e.target.closest('button[data-t]'); if (!b || !me) return; const t = b.dataset.t, prev = me.bikeType || '', msg = $('bikeLookMsg'); if (t === prev) return;
+  me.bikeType = t; msg.hidden = true; paintBikeTypes(); paintBike(); listOpen('bikeTypes', false); $('bikeTypeRow').focus();   // anında göster, sunucu kaydı arkadan
+  try { await bikeSave(me.bikeBrand || '', me.bikeModel || '', { year: me.bikeYear == null ? '' : me.bikeYear, type: t, cc: me.bikeCc == null ? '' : me.bikeCc }); paintBikeTypes(); }
+  catch (err) { me.bikeType = prev; paintBikeTypes(); paintBike(); msg.textContent = (err && err.message) || 'Tip kaydedilemedi.'; msg.hidden = false; }
+};
 $('motoEdit').onclick = () => { goTab('settings'); (setH = setH || mountSettings()).show('moto'); };
 
 // --- Bağlantı izinleri ---

@@ -8,13 +8,14 @@
   const DEFAULT_INTERVALS = { oil: 5000, chain: 500, air: 15000 };   // yalnızca başlangıç önerisi; kullanıcı kendi motoruna göre düzenler
   const NAMES = { oil: 'Motor Yağı ve Filtre', chain: 'Zincir Yağlama ve Gerginlik', air: 'Hava Filtresi' };
   const MAX_KM = 999999, MAX_FUEL = 400;
-  const fresh = () => ({ v: 1, km: null, maint: { oil: { interval: DEFAULT_INTERVALS.oil, last: null }, chain: { interval: DEFAULT_INTERVALS.chain, last: null }, air: { interval: DEFAULT_INTERVALS.air, last: null } }, dates: { insurance: '', inspection: '' }, fuel: [] });
+  const fresh = () => ({ v: 1, km: null, maint: { oil: { interval: DEFAULT_INTERVALS.oil, last: null }, chain: { interval: DEFAULT_INTERVALS.chain, last: null }, air: { interval: DEFAULT_INTERVALS.air, last: null } }, dates: { insurance: '', inspection: '' }, owner: '', fuel: [] });
   const isNum = (x, lo, hi) => typeof x === 'number' && isFinite(x) && x >= lo && x <= hi;
 
   // Saklanan veriyi doğrula (bozuk/elle değiştirilmiş kayıt arayüzü bozmasın)
   function clean(d) {
     const o = fresh(); if (!d || typeof d !== 'object') return o;
     if (isNum(d.km, 0, MAX_KM)) o.km = Math.round(d.km);
+    if (typeof d.owner === 'string') o.owner = d.owner.trim().slice(0, 60);
     for (const k of Object.keys(o.maint)) { const m = d.maint && d.maint[k]; if (m) { if (isNum(m.interval, 50, MAX_KM)) o.maint[k].interval = Math.round(m.interval); if (isNum(m.last, 0, MAX_KM)) o.maint[k].last = Math.round(m.last); } }
     for (const k of ['insurance', 'inspection']) { const v = d.dates && d.dates[k]; if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) o.dates[k] = v; }
     if (Array.isArray(d.fuel)) o.fuel = d.fuel.filter(f => f && isNum(f.liters, 0.1, 100) && isNum(f.cost, 0.01, 100000) && isNum(f.km, 0, MAX_KM) && isNum(f.t, 1e12, 4e12)).slice(-MAX_FUEL)
@@ -105,11 +106,10 @@
       return `<label class="block text-xs text-zinc-400">${label} bitiş tarihi<input type="date" class="field mt-1" data-d="${k}" value="${esc(D.dates[k])}"></label><p class="-mt-1 mb-1 text-xs ${cls}">${txt}</p>`;
     }
     function summaryTab() {
-      return `<section class="card space-y-3"><div class="flex items-center justify-between"><div><p class="text-xs text-zinc-400">Toplam Kilometre</p><p class="road text-3xl font-semibold">${D.km == null ? '—' : nf(D.km)} <span class="text-base text-zinc-400">km</span></p></div></div>
-        <div class="flex gap-2"><input id="mm2-km" class="field" inputmode="numeric" placeholder="Güncel Km" aria-label="Güncel Kilometre"><button type="button" data-a="km-save" class="btn-sm min-h-[44px] px-4">Güncelle</button></div></section>
+      return `<section class="card flex items-center justify-between gap-3"><div><p class="text-xs text-zinc-400">Güncel Kilometre</p><p class="road text-2xl font-semibold">${D.km == null ? '—' : nf(D.km)} <span class="text-sm text-zinc-400">km</span></p></div><p class="max-w-[11rem] text-right text-[11px] leading-snug text-zinc-400">Yukarıdaki Motosiklet Bilgileri bölümünden güncellenir.</p></section>
         <div class="flex items-center justify-between pt-1"><h3 class="road text-xl font-semibold">Bakım Durumu</h3><span class="text-[11px] text-zinc-400">Periyotlar düzenlenebilir</span></div>
         ${['oil', 'chain', 'air'].map(maintCard).join('')}
-        <section class="card space-y-2"><h3 class="road text-xl font-semibold">Sigorta ve Muayene</h3>${dateRow('insurance', 'Sigorta')}${dateRow('inspection', 'Muayene')}</section>`;
+        <section class="card space-y-2"><h3 class="road text-xl font-semibold">Sigorta</h3>${dateRow('insurance', 'Sigorta')}</section>`;
     }
     function fuelTab() {
       const S = fuelStats(D.fuel), rows = S.list.slice().reverse(), shown = showAll ? rows : rows.slice(0, 8);
@@ -142,12 +142,7 @@
       const b = e.target.closest('[data-a]'); if (!b) return; const a = b.dataset.a;
       if (a === 'tab') { tab = b.dataset.t; delArm = ''; render(); }
       else if (a === 'all') { showAll = !showAll; render(); }
-      else if (a === 'km-save') {
-        const v = parseNum(el.querySelector('#mm2-km').value);
-        if (!isNum(v, 0, MAX_KM) || !Number.isInteger(v)) return msg('Geçerli bir kilometre gir (tam sayı).', true);
-        if (D.km != null && v < D.km) return msg('Kilometre önceki değerden (' + nf(D.km) + ') küçük olamaz.', true);
-        D.km = v; if (save()) { render(); msg('Kilometre güncellendi.'); }
-      } else if (a === 'done') {
+      else if (a === 'done') {
         if (D.km == null) return msg('Önce güncel kilometreyi gir.', true);
         D.maint[b.dataset.k].last = D.km; if (save()) { render(); msg(NAMES[b.dataset.k] + ' bakımı ' + nf(D.km) + ' km\'de kaydedildi.'); }
       } else if (a === 'maint-save') {
@@ -175,5 +170,8 @@
     render();
     return { refresh() { try { D = clean(JSON.parse(localStorage.getItem(KEY(user)) || 'null')); } catch {} render(); }, _D: () => D };
   }
-  root.MyMoto = Object.assign({ mount }, core);
+  // Dışarıdan (Motosiklet Bilgileri formu, My Moto bilgi kartı) aynı saklama alanını okuma/yazma
+  const read = user => { try { return clean(JSON.parse(localStorage.getItem(KEY(user)) || 'null')); } catch { return fresh(); } };
+  const write = (user, fn) => { const D = read(user); fn(D); const c = clean(D); try { localStorage.setItem(KEY(user), JSON.stringify(c)); return c; } catch { return null; } };
+  root.MyMoto = Object.assign({ mount, read, write }, core);
 })(typeof window !== 'undefined' ? window : globalThis);
