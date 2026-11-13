@@ -14,7 +14,8 @@
 
   // Görünüm tercihleri (yazı boyutu, hareketi azalt) açılışta uygulanır
   const FONTS = [['barlow', 'Barlow', 'Sportif ve net (varsayılan)', "'Barlow',system-ui,sans-serif"], ['system', 'Sistem', 'Cihazın kendi yazı tipi, en hızlı', 'system-ui,-apple-system,Roboto,sans-serif'],
-    ['exo', 'Exo 2', 'Teknik, gösterge paneli havası', "'Exo 2',system-ui,sans-serif"], ['hyper', 'Okunaklı', 'Atkinson Hyperlegible: harfler karışmaz', "'Atkinson Hyperlegible',system-ui,sans-serif"]];
+    ['exo', 'Exo 2', 'Teknik, gösterge paneli havası', "'Exo 2',system-ui,sans-serif"], ['hyper', 'Okunaklı', 'Atkinson Hyperlegible: harfler karışmaz', "'Atkinson Hyperlegible',system-ui,sans-serif"],
+    ['montserrat', 'Montserrat', 'Geniş, modern ve net', "'Montserrat',system-ui,sans-serif"], ['nunito', 'Nunito', 'Yumuşak, yuvarlak hatlı', "'Nunito',system-ui,sans-serif"], ['lora', 'Lora', 'Klasik, kitap tarzı (serif)', "'Lora',Georgia,serif"]];
   function applyFont() { const f = LS.get('ml_font', 'barlow'), de = document.documentElement; if (f !== 'barlow' && FONTS.some(x => x[0] === f)) de.setAttribute('data-font', f); else de.removeAttribute('data-font'); }
   function applyDisplay() {
     applyFont();

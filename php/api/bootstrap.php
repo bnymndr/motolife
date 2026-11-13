@@ -52,7 +52,7 @@ function val(string $sql, array $p = []) { $r = q($sql, $p)->fetch(PDO::FETCH_NU
 function ins_ignore(): string { return sqlite_mode() ? 'INSERT OR IGNORE' : 'INSERT IGNORE'; }
 function lob($v): string { if (is_resource($v)) return (string)stream_get_contents($v); return $v === null ? '' : (string)$v; }
 
-const SCHEMA_VERSION = '4';
+const SCHEMA_VERSION = '5';
 function ensure_schema(PDO $pdo): void {
     static $done = false;
     if ($done) return; $done = true;
@@ -81,7 +81,8 @@ function ensure_schema(PDO $pdo): void {
             route_v INT NOT NULL DEFAULT 0, route_len INT NOT NULL DEFAULT 0, route_n INT NOT NULL DEFAULT 0, route_name VARCHAR(120) NOT NULL DEFAULT \'\', route_pts MEDIUMTEXT NULL,
             ride_id CHAR(16) NULL, ride_started BIGINT NOT NULL DEFAULT 0, ride_by CHAR(24) NULL, ride_idle BIGINT NOT NULL DEFAULT 0, rec_bytes BIGINT NOT NULL DEFAULT 0,
             rec_full TINYINT NOT NULL DEFAULT 0, tick_at BIGINT NOT NULL DEFAULT 0',
-        'ml_rgm' => 'gid CHAR(16) NOT NULL, uid CHAR(24) NOT NULL, at BIGINT NOT NULL, PRIMARY KEY (gid, uid)',
+        'ml_rgm' => 'gid CHAR(16) NOT NULL, uid CHAR(24) NOT NULL, at BIGINT NOT NULL, role VARCHAR(8) NOT NULL DEFAULT \'\', PRIMARY KEY (gid, uid)',
+        'ml_pics' => 'kind VARCHAR(8) NOT NULL, ref VARCHAR(24) NOT NULL, img MEDIUMTEXT NOT NULL, ver VARCHAR(12) NOT NULL DEFAULT \'\', at BIGINT NOT NULL DEFAULT 0, PRIMARY KEY (kind, ref)',
         'ml_rgx' => 'gid CHAR(16) PRIMARY KEY, descr VARCHAR(255) NOT NULL DEFAULT \'\'',
         'ml_gp' => 'id CHAR(16) PRIMARY KEY, gid CHAR(16) NOT NULL, uid CHAR(24) NOT NULL, text TEXT NOT NULL, at BIGINT NOT NULL, mood VARCHAR(20) NOT NULL DEFAULT \'\', image CHAR(16) NOT NULL DEFAULT \'\'',
         'ml_gpl' => 'post CHAR(16) NOT NULL, uid CHAR(24) NOT NULL, PRIMARY KEY (post, uid)',
@@ -99,6 +100,7 @@ function ensure_schema(PDO $pdo): void {
         'ml_gvp' => 'sid CHAR(16) PRIMARY KEY, gid CHAR(16) NOT NULL, uid CHAR(24) NOT NULL, name VARCHAR(40) NOT NULL, mic TINYINT NOT NULL DEFAULT 0',
     ];
     foreach ($t as $n => $cols) $pdo->exec("CREATE TABLE IF NOT EXISTS $n ($cols)$eng");
+    try { $pdo->exec("ALTER TABLE ml_rgm ADD COLUMN role VARCHAR(8) NOT NULL DEFAULT ''"); } catch (Throwable $e) {}   // eski kurulumlar için (v5); yeni kurulumda sütun zaten var
     $idx = ['ml_posts(uid, at)', 'ml_posts(at)', 'ml_comments(post)', 'ml_images(uid)', 'ml_friends(b)', 'ml_requests(from_uid)', 'ml_requests(to_uid)', 'ml_msgs(pair, at)',
         'ml_rgm(uid)', 'ml_rgrides(gid)', 'ml_rgrec(rideid)', 'ml_rglive(sid)', 'ml_rts(uid)', 'ml_rtr(room)', 'ml_rte(sid)', 'ml_gvp(gid)', 'ml_rides(uid, started)', 'ml_kv(exp)', 'ml_gp(gid, at)', 'ml_gpc(post)'];
     foreach ($idx as $i => $def) { try { $pdo->exec('CREATE INDEX mlx' . $i . ' ON ' . $def); } catch (Throwable $e) {} }

@@ -25,8 +25,23 @@ function so_stats(string $uid): array {
     return ['posts' => (int)val('SELECT COUNT(*) FROM ml_posts WHERE uid = ?', [$uid]), 'friends' => (int)val('SELECT COUNT(*) FROM ml_friends WHERE a = ?', [$uid]),
         'likes' => (int)val('SELECT COUNT(*) FROM ml_likes WHERE post IN (SELECT id FROM ml_posts WHERE uid = ?)', [$uid])];
 }
+// Görsel deposu (ml_pics): kind = cover (profil kapağı, ref = kullanıcı), gphoto / gcover (grup fotoğrafı / grup kapağı, ref = grup). JPEG, base64.
+function pic_ver(string $kind, string $ref): string { return (string)(val('SELECT ver FROM ml_pics WHERE kind = ? AND ref = ?', [$kind, $ref]) ?? ''); }
+function pic_put(string $kind, string $ref, string $bin): void {
+    q('DELETE FROM ml_pics WHERE kind = ? AND ref = ?', [$kind, $ref]);
+    if ($bin === '') return;
+    if (strlen($bin) > 150000 || substr($bin, 0, 3) !== "\xFF\xD8\xFF") fail(400, 'Fotoğraf geçersiz ya da çok büyük.');
+    q('INSERT INTO ml_pics (kind, ref, img, ver, at) VALUES (?, ?, ?, ?, ?)', [$kind, $ref, base64_encode($bin), base_convert((string)crc32($bin), 10, 36), now_ms()]);
+}
+function pic_send(string $kind, string $ref): never {
+    $d = val('SELECT img FROM ml_pics WHERE kind = ? AND ref = ?', [$kind, $ref]);
+    if (!$d) { http_response_code(404); exit; }
+    header('Content-Type: image/jpeg'); header('Cache-Control: private, max-age=86400'); echo base64_decode($d); exit;
+}
+function h_so_cover_put(): never { $u = need_user(); pic_put('cover', $u['id'], raw_body(200000)); out(['me' => so_profile(user_by_id($u['id']))]); }
+function h_so_cover(string $name): never { need_user(); $o = user_by_name($name); if (!$o) { http_response_code(404); exit; } pic_send('cover', $o['id']); }
 function so_profile(array $u): array {
-    return card($u) + ['bio' => $u['bio'], 'status' => $u['status'], 'mood' => $u['mood'], 'statusAt' => (int)$u['status_at'], 'since' => (int)$u['created_at'], 'stats' => so_stats($u['id'])];
+    return card($u) + ['cv' => pic_ver('cover', $u['id']), 'bio' => $u['bio'], 'status' => $u['status'], 'mood' => $u['mood'], 'statusAt' => (int)$u['status_at'], 'since' => (int)$u['created_at'], 'stats' => so_stats($u['id'])];
 }
 function relation(string $meId, array $o): array {
     if (is_friend($meId, $o['id'])) return ['rel' => 'friend'];

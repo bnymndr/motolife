@@ -21,7 +21,12 @@ function rg_is_member(string $gid, string $uid): bool { return (bool)val('SELECT
 function rg_members(string $gid): array { return all('SELECT * FROM ml_rgm WHERE gid = ? ORDER BY at, uid', [$gid]); }
 function rg_group_count(string $uid): int { return (int)val('SELECT COUNT(*) FROM ml_rgm WHERE uid = ?', [$uid]); }
 function rg_notify(array $g, string $kind, array $extra = []): void { foreach (rg_members($g['id']) as $m) rt_to_user($m['uid'], 'grp:changed', ['gid' => $g['id'], 'kind' => $kind] + $extra); }
-function rg_role(array $g, string $uid): string { return $g['leader'] === $uid ? 'leader' : 'member'; }
+function rg_role(array $g, string $uid): string {
+    if ($g['leader'] === $uid) return 'leader';
+    return val('SELECT role FROM ml_rgm WHERE gid = ? AND uid = ?', [$g['id'], $uid]) === 'admin' ? 'admin' : 'member';
+}
+function rg_is_staff(array $g, string $uid): bool { return rg_role($g, $uid) !== 'member'; }
+function rg_pic_url(string $gid, string $k): string { $v = pic_ver($k === 'photo' ? 'gphoto' : 'gcover', $gid); return $v === '' ? '' : "/api/rgroups/$gid/pic/$k?v=$v"; }
 function rg_new_code(): string { do { $c = ''; foreach (str_split(random_bytes(8)) as $b) $c .= RG_ALPHA[ord($b) % 32]; } while (val('SELECT 1 FROM ml_rg WHERE code = ?', [$c])); return $c; }
 function rg_norm_code($s): string { return substr(preg_replace('/[^A-Z0-9]/', '', strtoupper((string)$s)), 0, 8); }
 
@@ -46,21 +51,21 @@ function rg_gpost_view(array $g, array $rows, string $viewer): array {
         $lk = $likes[$p['id']] ?? []; $cm = $cms[$p['id']] ?? [];
         return ['id' => $p['id'], 'author' => $cards[$p['uid']] ?? SO_GONE, 'text' => $p['text'], 'at' => (int)$p['at'], 'mood' => $p['mood'],
             'image' => $p['image'] !== '' ? '/api/social/img/' . $p['image'] : '', 'likes' => count($lk), 'liked' => in_array($viewer, $lk, true), 'commentCount' => count($cm),
-            'mine' => $p['uid'] === $viewer, 'canDelete' => $p['uid'] === $viewer || $g['leader'] === $viewer,
-            'comments' => array_map(fn($c) => ['id' => $c['id'], 'author' => $cards[$c['uid']] ?? SO_GONE, 'text' => $c['text'], 'at' => (int)$c['at'], 'canDelete' => $c['uid'] === $viewer || $g['leader'] === $viewer], array_slice($cm, -20))];
+            'mine' => $p['uid'] === $viewer, 'canDelete' => $p['uid'] === $viewer || rg_is_staff($g, $viewer),
+            'comments' => array_map(fn($c) => ['id' => $c['id'], 'author' => $cards[$c['uid']] ?? SO_GONE, 'text' => $c['text'], 'at' => (int)$c['at'], 'canDelete' => $c['uid'] === $viewer || rg_is_staff($g, $viewer)], array_slice($cm, -20))];
     }, $rows);
 }
-function rg_brief(array $g, array $u): array { return ['id' => $g['id'], 'name' => $g['name'], 'desc' => rg_desc($g['id']), 'posts' => (int)val('SELECT COUNT(*) FROM ml_gp WHERE gid = ?', [$g['id']]), 'lastAt' => (int)val('SELECT MAX(at) FROM ml_gp WHERE gid = ?', [$g['id']]), 'role' => rg_role($g, $u['id']), 'leader' => rg_name($g['leader']), 'count' => count(rg_members($g['id'])), 'active' => (bool)$g['ride_id'], 'hasRoute' => (int)$g['route_v'] > 0 && $g['route_pts'] !== null]; }
+function rg_brief(array $g, array $u): array { return ['id' => $g['id'], 'photo' => rg_pic_url($g['id'], 'photo'), 'name' => $g['name'], 'desc' => rg_desc($g['id']), 'posts' => (int)val('SELECT COUNT(*) FROM ml_gp WHERE gid = ?', [$g['id']]), 'lastAt' => (int)val('SELECT MAX(at) FROM ml_gp WHERE gid = ?', [$g['id']]), 'role' => rg_role($g, $u['id']), 'leader' => rg_name($g['leader']), 'count' => count(rg_members($g['id'])), 'active' => (bool)$g['ride_id'], 'hasRoute' => (int)$g['route_v'] > 0 && $g['route_pts'] !== null]; }
 function rg_view(array $g, array $u): array {
     $mem = rg_members($g['id']); $live = array_flip(array_column(all('SELECT uid FROM ml_rglive WHERE gid = ?', [$g['id']]), 'uid'));
     usort($mem, fn($a, $b) => (int)($b['uid'] === $g['leader']) <=> (int)($a['uid'] === $g['leader']));
     $hasRoute = $g['route_pts'] !== null && (int)$g['route_v'] > 0;
     $cards = cards_for(array_column($mem, 'uid'));
-    return ['id' => $g['id'], 'name' => $g['name'], 'desc' => rg_desc($g['id']), 'role' => rg_role($g, $u['id']), 'leader' => rg_name($g['leader']), 'createdAt' => (int)$g['created_at'], 'gap' => (int)$g['gap'], 'postCount' => (int)val('SELECT COUNT(*) FROM ml_gp WHERE gid = ?', [$g['id']]),
+    return ['id' => $g['id'], 'photo' => rg_pic_url($g['id'], 'photo'), 'cover' => rg_pic_url($g['id'], 'cover'), 'name' => $g['name'], 'desc' => rg_desc($g['id']), 'role' => rg_role($g, $u['id']), 'leader' => rg_name($g['leader']), 'createdAt' => (int)$g['created_at'], 'gap' => (int)$g['gap'], 'postCount' => (int)val('SELECT COUNT(*) FROM ml_gp WHERE gid = ?', [$g['id']]),
         'members' => array_map(fn($m) => ['username' => rg_name($m['uid']), 'name' => rg_full($m['uid']), 'role' => rg_role($g, $m['uid']), 'sharing' => isset($live[$m['uid']]), 'av' => ($cards[$m['uid']] ?? SO_GONE)['av'], 'bike' => ($cards[$m['uid']] ?? SO_GONE)['bike'], 'joinedAt' => (int)$m['at']], $mem),
         'ride' => $g['ride_id'] ? ['id' => $g['ride_id'], 'startedAt' => (int)$g['ride_started']] : null,
         'route' => $hasRoute ? ['v' => (int)$g['route_v'], 'len' => (int)$g['route_len'], 'n' => (int)$g['route_n'], 'name' => $g['route_name']] : null]
-        + ($g['leader'] === $u['id'] ? ['code' => $g['code']] : []);
+        + (rg_is_staff($g, $u['id']) ? ['code' => $g['code']] : []);
 }
 
 // ---------- Güzergâh ----------
@@ -220,6 +225,7 @@ function rg_destroy(array $g, string $kind): void {
     foreach (all('SELECT id FROM ml_rgrides WHERE gid = ?', [$g['id']]) as $r) q('DELETE FROM ml_rgrec WHERE rideid = ?', [$r['id']]);
     rg_gpost_drop(array_column(all('SELECT id FROM ml_gp WHERE gid = ?', [$g['id']]), 'id'));
     foreach (['ml_rgrides', 'ml_rgm', 'ml_rglive', 'ml_rgx'] as $t) q("DELETE FROM $t WHERE gid = ?", [$g['id']]);
+    q("DELETE FROM ml_pics WHERE kind IN ('gphoto','gcover') AND ref = ?", [$g['id']]);
     q('DELETE FROM ml_rg WHERE id = ?', [$g['id']]);
 }
 function rg_remove_member(array $g, string $uid, string $kind): void {
@@ -234,7 +240,7 @@ function rg_remove_member(array $g, string $uid, string $kind): void {
     q('DELETE FROM ml_gpc WHERE uid = ? AND post IN (SELECT id FROM ml_gp WHERE gid = ?)', [$uid, $g['id']]);
     $rest = rg_members($g['id']);
     if (!$rest) { rg_destroy($g, 'deleted'); return; }
-    if ($g['leader'] === $uid) { q('UPDATE ml_rg SET leader = ? WHERE id = ?', [$rest[0]['uid'], $g['id']]); rg_ev($g['id'], 'leader', rg_name($rest[0]['uid']), 'otomatik'); }
+    if ($g['leader'] === $uid) { $nx = $rest[0]; foreach ($rest as $r0) if (($r0['role'] ?? '') === 'admin') { $nx = $r0; break; } q("UPDATE ml_rgm SET role = '' WHERE gid = ? AND uid = ?", [$g['id'], $nx['uid']]); q('UPDATE ml_rg SET leader = ? WHERE id = ?', [$nx['uid'], $g['id']]); rg_ev($g['id'], 'leader', rg_name($nx['uid']), 'otomatik'); }
     $g = rg_group($g['id']);
     rg_notify($g, $kind);
 }
@@ -291,10 +297,11 @@ function grp_update(array $S, array $u, array $p): void {
 }
 
 // ---------- REST ----------
-function rg_ctx(string $id, bool $leaderOnly = false): array {
+function rg_ctx(string $id, $need = false): array {   // $need: true = yalnız lider, 'staff' = lider ya da yönetici
     $u = need_user(); $g = preg_match('/^[0-9a-f]{16}$/', $id) ? rg_group($id) : null;
     if (!$g || !rg_is_member($g['id'], $u['id'])) fail(404, 'Grup bulunamadı.');
-    if ($leaderOnly && $g['leader'] !== $u['id']) fail(403, 'Bu işlem için grup lideri olmalısın.');
+    if ($need === true && $g['leader'] !== $u['id']) fail(403, 'Bu işlem için grup lideri olmalısın.');
+    if ($need === 'staff' && !rg_is_staff($g, $u['id'])) fail(403, 'Bu işlem için grup lideri ya da yöneticisi olmalısın.');
     return [$u, $g];
 }
 function rg_member_by_name(array $g, $n): ?array { foreach (rg_members($g['id']) as $m) if (lower(rg_name($m['uid'])) === lower((string)$n)) return $m; return null; }
@@ -337,7 +344,7 @@ function h_rg_preview(): never {
 }
 function h_rg_get(string $id): never { [$u, $g] = rg_ctx($id); out(['group' => rg_view($g, $u)]); }
 function h_rg_patch(string $id): never {
-    [$u, $g] = rg_ctx($id, true); $b = body();
+    [$u, $g] = rg_ctx($id, 'staff'); $b = body();
     if (array_key_exists('name', $b)) { $n = rg_txt($b['name'], 40); if (mb_strlen($n) < 2) fail(400, 'Grup adı en az 2 karakter olmalı.'); q('UPDATE ml_rg SET name = ? WHERE id = ?', [$n, $id]); }
     if (array_key_exists('desc', $b)) rg_set_desc($id, rg_txt($b['desc'], RG_MAX_DESC));
     if (array_key_exists('gap', $b)) { if (!in_array((int)$b['gap'], RG_GAPS, true) || !is_numeric($b['gap'])) fail(400, 'Geçersiz mesafe.'); q('UPDATE ml_rg SET gap = ? WHERE id = ?', [(int)$b['gap'], $id]); }
@@ -347,37 +354,58 @@ function h_rg_patch(string $id): never {
 function h_rg_delete(string $id): never { [$u, $g] = rg_ctx($id, true); rg_destroy($g, 'deleted'); out(['ok' => true]); }
 function h_rg_leave(string $id): never { [$u, $g] = rg_ctx($id); rg_remove_member($g, $u['id'], 'leave'); out(['ok' => true]); }
 function h_rg_kick(string $id): never {
-    [$u, $g] = rg_ctx($id, true); $m = rg_member_by_name($g, body()['username'] ?? '');
+    [$u, $g] = rg_ctx($id, 'staff'); $m = rg_member_by_name($g, body()['username'] ?? '');
     if (!$m) fail(404, 'Üye bulunamadı.');
     if ($m['uid'] === $u['id']) fail(400, 'Kendini çıkaramazsın; gruptan ayrıl.');
+    if ($m['uid'] === $g['leader'] || (rg_role($g, $m['uid']) === 'admin' && $g['leader'] !== $u['id'])) fail(403, 'Bu üyeyi çıkarma yetkin yok.');
     rg_remove_member($g, $m['uid'], 'kick'); out(['ok' => true]);
 }
 function h_rg_leader(string $id): never {
     [$u, $g] = rg_ctx($id, true); $m = rg_member_by_name($g, body()['username'] ?? '');
     if (!$m) fail(404, 'Üye bulunamadı.');
     if ($m['uid'] === $g['leader']) out(['group' => rg_view($g, $u)]);
+    q("UPDATE ml_rgm SET role = '' WHERE gid = ? AND uid = ?", [$id, $m['uid']]);
     q('UPDATE ml_rg SET leader = ? WHERE id = ?', [$m['uid'], $id]);
     rg_rec($g, ['e', now_ms(), 'leader', rg_name($m['uid']), uname($u)]);
     $g = rg_group($id); rg_notify($g, 'leader');
     out(['group' => rg_view($g, $u)]);
 }
+function h_rg_role(string $id): never {            // yalnız lider: Yönetici ata / geri al
+    [$u, $g] = rg_ctx($id, true); $b = body(); $m = rg_member_by_name($g, $b['username'] ?? '');
+    if (!$m) fail(404, 'Üye bulunamadı.');
+    if ($m['uid'] === $g['leader']) fail(400, 'Liderin rolü değiştirilemez; önce lideri devret.');
+    $r = $b['role'] ?? ''; if ($r !== 'admin' && $r !== 'member') fail(400, 'Geçersiz rol.');
+    q('UPDATE ml_rgm SET role = ? WHERE gid = ? AND uid = ?', [$r === 'admin' ? 'admin' : '', $id, $m['uid']]);
+    rg_ev($id, 'role', rg_name($m['uid']), $r); rg_notify($g, 'role');
+    out(['group' => rg_view(rg_group($id), $u)]);
+}
+function h_rg_pic_put(string $id, string $kind): never {      // grup fotoğrafı (photo) / grup içi kapak (cover): lider ya da yönetici
+    [$u, $g] = rg_ctx($id, 'staff');
+    if ($kind !== 'photo' && $kind !== 'cover') fail(404, 'Bilinmeyen görsel türü.');
+    pic_put($kind === 'photo' ? 'gphoto' : 'gcover', $id, raw_body(200000));
+    rg_notify($g, 'settings'); out(['group' => rg_view(rg_group($id), $u)]);
+}
+function h_rg_pic_get(string $id, string $kind): never {
+    rg_ctx($id); if ($kind !== 'photo' && $kind !== 'cover') { http_response_code(404); exit; }
+    pic_send($kind === 'photo' ? 'gphoto' : 'gcover', $id);
+}
 function h_rg_code(string $id): never {
-    [$u, $g] = rg_ctx($id, true); $c = rg_new_code();
+    [$u, $g] = rg_ctx($id, 'staff'); $c = rg_new_code();
     q('UPDATE ml_rg SET code = ? WHERE id = ?', [$c, $id]);       // eski kod/bağlantı geçersiz olur
     out(['code' => $c]);
 }
 function h_rg_start(string $id): never {
-    [$u, $g] = rg_ctx($id, true);
+    [$u, $g] = rg_ctx($id, 'staff');
     if ($g['ride_id']) fail(409, 'Grup sürüşü zaten başlamış.');
     rg_start_ride($g, $u); out(['group' => rg_view(rg_group($id), $u)]);
 }
 function h_rg_end(string $id): never {
-    [$u, $g] = rg_ctx($id, true);
+    [$u, $g] = rg_ctx($id, 'staff');
     if (!$g['ride_id']) fail(409, 'Aktif grup sürüşü yok.');
     rg_end_ride($g, $u, null); out(['group' => rg_view(rg_group($id), $u)]);
 }
 function h_rg_route_put(string $id): never {
-    [$u, $g] = rg_ctx($id, true);
+    [$u, $g] = rg_ctx($id, 'staff');
     if (rl('rgr:' . $u['id'], 6, 600000)) fail(429, 'Güzergâh çok sık değiştirildi, biraz bekle.');
     $b = json_decode(raw_body(409600), true);
     if (!is_array($b)) fail(400, 'Güzergâh okunamadı.');
@@ -405,7 +433,7 @@ function h_rg_route_get(string $id): never {
     out(['v' => (int)$g['route_v'], 'name' => $g['route_name'], 'len' => (int)$g['route_len'], 'pts' => $rc['pts']]);
 }
 function h_rg_route_delete(string $id): never {
-    [$u, $g] = rg_ctx($id, true);
+    [$u, $g] = rg_ctx($id, 'staff');
     if ($g['route_pts'] !== null) {
         q('UPDATE ml_rg SET route_pts = NULL, route_len = 0, route_n = 0, route_name = \'\', route_v = route_v + 1 WHERE id = ?', [$id]);
         $g = rg_group($id); if ($g['ride_id']) rg_rec($g, ['r', now_ms(), null]);

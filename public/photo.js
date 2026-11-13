@@ -4,6 +4,7 @@
   'use strict';
   const KIND = {
     avatar: { title: 'Profil Fotoğrafı', w: 256, h: 256, ratio: 1, round: true, cam: 'user', q: 0.82 },
+    photo: { title: 'Grup Fotoğrafı', w: 256, h: 256, ratio: 1, round: false, cam: 'environment', q: 0.82 },
     cover: { title: 'Kapak Fotoğrafı', w: 800, h: 300, ratio: 800 / 300, round: false, cam: 'environment', q: 0.8 }
   };
   const $ = id => document.getElementById(id);

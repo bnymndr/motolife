@@ -220,6 +220,7 @@ function h_account_delete(): never {
         q('DELETE FROM ml_rides WHERE uid = ?', [$uid]);
         rt_drop_user($uid);
         q('DELETE FROM ml_users WHERE id = ?', [$uid]);
+        q("DELETE FROM ml_pics WHERE kind = 'cover' AND ref = ?", [$uid]);
     } catch (Throwable $e) { error_log('[moto-life] Hesap silinemedi: ' . $e->getMessage()); fail(500, 'Hesap silinirken hata oluştu. Tekrar dene.'); }
     clear_session_cookie();
     out(['ok' => true]);

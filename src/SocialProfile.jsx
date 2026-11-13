@@ -20,6 +20,17 @@ async function api(path, { method = 'GET', body } = {}) {
   return j;
 }
 
+// Görsel (JPEG data URL) → ham gövde olarak PUT; boş = kaldır. Kapak/grup fotoğrafı uçları octet-stream kullanır (genel JSON sınırı küçük).
+async function putPic(path, dataUrl) {
+  const body = dataUrl ? await (await fetch(dataUrl)).blob() : new Blob([]);
+  const r = await fetch(path, { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/octet-stream' }, body });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'Fotoğraf kaydedilemedi.');
+  return j;
+}
+const ROLE_TR = { leader: 'Lider', admin: 'Yönetici', member: 'Üye' };
+const isStaff = g => g.role === 'leader' || g.role === 'admin';
+
 const ago = ts => {
   const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
   if (s < 45) return 'az önce';
@@ -555,12 +566,20 @@ function ProfileView({ username, self, version, onOpenUser, onChat, onRefresh, o
   if (!info) return <p className={cx('py-8 text-center text-sm', MUTED)}>Yükleniyor…</p>;
   const p = info.profile;
   const onDone = msg => { if (msg) toast(msg); onRefresh(); load(); };
+  const editCover = () => window.Photo && window.Photo.menu('cover', {
+    current: () => (p.cv ? `/api/social/cover/${encodeURIComponent(p.username)}?v=${p.cv}` : ''),
+    save: async d => { await putPic('/api/social/cover', d); onDone('Kapak fotoğrafı güncellendi.'); },
+    remove: async () => { await putPic('/api/social/cover', ''); onDone('Kapak fotoğrafı kaldırıldı.'); }
+  });
 
   return (
     <div className="space-y-3">
       {!isSelf && onBack && <button type="button" onClick={onBack} className={cx(GHOST, '!px-3')}><Icon name="back" className="h-4 w-4" />Profilim</button>}
       <section className={cx(CARD, 'overflow-hidden')}>
-        <div className="h-20 bg-gradient-to-r from-amber-400 via-[#073049] to-[#031a29]" />
+        <div className="relative aspect-[8/3] w-full bg-gradient-to-r from-amber-400 via-[#073049] to-[#031a29]">
+          {p.cv && <img src={`/api/social/cover/${encodeURIComponent(p.username)}?v=${p.cv}`} alt="" className="absolute inset-0 h-full w-full object-cover" />}
+          {isSelf && <button type="button" aria-label="Kapak Fotoğrafını Değiştir" onClick={editCover} className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full bg-[#031420]/60 text-lg text-white">📷</button>}
+        </div>
         <div className="px-4 pb-4">
           <div className="-mt-10 flex items-end justify-between gap-2">
             <span className="rounded-full ring-4 ring-white dark:ring-[#052437]"><Avatar user={p} size={80} /></span>
@@ -862,11 +881,11 @@ function GroupsView({ self, version, openGid, onOpened, onOpenUser, toast }) {
       {list && !list.length && <Empty icon="group" title="Henüz Bir Grubun Yok" text="Bir grup oluştur ya da arkadaşının davet koduyla katıl. Gruplar haritadaki grup sürüşüyle de ortaktır." />}
       {list && list.map(g => (
         <button key={g.id} type="button" onClick={() => setGid(g.id)} className={cx(CARD, 'flex w-full items-center gap-3 p-3 text-left transition hover:ring-amber-400/60')}>
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-400 text-lg font-bold text-[#031420]">{g.name.trim().charAt(0).toLocaleUpperCase('tr')}</span>
+          <GroupPhoto g={g} size={48} />
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-2"><span className="truncate font-semibold">{g.name}</span>
               {g.active && <span className="shrink-0 rounded-full bg-emerald-400/20 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-300">Sürüşte</span>}</span>
-            <span className={cx('block truncate text-xs', MUTED)}>{g.count} üye · {g.role === 'leader' ? 'Lider Sensin' : 'Lider: @' + g.leader}{g.posts ? ' · ' + g.posts + ' gönderi' : ''}</span>
+            <span className={cx('block truncate text-xs', MUTED)}>{g.count} üye · {g.role === 'leader' ? 'Lider Sensin' : (g.role === 'admin' ? 'Yöneticisin · ' : '') + 'Lider: @' + g.leader}{g.posts ? ' · ' + g.posts + ' gönderi' : ''}</span>
             {g.desc && <span className={cx('mt-0.5 block truncate text-xs', MUTED)}>{g.desc}</span>}
           </span>
         </button>
@@ -875,16 +894,25 @@ function GroupsView({ self, version, openGid, onOpened, onOpenUser, toast }) {
   );
 }
 
+function GroupPhoto({ g, size = 48, className = '' }) {
+  const [bad, setBad] = useState(false);
+  useEffect(() => setBad(false), [g.photo]);
+  return g.photo && !bad
+    ? <img src={g.photo} alt="" onError={() => setBad(true)} style={{ width: size, height: size }} className={cx('shrink-0 rounded-2xl object-cover', className)} />
+    : <span style={{ width: size, height: size, fontSize: size * 0.4 }} className={cx('flex shrink-0 items-center justify-center rounded-2xl bg-amber-400 font-bold text-[#031420]', className)}>{g.name.trim().charAt(0).toLocaleUpperCase('tr')}</span>;
+}
+
 function GroupMembers({ g, onOpenUser, act }) {
-  const leader = g.role === 'leader';
+  const leader = g.role === 'leader', staff = isStaff(g);
   return (
     <div className={cx(CARD, 'divide-y divide-slate-200 px-3 dark:divide-white/10')}>
       {g.members.map(m => (
         <UserRow key={m.username} user={m} onClick={() => onOpenUser(m.username)}
-                 sub={[m.role === 'leader' ? 'Lider' : 'Üye', m.bike, m.sharing ? 'Konumu açık' : ''].filter(Boolean).join(' · ')}
-                 right={leader && m.role !== 'leader' && (
+                 sub={[ROLE_TR[m.role] || 'Üye', m.bike, m.sharing ? 'Konumu açık' : ''].filter(Boolean).join(' · ')}
+                 right={m.role !== 'leader' && (leader || (staff && m.role === 'member')) && (
                    <>
-                     <ConfirmButton onConfirm={() => act('/leader', { username: m.username })} confirmLabel="Lider Yap?" className={cx(GHOST, '!px-2.5 !py-1.5 !text-xs')}>Lider Yap</ConfirmButton>
+                     {leader && <ConfirmButton onConfirm={() => act('/role', { username: m.username, role: m.role === 'admin' ? 'member' : 'admin' })} confirmLabel={m.role === 'admin' ? 'Üye Yap?' : 'Yönetici Yap?'} className={cx(GHOST, '!px-2.5 !py-1.5 !text-xs')}>{m.role === 'admin' ? 'Yöneticiliği Al' : 'Yönetici Yap'}</ConfirmButton>}
+                     {leader && <ConfirmButton onConfirm={() => act('/leader', { username: m.username })} confirmLabel="Lider Yap?" className={cx(GHOST, '!px-2.5 !py-1.5 !text-xs')}>Lider Yap</ConfirmButton>}
                      <ConfirmButton onConfirm={() => act('/kick', { username: m.username })} confirmLabel="Çıkar?" className={cx(DANGER, '!px-2.5 !py-1.5 !text-xs')}>Çıkar</ConfirmButton>
                    </>
                  )} />
@@ -893,8 +921,13 @@ function GroupMembers({ g, onOpenUser, act }) {
   );
 }
 
+const ROLE_INFO = [
+  ['Lider', 'Grubun sahibi. Her şeyi yapar: yönetici atar/alır, lideri devreder, grubu siler; ayrıca yönetici yetkilerinin hepsine sahiptir.'],
+  ['Yönetici', 'Grup adı, açıklama, fotoğraf ve kapağı düzenler; davet kodunu yeniler; üyeleri çıkarır (lideri ve diğer yöneticileri çıkaramaz); sürüşü başlatıp bitirir; ana güzergâhı belirler; herkesin gönderi ve yorumunu siler.'],
+  ['Üye', 'Gönderi paylaşır, beğenir, yorum yapar, konumunu ve sesini sürüşte paylaşır; istediği zaman ayrılır.']
+];
 function GroupInfo({ g, act, patch, onLeft, toast }) {
-  const leader = g.role === 'leader';
+  const leader = g.role === 'leader', staff = isStaff(g);
   const [edit, setEdit] = useState(false);
   const [name, setName] = useState(g.name);
   const [desc, setDesc] = useState(g.desc || '');
@@ -917,19 +950,21 @@ function GroupInfo({ g, act, patch, onLeft, toast }) {
         ) : (
           <>
             <p className="whitespace-pre-wrap text-[15px] [overflow-wrap:anywhere]">{g.desc || <span className={MUTED}>Bu grubun henüz bir açıklaması yok.</span>}</p>
-            {leader && <button type="button" onClick={() => { setName(g.name); setDesc(g.desc || ''); setEdit(true); }} className={cx(GHOST, 'mt-3')}>Adı ve Açıklamayı Düzenle</button>}
+            {staff && <button type="button" onClick={() => { setName(g.name); setDesc(g.desc || ''); setEdit(true); }} className={cx(GHOST, 'mt-3')}>Adı ve Açıklamayı Düzenle</button>}
           </>
         )}
       </div>
       <dl className={cx(CARD, 'divide-y divide-slate-200 px-4 dark:divide-white/10')}>
         {row('Lider', '@' + g.leader)}
+        {row('Yöneticiler', g.members.filter(m => m.role === 'admin').map(m => '@' + m.username).join(', ') || 'Yok')}
+        {row('Rolün', ROLE_TR[g.role] || 'Üye')}
         {row('Kuruluş', fmtDate(g.createdAt))}
         {row('Üye Sayısı', g.members.length)}
         {row('Gönderi Sayısı', g.postCount)}
         {row('Sürüş Durumu', g.ride ? 'Sürüş Devam Ediyor' : 'Sürüş Yok')}
         {row('Ana Güzergâh', g.route ? (g.route.name || 'Belirlendi') + ' · ' + (g.route.len / 1000).toFixed(1).replace('.', ',') + ' km' : 'Belirlenmedi')}
       </dl>
-      {leader && g.code && (
+      {staff && g.code && (
         <div className={cx(CARD, 'space-y-2 p-4')}>
           <p className="font-semibold">Davet</p>
           <p className="select-all text-center font-mono text-2xl font-bold tracking-[.3em] text-amber-600 dark:text-amber-300">{g.code}</p>
@@ -940,6 +975,10 @@ function GroupInfo({ g, act, patch, onLeft, toast }) {
           </div>
         </div>
       )}
+      <details className={cx(CARD, 'p-4')}>
+        <summary className="cursor-pointer font-semibold">Roller ve Yetkiler</summary>
+        <dl className="mt-2 space-y-2">{ROLE_INFO.map(([k, v]) => <div key={k}><dt className="text-sm font-semibold text-amber-600 dark:text-amber-300">{k}</dt><dd className={cx('text-sm', MUTED)}>{v}</dd></div>)}</dl>
+      </details>
       <button type="button" onClick={() => { if (window.openMap) window.openMap(); }} className={cx(GHOST, 'w-full')}>Haritada Grup Sürüşünü Aç</button>
       <div className="flex gap-2">
         <ConfirmButton onConfirm={() => act('/leave').then(onLeft).catch(x => toast(x.message))} confirmLabel="Ayrıl?" className={cx(DANGER, 'flex-1')}>Gruptan Ayrıl</ConfirmButton>
@@ -961,18 +1000,33 @@ function GroupPage({ self, gid, version, onBack, onOpenUser, toast }) {
   const act = useCallback(async (path, body) => { const j = await api(`/api/rgroups/${gid}${path}`, { method: 'POST', body: body || {} }); loadG(); return j; }, [gid, loadG]);
   const patch = useCallback(async body => { const j = await api('/api/rgroups/' + gid, { method: 'PATCH', body }); setG(j.group); return j; }, [gid]);
 
+  const editPic = kind => window.Photo && window.Photo.menu(kind, {
+    current: () => (g && g[kind]) || '',
+    save: async d => { const j = await putPic(`/api/rgroups/${gid}/pic/${kind}`, d); setG(j.group); toast(kind === 'photo' ? 'Grup fotoğrafı güncellendi.' : 'Grup kapağı güncellendi.'); },
+    remove: async () => { const j = await putPic(`/api/rgroups/${gid}/pic/${kind}`, ''); setG(j.group); toast('Fotoğraf kaldırıldı.'); }
+  });
   if (err && !g) return <div className="space-y-3"><button type="button" onClick={onBack} className={GHOST}><Icon name="back" className="h-4 w-4" />Gruplarım</button><Empty icon="x" title="Grup Açılamadı" text={err} /></div>;
   if (!g) return <p className={cx('py-8 text-center text-sm', MUTED)}>Yükleniyor…</p>;
   const subs = [['posts', 'Gönderiler'], ['members', 'Üyeler (' + g.members.length + ')'], ['info', 'Bilgi']];
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <button type="button" onClick={onBack} aria-label="Gruplarım" className={cx(GHOST, '!px-2.5')}><Icon name="back" className="h-5 w-5" /></button>
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-lg font-bold">{g.name}</h2>
-          <p className={cx('truncate text-xs', MUTED)}>{g.members.length} üye · Lider: @{g.leader}{g.ride ? ' · Sürüşte' : ''}</p>
+      <section className={cx(CARD, 'overflow-hidden')}>
+        <div className="relative aspect-[8/3] w-full bg-gradient-to-r from-amber-400 via-[#073049] to-[#031a29]">
+          {g.cover && <img src={g.cover} alt="" className="absolute inset-0 h-full w-full object-cover" />}
+          <button type="button" onClick={onBack} aria-label="Gruplarım" className="absolute left-2 top-2 flex h-11 w-11 items-center justify-center rounded-full bg-[#031420]/60 text-white"><Icon name="back" className="h-5 w-5" /></button>
+          {isStaff(g) && <button type="button" aria-label="Grup Kapağını Değiştir" onClick={() => editPic('cover')} className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full bg-[#031420]/60 text-lg text-white">📷</button>}
         </div>
-      </div>
+        <div className="flex items-end gap-3 px-4 pb-3">
+          <span className="relative -mt-8 rounded-2xl ring-4 ring-white dark:ring-[#052437]">
+            <GroupPhoto g={g} size={72} />
+            {isStaff(g) && <button type="button" aria-label="Grup Fotoğrafını Değiştir" onClick={() => editPic('photo')} className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-amber-400 text-sm text-[#031420]">📷</button>}
+          </span>
+          <div className="min-w-0 flex-1 pt-2">
+            <h2 className="truncate text-lg font-bold">{g.name}</h2>
+            <p className={cx('truncate text-xs', MUTED)}>{g.members.length} üye · Lider: @{g.leader}{g.ride ? ' · Sürüşte' : ''}</p>
+          </div>
+        </div>
+      </section>
       <div className="grid grid-cols-3 gap-1 rounded-xl bg-slate-200/70 p-1 dark:bg-white/[.07]" role="tablist">
         {subs.map(([id, label]) => (
           <button key={id} type="button" role="tab" aria-selected={sub === id} onClick={() => setSub(id)}

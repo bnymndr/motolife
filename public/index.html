@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Moto Life</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=Exo+2:wght@400;500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=Exo+2:wght@400;500;600;700&family=Atkinson+Hyperlegible:wght@400;700&family=Montserrat:wght@400;500;600;700&family=Nunito:wght@400;500;600;700&family=Lora:wght@400;500;600;700&display=swap">
 <script src="https://cdn.tailwindcss.com/3.4.17"></script>
 <script>
 tailwind.config = { darkMode: 'class', theme: { extend: { colors: {
@@ -22,7 +22,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: { colors: {
   ink: 'rgb(var(--ink-rgb) / <alpha-value>)'
 } } } };
 </script>
-<script>try{var _ft=localStorage.getItem("ml_font");if(_ft&&/^(system|exo|hyper)$/.test(_ft))document.documentElement.setAttribute("data-font",_ft)}catch(e){}
+<script>try{var _ft=localStorage.getItem("ml_font");if(_ft&&/^(system|exo|hyper|montserrat|nunito|lora)$/.test(_ft))document.documentElement.setAttribute("data-font",_ft)}catch(e){}
 try{var _th=localStorage.getItem("ml_theme");if(_th&&/^(asphalt|forest|ocean)$/.test(_th))document.documentElement.setAttribute("data-apptheme",_th)}catch(e){}
 try{var _fs=+localStorage.getItem("ml_fs");if(_fs>=88&&_fs<=125&&_fs!==100)document.documentElement.style.fontSize=_fs+"%";if(localStorage.getItem("ml_rm")==="1")document.documentElement.setAttribute("data-rm","1")}catch(e){}</script>
 <style>
@@ -66,7 +66,10 @@ try{var _fs=+localStorage.getItem("ml_fs");if(_fs>=88&&_fs<=125&&_fs!==100)docum
   :root[data-font=system]{--font:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue','Noto Sans',Arial,sans-serif;--font-d:var(--font)}
   :root[data-font=exo]{--font:'Exo 2',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;--font-d:var(--font)}
   :root[data-font=hyper]{--font:'Atkinson Hyperlegible',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;--font-d:var(--font)}
-  :root[data-font=system] .road,:root[data-font=exo] .road,:root[data-font=hyper] .road{letter-spacing:0}
+  :root[data-font=montserrat]{--font:'Montserrat',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;--font-d:var(--font)}
+  :root[data-font=nunito]{--font:'Nunito',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;--font-d:var(--font)}
+  :root[data-font=lora]{--font:'Lora',Georgia,'Times New Roman',serif;--font-d:var(--font)}
+  :root[data-font=system] .road,:root[data-font=exo] .road,:root[data-font=hyper] .road,:root[data-font=montserrat] .road,:root[data-font=nunito] .road,:root[data-font=lora] .road{letter-spacing:0}
   :root[data-apptheme=asphalt]{--a3:255 112 100;--a4:240 84 72;--a5:204 58 48;--ink-rgb:14 14 16;--z2:232 232 234;--z3:202 204 209;--z4:152 156 164;--z5:110 114 122;--z6:74 77 84;--z7:46 48 53;--z8:32 34 38;
     --bg1:#23252a;--bg2:#15161a;--bg3:#0a0a0c;--glow:240 84 72;--panel:20 21 24;--deep:#0a0a0c;--deep2:#18191d;--deep3:#111214}
   :root[data-apptheme=forest]{--a3:190 232 112;--a4:156 210 76;--a5:126 182 52;--ink-rgb:5 20 13;--z2:226 232 222;--z3:196 207 198;--z4:142 160 146;--z5:100 120 106;--z6:66 86 74;--z7:40 58 48;--z8:27 42 34;
