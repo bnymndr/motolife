@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#031420">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Moto Life">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Moto Life</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=Exo+2:wght@400;500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script>
+tailwind.config = { darkMode: 'class', theme: { extend: { colors: {
+  amber: { 300: 'rgb(var(--a3) / <alpha-value>)', 400: 'rgb(var(--a4) / <alpha-value>)', 500: 'rgb(var(--a5) / <alpha-value>)' },
+  zinc: { 200: 'rgb(var(--z2) / <alpha-value>)', 300: 'rgb(var(--z3) / <alpha-value>)', 400: 'rgb(var(--z4) / <alpha-value>)', 500: 'rgb(var(--z5) / <alpha-value>)', 600: 'rgb(var(--z6) / <alpha-value>)', 700: 'rgb(var(--z7) / <alpha-value>)', 800: 'rgb(var(--z8) / <alpha-value>)' },
+  surface: 'rgba(255,255,255,0.055)',
+  ink: 'rgb(var(--ink-rgb) / <alpha-value>)'
+} } } };
+</script>
+<script>try{var _ft=localStorage.getItem("ml_font");if(_ft&&/^(system|exo|hyper)$/.test(_ft))document.documentElement.setAttribute("data-font",_ft)}catch(e){}
+try{var _th=localStorage.getItem("ml_theme");if(_th&&/^(asphalt|forest|ocean)$/.test(_th))document.documentElement.setAttribute("data-apptheme",_th)}catch(e){}
+try{var _fs=+localStorage.getItem("ml_fs");if(_fs>=88&&_fs<=125&&_fs!==100)document.documentElement.style.fontSize=_fs+"%";if(localStorage.getItem("ml_rm")==="1")document.documentElement.setAttribute("data-rm","1")}catch(e){}</script>
+<style>
+  :root{--a3:242 166 78;--a4:234 134 33;--a5:212 115 26;--accent:rgb(var(--a4));--accent-2:rgb(var(--a3));--ink-rgb:3 20 32;--ink:rgb(var(--ink-rgb));--cream:#F4EFE6;--nav:calc(70px + env(safe-area-inset-bottom));
+    --z2:230 225 216;--z3:201 208 214;--z4:147 164 178;--z5:102 122 138;--z6:68 88 106;--z7:42 59 75;--z8:27 43 58;
+    --bg1:#0a2a40;--bg2:#061c2c;--bg3:#031420;--glow:234 134 33;--panel:6 24 38;--deep:#031420;--deep2:#0a2536;--deep3:#0a1a26;
+    --font:'Barlow',system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue','Noto Sans',Arial,sans-serif;
+    --font-d:'Barlow Condensed','Barlow',system-ui,-apple-system,'Segoe UI',Roboto,'Arial Narrow',Arial,sans-serif}
+  .bike-stage{position:relative;overflow:hidden;border-radius:1.25rem;height:218px;
+    background:radial-gradient(120% 90% at 50% 38%,rgb(var(--a4) / .20),transparent 66%),url(/garage-bg.svg) center/cover no-repeat,linear-gradient(180deg,rgb(var(--ink-rgb) / .5),rgb(var(--ink-rgb) / .95));box-shadow:inset 0 0 0 1px rgb(var(--a4) / .22)}
+  .bike-stage::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;background:radial-gradient(100% 80% at 50% 45%,transparent 55%,rgb(var(--ink-rgb) / .55))}
+  .tt-plate{position:absolute;left:50%;bottom:18px;width:72%;max-width:280px;height:40px;transform:translateX(-50%);border-radius:50%;
+    background:linear-gradient(180deg,rgb(var(--z4) / .9),rgb(var(--ink-rgb)));box-shadow:0 16px 0 -2px rgb(var(--ink-rgb)),0 18px 22px rgb(0 0 0 / .6)}
+  .tt-plate::before{content:"";position:absolute;inset:3px;border-radius:50%;background:radial-gradient(closest-side,rgb(var(--a4) / .35),rgb(var(--ink-rgb) / .95) 72%);box-shadow:inset 0 0 0 2px rgb(var(--a3) / .75),0 0 16px rgb(var(--a4) / .45)}
+  .tt-plate::after{content:"";position:absolute;left:12%;right:12%;top:50%;height:1px;background:linear-gradient(90deg,transparent,rgb(var(--a3) / .4),transparent)}
+  .tt{position:absolute;left:0;right:0;bottom:32px;height:160px;perspective:900px;display:flex;justify-content:center;align-items:flex-end;pointer-events:none}
+  .tt-spin{position:relative;transform-style:preserve-3d;max-width:185px;width:58%}
+  .tt-spin.fb{animation:ttspin 14s linear infinite}
+  .bike-img{display:block;width:100%;height:auto;max-height:112px;object-fit:contain}
+  @keyframes ttspin{from{transform:rotateY(0)}to{transform:rotateY(360deg)}}
+  .bike-none{position:absolute;inset:0 0 56px;display:flex;align-items:center;justify-content:center;color:rgb(var(--a3));font-size:.9rem;opacity:.8}
+  .bike-edit{position:absolute;z-index:3;top:.6rem;right:.6rem;width:2.75rem;height:2.75rem;border-radius:9999px;display:flex;align-items:center;justify-content:center;font-size:1.35rem;line-height:1;background:rgb(var(--ink-rgb) / .8);box-shadow:inset 0 0 0 1px rgb(var(--a3) / .6),0 4px 12px rgb(0 0 0 / .4)}
+  .bike-edit:active{background:rgb(var(--a4) / .35)}
+  :root[data-font=system]{--font:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue','Noto Sans',Arial,sans-serif;--font-d:var(--font)}
+  :root[data-font=exo]{--font:'Exo 2',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;--font-d:var(--font)}
+  :root[data-font=hyper]{--font:'Atkinson Hyperlegible',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;--font-d:var(--font)}
+  :root[data-font=system] .road,:root[data-font=exo] .road,:root[data-font=hyper] .road{letter-spacing:0}
+  :root[data-apptheme=asphalt]{--a3:255 112 100;--a4:240 84 72;--a5:204 58 48;--ink-rgb:14 14 16;--z2:232 232 234;--z3:202 204 209;--z4:152 156 164;--z5:110 114 122;--z6:74 77 84;--z7:46 48 53;--z8:32 34 38;
+    --bg1:#23252a;--bg2:#15161a;--bg3:#0a0a0c;--glow:240 84 72;--panel:20 21 24;--deep:#0a0a0c;--deep2:#18191d;--deep3:#111214}
+  :root[data-apptheme=forest]{--a3:190 232 112;--a4:156 210 76;--a5:126 182 52;--ink-rgb:5 20 13;--z2:226 232 222;--z3:196 207 198;--z4:142 160 146;--z5:100 120 106;--z6:66 86 74;--z7:40 58 48;--z8:27 42 34;
+    --bg1:#14352a;--bg2:#0c2119;--bg3:#06130d;--glow:156 210 76;--panel:9 28 21;--deep:#06130d;--deep2:#0f2a20;--deep3:#0a1c15}
+  :root[data-apptheme=ocean]{--a3:112 216 248;--a4:46 186 232;--a5:26 152 198;--ink-rgb:3 15 34;--z2:222 230 240;--z3:190 204 220;--z4:136 156 182;--z5:100 120 148;--z6:66 84 112;--z7:40 56 82;--z8:26 40 62;
+    --bg1:#0f2f5c;--bg2:#091d3a;--bg3:#040f22;--glow:46 186 232;--panel:6 22 48;--deep:#040f22;--deep2:#0a2547;--deep3:#07182f}
+  html{-webkit-text-size-adjust:100%;color-scheme:dark;background:var(--bg3)}
+  body{font-family:var(--font);color:var(--cream);overflow-x:hidden;overscroll-behavior:none;-webkit-font-smoothing:antialiased;
+    background:radial-gradient(80% 32% at 100% 0%,rgb(var(--glow) / .13),transparent 70%),
+               radial-gradient(90% 38% at 50% 108%,rgb(var(--glow) / .14),transparent 70%),
+               linear-gradient(180deg,var(--bg1) 0%,var(--bg2) 45%,var(--bg3) 100%) fixed}
+  .road{font-family:var(--font-d);font-weight:700;letter-spacing:.01em}
+  .road{font-variant-numeric:tabular-nums}
+  .card.wx{--wxc:var(--glow);background:radial-gradient(130% 110% at 100% 0%,rgb(var(--wxc) / .40),transparent 64%),radial-gradient(90% 80% at 0% 100%,rgb(var(--wxc) / .10),transparent 70%),linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.04))}
+  .wx[data-wx=cloud]{--wxc:150 170 190}.wx[data-wx=fog]{--wxc:170 180 190}.wx[data-wx=rain]{--wxc:60 150 230}.wx[data-wx=snow]{--wxc:190 225 250}.wx[data-wx=storm]{--wxc:160 110 230}
+  .wx-ic{background:rgb(var(--wxc) / .18);box-shadow:inset 0 0 0 1px rgb(var(--wxc) / .35),0 6px 18px rgb(var(--wxc) / .18);filter:saturate(1.1)}
+  .wx-pill{background:rgb(var(--wxc) / .18);box-shadow:inset 0 0 0 1px rgb(var(--wxc) / .32);color:var(--cream)}
+  #wxTemp{text-shadow:0 2px 14px rgb(var(--wxc) / .35)}
+  button,input,select{touch-action:manipulation}
+  button{transition:background-color .15s,transform .08s,opacity .15s}
+  button:active:not(:disabled){transform:scale(.985)}
+  button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .bg-surface{box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}
+  .field{width:100%;border-radius:.75rem;background:rgba(255,255,255,.055);box-shadow:inset 0 0 0 1px rgba(255,255,255,.09);padding:.85rem 1rem;font-size:16px;color:var(--cream);outline:none}
+  .field::placeholder{color:#667A8A}
+  .field:focus{box-shadow:inset 0 0 0 1.5px var(--accent)}
+  select.field option{background:var(--deep2);color:#F4EFE6}
+  .btn{width:100%;border-radius:.75rem;background:var(--accent);color:var(--ink);font-weight:600;font-size:1.05rem;padding:.9rem 1rem}
+  .btn:active{background:var(--accent-2)}
+  .link{color:var(--accent-2);font-size:.95rem;padding:.4rem}
+  .btn-sec{width:100%;border-radius:.75rem;background:rgba(255,255,255,.07);color:var(--cream);font-weight:500;font-size:1rem;padding:.85rem 1rem;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+  .btn-sec:active{background:rgba(255,255,255,.12)}
+  .btn-sm{border-radius:.625rem;background:rgba(255,255,255,.07);color:var(--cream);font-weight:500;font-size:.875rem;line-height:1.25rem;padding:.45rem .75rem;white-space:nowrap;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+  .btn-accent{background:var(--accent);color:var(--ink);font-weight:600;box-shadow:none}
+  #bottomNav.kb{display:none}
+  summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;font-weight:500;padding:.35rem 0}
+  summary::-webkit-details-marker{display:none}
+  summary::after{content:'▾';color:#93A4B2;transition:transform .15s}
+  details[open] > summary::after{transform:rotate(180deg)}
+  [data-rm] *,[data-rm] *::before,[data-rm] *::after{transition:none!important;animation:none!important}
+  .card{border-radius:1.25rem;background:linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.04));box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 8px 22px rgba(0,0,0,.22);padding:.85rem 1rem;min-height:0;overflow:hidden}
+  #bottomNav{background:rgba(3,20,32,.96)}
+  #bottomNav [data-nav]{position:relative}
+  #bottomNav [data-nav] svg{transition:transform .15s,fill .15s}
+  #bottomNav [data-nav=settings][aria-current=page] svg{fill:none}
+  #bottomNav [data-nav][aria-current=page] svg{fill:rgb(var(--a4) / .2);transform:translateY(-1px) scale(1.06)}
+  #bottomNav [data-nav][aria-current=page]:before{content:'';position:absolute;top:0;left:30%;right:30%;height:3px;border-radius:0 0 3px 3px;background:var(--accent)}
+  .stat-big{font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- Açılış ekranı: sayfa hazır olunca kapanır -->
+<div id="splash" class="fixed inset-0 z-[60] bg-ink transition-opacity duration-200">
+  <img src="/splash.jpg" alt="Moto Life – Birlikte Sür, Bağlı Kal." class="h-full w-full object-cover md:object-contain">
+</div>
+<script>
+/* Karşılama resmi uygulama yüklenirken görünür; ilk ekran hazır olur olmaz (bekleme süresi YOK) kalkar. Ağ takılırsa 6 sn sonra yine kalkar. */
+(function () {
+  const splash = document.getElementById('splash'); let gone = false;
+  window.hideSplash = function () { if (gone || !splash) return; gone = true; splash.style.opacity = '0'; splash.style.pointerEvents = 'none'; setTimeout(() => splash.remove(), 220); };
+  setTimeout(window.hideSplash, 6000);
+})();
+</script>
+
+<!-- Giriş / kayıt ekranı -->
+<main id="auth" class="hidden mx-auto flex min-h-[100dvh] max-w-md flex-col justify-center gap-5 p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+  <div>
+    <h1 class="road text-6xl font-bold leading-[0.9] sm:text-7xl">Moto <span class="text-amber-400">Life</span></h1>
+    <p class="road mt-2 text-xl tracking-wide text-zinc-400">Sürüş ve Topluluk</p>
+  </div>
+  <section id="quickLogin" class="hidden flex flex-col items-center gap-4">
+    <div id="qAvatar" class="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-amber-400 road text-5xl font-bold text-ink"></div>
+    <div class="text-center">
+      <p id="qName" class="road text-3xl font-bold leading-none"></p>
+      <p id="qUser" class="mt-1 text-sm text-zinc-400"></p>
+    </div>
+    <form id="quickForm" class="flex w-full flex-col gap-3">
+      <input id="qPw" class="field" type="password" autocomplete="current-password" placeholder="Şifre" required>
+      <button class="btn" type="submit">Giriş Yap</button>
+      <button id="qForgot" class="link self-center" type="button">Şifremi Unuttum</button>
+    </form>
+    <button id="qOther" class="btn-sec" type="button">Farklı Bir Oturum Aç</button>
+  </section>
+  <div id="authTabs" class="grid grid-cols-2 gap-1 rounded-xl bg-surface p-1">
+    <button id="tabLogin" type="button">Giriş Yap</button>
+    <button id="tabRegister" type="button">Kayıt Ol</button>
+  </div>
+
+  <div id="socialAuth" class="hidden flex flex-col gap-2">
+    <div id="gBtn" class="flex min-h-[44px] justify-center"></div>
+    <button id="aBtn" type="button" class="btn-sec flex items-center justify-center gap-2" style="min-height:44px"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 12.7c0-2.3 1.9-3.400 2-3.500-1.100-1.600-2.800-1.800-3.400-1.800-1.400-.1-2.800.9-3.500.9s-1.800-.8-3-.8c-1.500 0-3 .9-3.800 2.300-1.600 2.800-.4 7 1.200 9.300.8 1.100 1.700 2.400 2.900 2.300 1.200 0 1.600-.7 3-.7s1.800.7 3 .7 2-1.100 2.800-2.200c.9-1.300 1.200-2.500 1.200-2.600 0 0-2.400-.9-2.400-3.600zM14.200 5.800c.6-.8 1.100-1.800.9-2.800-.9 0-2 .6-2.600 1.400-.6.700-1.100 1.700-.9 2.700 1 .1 2-.5 2.600-1.300z"/></svg>Apple (iCloud) ile Devam Et</button>
+    <div class="flex items-center gap-3 text-xs text-zinc-500"><span class="h-px flex-1 bg-white/10"></span>Veya e-posta (Gmail, iCloud…) ile<span class="h-px flex-1 bg-white/10"></span></div>
+  </div>
+
+  <form id="loginForm" class="flex flex-col gap-3">
+    <input id="lLogin" class="field" autocomplete="username" autocapitalize="none" placeholder="Kullanıcı Adı, E-posta veya Telefon" required>
+    <input id="lPw" class="field" type="password" autocomplete="current-password" placeholder="Şifre" required>
+    <button class="btn" type="submit">Giriş Yap</button>
+    <button id="toForgot" class="link self-center" type="button">Şifremi Unuttum</button>
+  </form>
+
+  <form id="registerForm" class="hidden flex flex-col gap-3">
+    <input id="rUser" class="field" autocomplete="username" autocapitalize="none" maxlength="20" placeholder="Kullanıcı Adı" required>
+    <div class="grid grid-cols-2 gap-3">
+      <input id="rFirst" class="field" autocomplete="given-name" maxlength="40" placeholder="İsim" required>
+      <input id="rLast" class="field" autocomplete="family-name" maxlength="40" placeholder="Soyisim" required>
+    </div>
+    <select id="rGender" class="field" aria-label="Cinsiyet">
+      <option value="erkek">Erkek</option>
+      <option value="kadin">Kadın</option>
+      <option value="belirtmek-istemiyorum" selected>Belirtmek İstemiyorum</option>
+    </select>
+    <div class="grid grid-cols-2 gap-3">
+      <input id="rBrand" class="field" list="brands" maxlength="40" placeholder="Marka" required>
+      <input id="rModel" class="field" maxlength="40" placeholder="Model" required>
+    </div>
+    <input id="rEmail" class="field" type="email" autocomplete="email" placeholder="E-posta (Gmail, iCloud, Outlook…)" required>
+    <input id="rPhone" class="field" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" placeholder="Telefon (05xx xxx xx xx)" required>
+    <fieldset class="flex flex-col gap-2 rounded-xl p-3" style="box-shadow:inset 0 0 0 1px rgba(255,255,255,.09)">
+      <legend class="px-1 text-xs text-zinc-400">Zor Durumda Ulaşılacak Arkadaş <span class="text-zinc-500">(isteğe bağlı)</span></legend>
+      <input id="rEmName" class="field" autocomplete="off" maxlength="40" placeholder="Arkadaşının Adı">
+      <input id="rEmPhone" class="field" type="tel" inputmode="tel" autocomplete="off" maxlength="20" placeholder="Arkadaşının Telefonu">
+    </fieldset>
+    <input id="rPw" class="field" type="password" autocomplete="new-password" placeholder="Şifre (en az 6 karakter)" required>
+    <button class="btn" type="submit">Kayıt Ol</button>
+  </form>
+
+  <form id="socialForm" class="hidden flex flex-col gap-3">
+    <h2 class="road text-2xl font-semibold">Kaydı Tamamla</h2>
+    <p id="sInfo" class="text-sm text-zinc-400"></p>
+    <input id="oUser" class="field" autocomplete="username" autocapitalize="none" maxlength="20" placeholder="Kullanıcı Adı" required>
+    <div class="grid grid-cols-2 gap-3">
+      <input id="oFirst" class="field" autocomplete="given-name" maxlength="40" placeholder="İsim" required>
+      <input id="oLast" class="field" autocomplete="family-name" maxlength="40" placeholder="Soyisim" required>
+    </div>
+    <select id="oGender" class="field" aria-label="Cinsiyet"><option value="erkek">Erkek</option><option value="kadin">Kadın</option><option value="belirtmek-istemiyorum" selected>Belirtmek İstemiyorum</option></select>
+    <div class="grid grid-cols-2 gap-3">
+      <input id="oBrand" class="field" list="brands" maxlength="40" placeholder="Marka" required>
+      <input id="oModel" class="field" maxlength="40" placeholder="Model" required>
+    </div>
+    <input id="oPhone" class="field" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" placeholder="Telefon (05xx xxx xx xx)" required>
+    <fieldset class="flex flex-col gap-2 rounded-xl p-3" style="box-shadow:inset 0 0 0 1px rgba(255,255,255,.09)">
+      <legend class="px-1 text-xs text-zinc-400">Zor Durumda Ulaşılacak Arkadaş <span class="text-zinc-500">(isteğe bağlı)</span></legend>
+      <input id="oEmName" class="field" autocomplete="off" maxlength="40" placeholder="Arkadaşının Adı">
+      <input id="oEmPhone" class="field" type="tel" inputmode="tel" autocomplete="off" maxlength="20" placeholder="Arkadaşının Telefonu">
+    </fieldset>
+    <button class="btn" type="submit">Kaydı Tamamla</button>
+    <button class="link self-center" type="button" data-back>← Vazgeç</button>
+  </form>
+
+  <form id="forgotForm" class="hidden flex flex-col gap-3">
+    <h2 class="road text-2xl font-semibold">Şifremi Unuttum</h2>
+    <p class="text-sm text-zinc-400">Hesabındaki e-posta adresini yaz, sana şifre sıfırlama bağlantısı gönderelim.</p>
+    <input id="fEmail" class="field" type="email" autocomplete="email" placeholder="E-posta" required>
+    <button class="btn" type="submit">Bağlantı Gönder</button>
+    <button class="link self-center" type="button" data-back>← Girişe Dön</button>
+  </form>
+
+  <form id="resetForm" class="hidden flex flex-col gap-3">
+    <h2 class="road text-2xl font-semibold">Yeni Şifre Belirle</h2>
+    <input id="nPw" class="field" type="password" autocomplete="new-password" placeholder="Yeni Şifre (en az 6 karakter)" required>
+    <input id="nPw2" class="field" type="password" autocomplete="new-password" placeholder="Yeni Şifre (tekrar)" required>
+    <button class="btn" type="submit">Şifreyi Kaydet</button>
+    <button class="link self-center" type="button" data-back>← Girişe Dön</button>
+  </form>
+
+  <p id="authMsg" class="min-h-5 text-sm"></p>
+  <datalist id="brands"><option value="Honda"><option value="Yamaha"><option value="Kawasaki"><option value="Suzuki"><option value="BMW"><option value="Ducati"><option value="KTM"><option value="Triumph"><option value="Harley-Davidson"><option value="Royal Enfield"><option value="Aprilia"><option value="Husqvarna"><option value="Moto Guzzi"><option value="Benelli"><option value="CFMOTO"><option value="Voge"><option value="Vespa"><option value="Piaggio"><option value="SYM"><option value="Kymco"><option value="Bajaj"><option value="TVS"><option value="Kuba"><option value="Mondial"><option value="RKS"><option value="Arora"><option value="Lifan"><option value="Mash"><option value="Hero"><option value="Diğer"></datalist>
+</main>
+
+<!-- Profil paneli -->
+<main id="dash" class="hidden mx-auto flex min-h-[100dvh] max-w-md flex-col gap-3 p-4 pt-[calc(1rem+env(safe-area-inset-top))] pb-[calc(var(--nav)+.75rem)]">
+
+  <!-- 0. Üst kuşak: ayarlar | tarih - saat | çıkış -->
+
+  <!-- 1. Profil ve karşılama -->
+  <section class="card flex items-center gap-3">
+    <button id="avatarBtn" type="button" aria-label="Profil Fotoğrafını Değiştir" class="relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-full">
+      <img id="avatarImg" class="hidden h-full w-full object-cover" alt="Profil Fotoğrafı">
+      <span id="avatarInit" class="flex h-full w-full items-center justify-center bg-amber-400 road text-3xl font-bold text-ink"></span>
+    </button>
+    <input id="avatarFile" type="file" accept="image/*" class="hidden">
+    <div class="min-w-0 flex-1">
+      <p id="greetHello" class="road text-3xl font-bold leading-none"></p>
+      <p id="greetName" class="mt-1 truncate text-base font-medium"></p>
+      <p id="greetMsg" class="mt-0.5 text-xs leading-snug text-zinc-400"></p>
+    </div>
+  </section>
+
+  <!-- 2. Hava durumu -->
+  <section id="wxCard" class="card wx flex flex-col justify-between gap-2.5">
+    <div class="flex items-center gap-2">
+      <svg class="h-5 w-5 shrink-0 text-amber-300" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-pin"/></svg>
+      <span id="wxCity" class="road min-w-0 flex-1 truncate text-xl font-semibold leading-none">Konum Alınıyor…</span>
+      <button id="wxLocBtn" type="button" aria-label="Konumu Yenile" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-amber-300 active:bg-white/20"><svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-pin"/></svg></button>
+      <button id="wxRefreshBtn" type="button" aria-label="Hava Durumunu Yenile" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-amber-300 active:bg-white/20"><svg id="wxRefreshIc" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-refresh"/></svg></button>
+    </div>
+    <div id="wxMain" class="flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <span id="wxIcon" class="wx-ic flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-4xl leading-none">🌡️</span>
+        <span id="wxTemp" class="road text-6xl font-bold leading-none">--°</span>
+      </div>
+      <div class="min-w-0 text-right">
+        <div id="wxDesc" class="wx-pill inline-block max-w-full truncate rounded-full px-3 py-1.5 text-sm font-semibold">Hava Durumu Yükleniyor…</div>
+      </div>
+    </div>
+    <div id="wxFallback" class="hidden space-y-1.5">
+      <p id="wxFbMsg" class="text-xs text-zinc-400"></p>
+      <div class="flex gap-2">
+        <input id="wxCityInput" class="field !py-2" placeholder="Şehir yaz (ör. Ankara)" autocomplete="off">
+        <button id="wxCityBtn" class="btn-sm btn-accent" type="button">Ara</button>
+      </div>
+      <button id="wxUseGeo" class="link !p-0 !text-xs" type="button">Konumumu Kullan</button>
+    </div>
+    <p class="text-[10px] leading-none text-zinc-500">Kaynak: <span id="wxSrc">—</span> · <span id="wxStamp">5 dakikada bir yenilenir</span></p>
+  </section>
+
+  <!-- 3. Sürüş özeti: haftalık / aylık km + genel sürüş puanı -->
+  <section class="card flex flex-col gap-3" id="statsCard" aria-label="Sürüş Özeti">
+    <div class="flex items-center justify-between gap-2">
+      <h2 class="road text-lg tracking-wide text-zinc-300">Sürüş Özeti</h2>
+      <div class="flex rounded-xl bg-black/25 p-0.5 text-xs font-semibold" role="group" aria-label="Grafik Aralığı">
+        <button type="button" id="stWeek" data-range="week" aria-pressed="true" class="min-h-[32px] rounded-[10px] px-3.5">Hafta</button>
+        <button type="button" id="stMonth" data-range="month" aria-pressed="false" class="min-h-[32px] rounded-[10px] px-3.5">Ay</button>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-2">
+      <div class="rounded-2xl bg-black/20 px-3 py-2"><small class="text-[11px] text-zinc-400">Bu Hafta</small><div><span id="stWk" class="stat-big text-3xl">—</span> <span class="text-sm text-zinc-400">km</span></div><small id="stWkSub" class="text-[11px] text-zinc-500"></small></div>
+      <div class="rounded-2xl bg-black/20 px-3 py-2"><small class="text-[11px] text-zinc-400">Bu Ay</small><div><span id="stMo" class="stat-big text-3xl">—</span> <span class="text-sm text-zinc-400">km</span></div><small id="stMoSub" class="text-[11px] text-zinc-500"></small></div>
+    </div>
+    <div id="stChart" class="h-[128px] w-full" role="img" aria-label="Kilometre Grafiği"></div>
+    <p id="stMsg" class="text-[11px] leading-snug text-zinc-500"></p>
+  </section>
+
+  <section class="card flex items-center gap-4" id="scoreCard" aria-label="Genel Sürüş Puanı">
+    <div id="scRing" class="relative h-[104px] w-[104px] shrink-0"></div>
+    <div class="min-w-0 flex-1">
+      <h2 class="road text-lg tracking-wide text-zinc-300">Sürüş Puanı</h2>
+      <p id="scTxt" class="text-sm text-zinc-300">Hesaplanıyor…</p>
+      <div id="scTrend" class="mt-1 h-[34px] w-full"></div>
+    </div>
+  </section>
+  <details class="rounded-2xl bg-white/[.04] px-4 py-2 text-xs text-zinc-400"><summary class="min-h-[40px] text-sm text-zinc-300">Puan Nasıl Hesaplanır?</summary>
+    <p class="pb-2 leading-snug">Puan yalnızca ani fren / ani hızlanma olayı ölçülebilen (sensör ya da GPS) ve en az 2 km olan sürüşlerden hesaplanır. Her 10 km'deki olaylar şiddetine göre (orta 1, sert 2,5, acil 5) sayılır; 100 puandan düşülür. Genel puan, mesafeyle ağırlıklı ortalamadır. Sensörsüz sürüşler puanlanmaz (0 sayılmaz). Eşikler gerçek sürüş verisiyle ayarlanmadı: puan <b>tahminidir</b>.</p></details>
+</main>
+
+<!-- Katılma ekranı -->
+
+<main id="motor" class="hidden mx-auto min-h-[100dvh] max-w-md space-y-3 p-4 pt-[calc(1rem+env(safe-area-inset-top))] pb-[calc(var(--nav)+1rem)]">
+  <h1 class="road text-3xl font-bold">My Moto</h1>
+  <section class="card space-y-3">
+    <div class="bike-stage" data-testid="bike-stage">
+      <div class="tt-plate" aria-hidden="true"></div>
+      <div class="tt" aria-hidden="true"><div class="tt-spin"><img id="bikeImg" class="bike-img" alt="" width="788" height="522" decoding="async" hidden></div></div>
+      <p id="bikeNone" class="bike-none" hidden>Tip Seçilmedi</p>
+      <button id="motoEdit" class="bike-edit" type="button" aria-label="Motosiklet Bilgilerini Güncelle" title="Motosiklet Bilgilerini Güncelle">🛠️</button>
+    </div>
+    <p id="motoName" class="road text-center text-2xl font-semibold leading-tight"></p>
+  </section>
+  <section class="card flex flex-col gap-1.5">
+    <h2 class="road text-lg tracking-wide text-zinc-300">Günlük Bilgiler</h2>
+    <ul id="tips" class="space-y-1.5"></ul>
+  </section>
+  <div id="mymoto-root"></div>
+</main>
+
+<main id="world" class="hidden fixed inset-x-0 top-0 overflow-hidden" style="bottom:var(--nav)">
+  <div id="map-root" class="relative h-full w-full"></div>
+</main>
+
+<main id="analysis" class="hidden fixed inset-x-0 top-0 overflow-y-auto" style="bottom:var(--nav)">
+  <div id="analysis-root"><p class="p-6 text-center text-sm text-zinc-400">Analiz yükleniyor…</p></div>
+</main>
+<main id="social" class="hidden mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-x-hidden pb-[var(--nav)] pt-[calc(0.75rem+env(safe-area-inset-top))]">
+  <h1 class="road px-4 text-3xl font-bold leading-none">Sosyal</h1>
+  <div id="social-root" class="min-h-0 flex-1"></div>
+</main>
+<main id="settings" class="hidden mx-auto min-h-[100dvh] max-w-md p-4 pt-[calc(1rem+env(safe-area-inset-top))] pb-[calc(var(--nav)+1rem)]">
+  <div id="settings-root"></div>
+  <!-- Eski ayar blokları (kimlikleri ve JS'leri korunur); settings.js ilgili alt sayfaya taşır -->
+  <div id="setLegacy" class="hidden">
+    <div id="lg-profile" class="card">
+    <div class="space-y-3 pt-3">
+      <label class="block text-xs text-zinc-400">Kullanıcı Adı<input id="sUser" class="field mt-1" maxlength="20" autocapitalize="none"></label>
+      <div class="grid grid-cols-2 gap-3">
+        <label class="block text-xs text-zinc-400">İsim<input id="sFirst" class="field mt-1" maxlength="40"></label>
+        <label class="block text-xs text-zinc-400">Soyisim<input id="sLast" class="field mt-1" maxlength="40"></label>
+      </div>
+      <label class="block text-xs text-zinc-400">Cinsiyet
+        <select id="sGender" class="field mt-1">
+          <option value="erkek">Erkek</option>
+          <option value="kadin">Kadın</option>
+          <option value="belirtmek-istemiyorum">Belirtmek İstemiyorum</option>
+        </select>
+      </label>
+      <label class="block text-xs text-zinc-400">E-posta<input id="sEmail" type="email" class="field mt-1"></label>
+      <label class="block text-xs text-zinc-400">Telefon<input id="sPhone" type="tel" inputmode="tel" maxlength="20" autocomplete="tel" class="field mt-1" placeholder="05xx xxx xx xx"></label>
+      <fieldset class="space-y-2 rounded-xl p-3" style="box-shadow:inset 0 0 0 1px rgba(255,255,255,.09)">
+        <legend class="px-1 text-xs text-zinc-400">Zor Durumda Ulaşılacak Arkadaş <span class="text-zinc-500">(isteğe bağlı; ikisini de boş bırakırsan silinir)</span></legend>
+        <input id="sEmName" class="field" maxlength="40" autocomplete="off" placeholder="Arkadaşının Adı">
+        <input id="sEmPhone" class="field" type="tel" inputmode="tel" maxlength="20" autocomplete="off" placeholder="Arkadaşının Telefonu">
+      </fieldset>
+      <div id="sCurBox">
+        <label class="block text-xs text-zinc-400">Mevcut Şifre (e-posta ya da şifre değişirken)<input id="sCurPw" type="password" autocomplete="current-password" class="field mt-1"></label>
+      </div>
+      <label class="block text-xs text-zinc-400">Yeni Şifre (boş bırakırsan değişmez)<input id="sNewPw" type="password" autocomplete="new-password" class="field mt-1"></label>
+      <p class="text-xs text-zinc-500">Kullanıcı adı değişikliği bir sonraki gruba katıldığında görünür.</p>
+      <button id="sSave" class="btn" type="button">Kaydet</button>
+      <p id="sMsg" class="min-h-6 text-center"></p>
+    </div>
+    </div>
+    <div id="lg-perm" class="card">
+    <ul id="permList" class="space-y-2 pt-3"></ul>
+    <p id="permMsg" class="min-h-5 pt-2 text-xs text-zinc-400"></p>
+    </div>
+  </div>
+  <button id="logoutBtn" class="hidden" type="button" tabindex="-1" aria-hidden="true">Çıkış Yap</button>
+</main>
+
+<!-- Ana uygulama -->
+
+<nav id="bottomNav" class="hidden fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-ink/90 backdrop-blur" style="padding-bottom:env(safe-area-inset-bottom)">
+  <div class="mx-auto grid max-w-md grid-cols-5">
+    <button type="button" data-nav="home" aria-label="Ana Sayfa" class="flex flex-col items-center justify-start gap-0.5 px-0.5 pb-1.5 pt-2 text-zinc-400">
+      <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-home"/></svg>
+      <span class="text-center text-[11px] font-medium leading-tight">Ana Sayfa</span>
+    </button>
+    <button type="button" data-nav="motor" aria-label="My Moto" class="flex flex-col items-center justify-start gap-0.5 px-0.5 pb-1.5 pt-2 text-zinc-400">
+      <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-moto"/></svg>
+      <span class="text-center text-[11px] font-medium leading-tight">My Moto</span>
+    </button>
+    <button type="button" data-nav="world" aria-label="Harita" class="flex flex-col items-center justify-start gap-0.5 px-0.5 pb-1.5 pt-2 text-zinc-400">
+      <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-map"/></svg>
+      <span class="text-center text-[11px] font-medium leading-tight">Harita</span>
+    </button>
+    <button type="button" data-nav="social" aria-label="Sosyal" class="relative flex flex-col items-center justify-start gap-0.5 px-0.5 pb-1.5 pt-2 text-zinc-400">
+      <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-social"/></svg>
+      <span class="text-center text-[11px] font-medium leading-tight">Sosyal</span>
+      <span id="socialBadge" class="absolute right-2 top-1 hidden min-w-[1.1rem] rounded-full bg-rose-500 px-1 text-center text-[10px] font-bold leading-[1.1rem] text-white"></span>
+    </button>
+    <button type="button" data-nav="settings" aria-label="Ayarlar" class="flex flex-col items-center justify-start gap-0.5 px-0.5 pb-1.5 pt-2 text-zinc-400">
+      <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#gear"/></svg>
+      <span class="text-center text-[11px] font-medium leading-tight">Ayarlar</span>
+    </button>
+  </div>
+</nav>
+
+<div id="logoutAsk" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-6">
+  <div class="w-full max-w-sm space-y-4 rounded-2xl bg-[#052437] p-5 text-center" style="box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)">
+    <p id="askText" class="road text-2xl font-semibold">Çıkış Yapılsın mı?</p>
+    <div class="grid grid-cols-2 gap-2">
+      <button id="logoutNo" type="button" class="btn-sec">Hayır</button>
+      <button id="logoutYes" type="button" class="btn">Evet</button>
+    </div>
+  </div>
+</div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="i-home" viewBox="0 0 24 24"><path d="M3.5 10.6 12 3.6l8.5 7v8.4a1.6 1.6 0 0 1-1.6 1.6H15v-5.6H9V20.6H5.1a1.6 1.6 0 0 1-1.6-1.6z"/></symbol>
+<symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></symbol>
+<symbol id="i-moto" viewBox="0 0 24 24"><circle cx="5.2" cy="16.8" r="3.2"/><circle cx="18.8" cy="16.8" r="3.2"/><path d="M5.2 16.8 9 10.4h5.6l2.2 3.6M14.6 10.4l-1.2-3.6H16M9 10.4H6.6M12.4 16.8h-3.6l2.4-3.6 3.4.1"/></symbol>
+<symbol id="i-map" viewBox="0 0 24 24"><path d="M9 4 3.5 6.2v13.3L9 17.3l6 2.4 5.5-2.2V4.2L15 6.4z"/><path d="M9 4v13.3M15 6.4v13.3"/></symbol>
+<symbol id="i-social" viewBox="0 0 24 24"><path d="M20.5 11.4a8.2 8.2 0 0 1-8.9 8.2 8.4 8.4 0 0 1-3.5-.8L3.5 20.5l1.7-4.4a8.2 8.2 0 1 1 15.3-4.7z"/><path d="M8.4 11.6h.01M12 11.6h.01M15.6 11.6h.01" stroke-width="2.4"/></symbol>
+<symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol></svg>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/mymoto.js"></script>
+<script src="/bikes.js"></script>
+<script src="/bike-volume.js"></script>
+<script src="/settings.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const socket = io({ autoConnect: false });
+/* ---------- Giriş / kayıt / şifre sıfırlama ---------- */
+// Bu cihazda en son giriş yapan hesap (yalnızca kullanıcı adı, görünen ad ve fotoğraf; şifre asla saklanmaz)
+const loadQuick = () => { try { const q = JSON.parse(localStorage.getItem('lastAcct') || 'null'); return q && q.u ? q : null; } catch { return null; } };
+let quick = loadQuick(), quickOn = !!quick;
+function remember(u) {
+  if (!u || !u.username) return;
+  quick = { u: u.username, n: [u.firstName, u.lastName].filter(Boolean).join(' ') || u.username, a: u.avatar || '' };
+  try { localStorage.setItem('lastAcct', JSON.stringify(quick)); } catch {}
+}
+function renderQuick() {
+  if (!quick) return;
+  $('qName').textContent = quick.n; $('qUser').textContent = '@' + quick.u;
+  const av = $('qAvatar'); av.innerHTML = '';
+  if (quick.a) { const i = document.createElement('img'); i.src = quick.a; i.alt = ''; i.className = 'h-full w-full object-cover'; av.appendChild(i); }
+  else av.textContent = quick.u.charAt(0).toLocaleUpperCase('tr');
+}
+let authMode = 'login', me = null, resetToken = new URLSearchParams(location.search).get('reset') || '';
+// Grup sürüşü davet bağlantısı (/?grup=KOD): giriş yapılana kadar sessionStorage'da bekler, adres çubuğu temizlenir
+let pendingGroup = '';
+try {
+  const gq = new URLSearchParams(location.search).get('grup');
+  if (gq) { sessionStorage.setItem('mm_joincode', gq.slice(0, 16)); history.replaceState(null, '', location.pathname); }
+  pendingGroup = sessionStorage.getItem('mm_joincode') || '';
+} catch (e) {}
+async function api(path, body) {
+  const r = await fetch('/api/' + path, body === undefined ? {} :
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'İstek başarısız.');
+  return j;
+}
+
+// --- Güvenlik sorusu (insan doğrulaması): giriş, kayıt ve şifre sıfırlama formlarında ---
+const CAP_FORMS = ['loginForm', 'quickForm', 'registerForm', 'forgotForm'];
+async function capLoad(box) {
+  const q = box.querySelector('.capq'), a = box.querySelector('.capa'); a.value = ''; q.textContent = 'Yükleniyor…'; box._t = '';
+  try { const j = await (await fetch('/api/captcha', { cache: 'no-store' })).json(); box._t = j.token; q.textContent = j.q; }
+  catch (e) { q.textContent = 'Soru yüklenemedi. Yenile düğmesine dokun.'; }
+}
+function capInit() {
+  CAP_FORMS.forEach(id => {
+    const f = $(id); if (!f || f.querySelector('.cap')) return;
+    const box = document.createElement('div'); box.className = 'cap flex flex-col gap-2'; box.id = id + 'Cap';
+    box.innerHTML = '<div class="flex items-center gap-2"><p class="min-w-0 flex-1 text-sm text-zinc-300"><span class="block text-xs text-zinc-400">Güvenlik Sorusu</span><b class="capq road text-xl"></b></p><button type="button" class="capr btn-sec" style="flex:none;width:48px;min-height:48px;padding:0" aria-label="Soruyu Yenile">↻</button></div><input class="field capa" inputmode="numeric" autocomplete="off" maxlength="3" placeholder="Cevabın (Sayı Olarak)" aria-label="Güvenlik Sorusunun Cevabı" required><input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">';
+    const sub = f.querySelector('button[type=submit]'); f.insertBefore(box, sub);
+    box.querySelector('.capr').onclick = () => capLoad(box);
+  });
+}
+const capBox = id => $(id + 'Cap');
+const capData = id => { const b = capBox(id); return { cToken: b._t || '', cAns: b.querySelector('.capa').value, website: b.querySelector('.hp').value }; };
+const capReload = id => { const b = capBox(id); if (b) capLoad(b); };
+capInit(); CAP_FORMS.forEach(capReload);
+const val = id => $(id).value.trim();
+const showMsg = (m, ok) => { $('authMsg').textContent = m || ''; $('authMsg').className = 'min-h-5 text-sm ' + (ok ? 'text-amber-300' : 'text-red-400'); };
+const TAB_OF = { dash: 'home', motor: 'motor', world: 'world', analysis: 'settings', social: 'social', settings: 'settings' };
+let mapH = null, mapLoading = false;   // harita ekranı (bkz. openMap)
+let anH = null, anP = null;            // sürüş analizi ekranı (bkz. openAnalysis)
+// Analiz ekranını ilk açılışta yükler (mevcut sürüş kayıtlarını okur; yeni veri sistemi yoktur). Her açılışta listeyi tazeler.
+function openAnalysis() {
+  if (anP) return anP.then(h => { h.activate(); return h; });
+  const once = (src, ok) => (ok() ? Promise.resolve() : new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error(src)); document.head.appendChild(s); }));
+  if (!document.getElementById('anCss')) { const l = document.createElement('link'); l.id = 'anCss'; l.rel = 'stylesheet'; l.href = '/analysis.css'; document.head.appendChild(l); }
+  anP = once('/ride-core.js', () => window.RideCore).then(() => once('/ride-store.js', () => window.RideStore)).then(() => once('/telemetry-core.js', () => window.TelemetryCore))
+    .then(() => once('/analysis-core.js', () => window.AnalysisCore)).then(() => once('/analysis.js', () => window.Analysis))
+    .then(() => { anH = window.Analysis.mount($('analysis-root'), { user: me && me.username, onExit: () => { if (anFrom === 'world') showScreen('world'); else { showScreen('settings'); setH.show('calib'); } } }); anH.activate(); return anH; })
+    .catch(e => { anP = null; $('analysis-root').innerHTML = '<p class="p-6 text-center text-sm text-rose-300">Analiz ekranı yüklenemedi. Bağlantını kontrol edip tekrar dene.</p>'; throw e; });
+  return anP;
+}
+function goAnalysis(fn) { showScreen('analysis'); if (anP) anP.then(fn).catch(() => {}); }
+let curScreen = 'dash', anFrom = 'settings';
+function showScreen(n) {
+  if (n === 'analysis' && curScreen !== 'analysis') anFrom = curScreen;
+  curScreen = n;
+  ['auth', 'dash', 'motor', 'world', 'analysis', 'social', 'settings'].forEach(k => $(k).classList.toggle('hidden', k !== n));
+  $('bottomNav').classList.toggle('hidden', n === 'auth');
+  document.querySelectorAll('[data-nav]').forEach(b => {
+    const on = b.dataset.nav === TAB_OF[n];
+    b.classList.toggle('text-amber-400', on); b.classList.toggle('text-zinc-400', !on);
+    b.setAttribute('aria-current', on ? 'page' : 'false');
+  });
+  if (n === 'dash') startDash(); else stopDash();
+  if (n === 'motor') renderMotor();
+  if (n === 'social') openSocial();
+  if (n === 'world') openMap(); else if (mapH) mapH.deactivate();
+  if (n === 'analysis') openAnalysis().catch(() => {}); else if (anH) anH.deactivate();
+  if (n === 'settings') { openSettings(); renderPerms(); (setH = setH || mountSettings()).home(); }
+  scrollTo(0, 0);
+}
+const showAuth = () => showScreen('auth');
+// Sosyal bölüm: React paketi (public/social.bundle.js) ilk gerektiğinde yüklenir ve ekrana bağlanır
+let socialH = null, socialLoading = false;
+function openSocial() {
+  const props = () => ({
+    me, socket, theme: 'dark',
+    onUnread: n => { const b = $('socialBadge'); b.textContent = n > 99 ? '99+' : String(n); b.classList.toggle('hidden', !n); }
+  });
+  if (socialH) return socialH.update(props());
+  if (socialLoading) return;
+  socialLoading = true;
+  const root = $('social-root');
+  root.innerHTML = '<p class="p-6 text-center text-sm text-zinc-400">Yükleniyor…</p>';
+  const sc = document.createElement('script');
+  sc.src = '/social.bundle.js';
+  sc.onload = () => { root.innerHTML = ''; socialH = window.MotoSocial.mount(root, props()); socialLoading = false; };
+  sc.onerror = () => { root.innerHTML = '<p class="p-6 text-center text-sm text-red-300">Sosyal bölüm yüklenemedi. Sayfayı yenileyip tekrar dene.</p>'; socialLoading = false; };
+  document.head.appendChild(sc);
+}
+// Haritadaki grup sayfasından Sosyal › Gruplarım'a geçiş (gid verilirse o grubun sayfası açılır)
+window.openSocialGroups = gid => {
+  goTab('social');
+  window.__socialGoto = { tab: 'groups', gid: gid || null };      // bileşen henüz yüklenmediyse açılışta okunur
+  window.dispatchEvent(new CustomEvent('ml:social-goto', { detail: window.__socialGoto }));
+};
+// Harita ekranı: /map.css ve /map.js ilk açılışta yüklenir (Leaflet, map.js içinden yüklenir)
+function openMap() {
+  if (mapH) return mapH.activate();
+  if (mapLoading) return;
+  mapLoading = true;
+  const root = $('map-root');
+  root.innerHTML = '<p class="p-6 text-center text-sm text-zinc-400">Harita yükleniyor…</p>';
+  if (!document.getElementById('mapCss')) {
+    const l = document.createElement('link'); l.id = 'mapCss'; l.rel = 'stylesheet'; l.href = '/map.css'; document.head.appendChild(l);
+  }
+  const sc = document.createElement('script');
+  sc.src = '/map.js';
+  sc.onload = () => { root.innerHTML = ''; mapH = window.MotoMap.mount(root, { user: me && me.username, socket, onAnalyze: id => goAnalysis(h => h.openRide(id)), onAnalyzeGroup: gid => goAnalysis(h => h.openGroupList(gid)) }); mapLoading = false; mapH.activate(); if (window.__joinGroup) { mapH.joinPrompt(window.__joinGroup); window.__joinGroup = ''; } };
+  sc.onerror = () => { root.innerHTML = '<p class="p-6 text-center text-sm text-red-300">Harita yüklenemedi. Sayfayı yenileyip tekrar dene.</p>'; mapLoading = false; sc.remove(); };
+  document.head.appendChild(sc);
+}
+function enterHome(user) {
+  me = user; remember(user);
+  showScreen('dash');
+  if (!socket.connected) socket.connect();
+  if (pendingGroup) { window.__joinGroup = pendingGroup; pendingGroup = ''; try { sessionStorage.removeItem('mm_joincode'); } catch (e) {} showScreen('world'); }   // davet bağlantısıyla gelen: haritayı aç, katılım onayı sor
+  setTimeout(openSocial, 1500);   // arka planda hazırla: okunmamış mesaj rozeti baştan çalışsın
+}
+function setAuthMode(m) {
+  authMode = m; showMsg('');
+  ['login', 'register', 'forgot', 'reset', 'social'].forEach(k => $(k + 'Form').classList.toggle('hidden', k !== m));
+  // Hatırlanan hesap varsa giriş ekranı yerine yalnızca şifre soran kart görünür
+  const q = quickOn && !!quick && m === 'login';
+  if (q) renderQuick();
+  $('quickLogin').classList.toggle('hidden', !q);
+  $('loginForm').classList.toggle('hidden', q || m !== 'login');
+  $('authTabs').classList.toggle('hidden', q || m === 'forgot' || m === 'reset' || m === 'social');
+  $('socialAuth').classList.toggle('hidden', q || !(m === 'login' || m === 'register'));
+  const on = 'rounded-lg py-3 font-medium bg-amber-400 text-ink', off = 'rounded-lg py-3 font-medium text-zinc-300';
+  $('tabLogin').className = m === 'login' ? on : off;
+  $('tabRegister').className = m === 'register' ? on : off;
+}
+$('qOther').onclick = () => { quickOn = false; $('qPw').value = ''; setAuthMode('login'); };   // mevcut giriş / kayıt ekranına geç
+$('qForgot').onclick = () => setAuthMode('forgot');
+$('quickForm').onsubmit = async e => {
+  e.preventDefault(); showMsg('');
+  try { enterHome((await api('login', { login: quick.u, password: $('qPw').value, ...capData('quickForm') })).user); $('qPw').value = ''; }
+  catch (er) { showMsg(er.message); capReload('quickForm'); }
+};
+$('tabLogin').onclick = () => setAuthMode('login');
+$('tabRegister').onclick = () => setAuthMode('register');
+$('toForgot').onclick = () => setAuthMode('forgot');
+document.querySelectorAll('[data-back]').forEach(b => { b.onclick = () => setAuthMode('login'); });
+
+$('loginForm').onsubmit = async e => {
+  e.preventDefault(); showMsg('');
+  try { enterHome((await api('login', { login: val('lLogin'), password: $('lPw').value, ...capData('loginForm') })).user); }
+  catch (er) { showMsg(er.message); capReload('loginForm'); }
+};
+$('registerForm').onsubmit = async e => {
+  e.preventDefault(); showMsg('');
+  try {
+    enterHome((await api('register', {
+      username: val('rUser'), firstName: val('rFirst'), lastName: val('rLast'), gender: $('rGender').value,
+      bikeBrand: val('rBrand'), bikeModel: val('rModel'), email: val('rEmail'), password: $('rPw').value,
+      phone: val('rPhone'), emergencyName: val('rEmName'), emergencyPhone: val('rEmPhone'), ...capData('registerForm')
+    })).user);
+  } catch (er) { showMsg(er.message); capReload('registerForm'); }
+};
+// --- Google / Apple ile giriş: yalnızca sunucuda istemci kimliği tanımlıysa görünür ---
+let socialCfg = null, socialTicket = '', socialInit = false;
+const loadScript = src => new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.async = true; s.onload = ok; s.onerror = () => no(new Error('Betik yüklenemedi')); document.head.appendChild(s); });
+async function socialDone(path, body) {
+  showMsg('');
+  try {
+    const r = await api(path, body);
+    if (r.needProfile) {                                        // yeni kullanıcı: telefon, kullanıcı adı ve motosiklet bilgisini tamamlat
+      socialTicket = r.ticket;
+      $('oFirst').value = r.firstName || ''; $('oLast').value = r.lastName || '';
+      $('sInfo').textContent = r.email + ' ile devam ediyorsun. Birkaç bilgi daha gerekli.';
+      return setAuthMode('social');
+    }
+    enterHome(r.user);
+  } catch (er) { showMsg(er.message); }
+}
+async function initSocial() {
+  if (socialInit) return; socialInit = true;
+  try { socialCfg = await (await fetch('/api/auth/config')).json(); } catch (e) { return; }
+  socialCfg = socialCfg || {};
+  const noCfg = n => showMsg(n + ' ile giriş bu sitede henüz etkinleştirilmemiş. Yönetici ' + (n === 'Google' ? 'GOOGLE_CLIENT_ID' : 'APPLE_CLIENT_ID') + ' ayarını yapmalı. Şimdilik e-posta ile devam edebilirsin.');
+  if (socialCfg.google) loadScript('https://accounts.google.com/gsi/client').then(() => {
+    google.accounts.id.initialize({ client_id: socialCfg.google, callback: r => socialDone('auth/google', { credential: r.credential }) });
+    google.accounts.id.renderButton($('gBtn'), { theme: 'filled_black', size: 'large', text: 'continue_with', shape: 'pill', locale: 'tr', width: Math.min(320, $('socialAuth').clientWidth || 300) });
+  }).catch(() => { gFallback(() => showMsg('Google giriş betiği yüklenemedi. Bağlantını kontrol edip tekrar dene.')); });
+  else gFallback(() => noCfg('Google'));
+  if (socialCfg.apple) {
+    loadScript('https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/tr_TR/appleid.auth.js').then(() => {
+      AppleID.auth.init({ clientId: socialCfg.apple, scope: 'name email', redirectURI: location.origin, usePopup: true });
+    }).catch(() => { $('aBtn').onclick = () => showMsg('Apple giriş betiği yüklenemedi. Bağlantını kontrol edip tekrar dene.'); });
+    $('aBtn').onclick = async () => {
+      if (typeof AppleID === 'undefined') return showMsg('Apple giriş betiği yüklenemedi. Bağlantını kontrol edip tekrar dene.');
+      try {
+        const r = await AppleID.auth.signIn(), nm = (r.user && r.user.name) || {};
+        socialDone('auth/apple', { credential: r.authorization.id_token, firstName: nm.firstName || '', lastName: nm.lastName || '' });
+      } catch (er) { if (er && er.error !== 'popup_closed_by_user') showMsg('Apple ile giriş tamamlanamadı.'); }
+    };
+  } else $('aBtn').onclick = () => noCfg('Apple');
+}
+function gFallback(fn) {
+  $('gBtn').innerHTML = '<button type="button" class="btn-sec flex w-full items-center justify-center gap-2" style="min-height:44px"><svg class="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true"><path fill="#EA4335" d="M12 10.2v3.9h5.500c-.2 1.300-1.600 3.800-5.500 3.800a6.100 6.100 0 0 1 0-12.200c1.900 0 3.200.8 3.900 1.500l2.700-2.600A9.800 9.800 0 0 0 12 2.100a9.900 9.900 0 1 0 0 19.800c5.700 0 9.500-4 9.500-9.600 0-.6-.1-1.100-.2-1.600z"/></svg>Google ile Devam Et</button>';
+  $('gBtn').firstChild.onclick = fn;
+}
+$('socialForm').onsubmit = async e => {
+  e.preventDefault(); showMsg('');
+  try {
+    enterHome((await api('auth/complete', {
+      ticket: socialTicket, username: val('oUser'), firstName: val('oFirst'), lastName: val('oLast'), gender: $('oGender').value,
+      bikeBrand: val('oBrand'), bikeModel: val('oModel'), phone: val('oPhone'), emergencyName: val('oEmName'), emergencyPhone: val('oEmPhone')
+    })).user);
+  } catch (er) { showMsg(er.message); }
+};
+initSocial();
+$('forgotForm').onsubmit = async e => {
+  e.preventDefault(); showMsg('');
+  try {
+    await api('forgot', { email: val('fEmail'), ...capData('forgotForm') });
+    showMsg('E-posta adresin kayıtlıysa şifre sıfırlama bağlantısı gönderildi. Gelen kutunu ve spam klasörünü kontrol et.', true); capReload('forgotForm');
+  } catch (er) { showMsg(er.message); capReload('forgotForm'); }
+};
+$('resetForm').onsubmit = async e => {
+  e.preventDefault(); showMsg('');
+  if ($('nPw').value !== $('nPw2').value) return showMsg('Şifreler aynı değil.');
+  try {
+    await api('reset', { token: resetToken, password: $('nPw').value });
+    resetToken = ''; history.replaceState(null, '', '/');
+    setAuthMode('login'); showMsg('Şifren güncellendi. Yeni şifrenle giriş yapabilirsin.', true);
+  } catch (er) { showMsg(er.message); }
+};
+const doLogout = async () => { try { await api('logout', {}); } catch {} location.reload(); };
+$('logoutBtn').onclick = doLogout;
+// Ana sayfadaki çıkış düğmesi: önce evet / hayır sorusu
+const logoutAsk = $('logoutAsk');
+let askYes = null;
+const ask = (msg, yes) => { $('askText').textContent = msg; askYes = yes; logoutAsk.classList.remove('hidden'); };
+$('logoutNo').onclick = () => logoutAsk.classList.add('hidden');
+logoutAsk.addEventListener('click', e => { if (e.target === logoutAsk) logoutAsk.classList.add('hidden'); });
+$('logoutYes').onclick = () => { logoutAsk.classList.add('hidden'); if (askYes) askYes(); };
+socket.on('connect_error', e => { if (e.message === 'unauthorized') showAuth(); });
+
+/* ---------- Ayarlar sayfası ---------- */
+const setMsg = (m, ok) => { $('sMsg').textContent = m || ''; $('sMsg').className = 'min-h-6 text-center ' + (ok ? 'text-amber-300' : 'text-red-400'); };
+const FIELDS = { sUser: 'username', sFirst: 'firstName', sLast: 'lastName', sGender: 'gender', sEmail: 'email', sPhone: 'phone', sEmName: 'emergencyName', sEmPhone: 'emergencyPhone' };
+function openSettings() {
+  for (const [id, k] of Object.entries(FIELDS)) $(id).value = me[k] || '';
+  if (!$('sGender').value) $('sGender').value = 'belirtmek-istemiyorum';
+  $('sCurBox').classList.toggle('hidden', !me.hasPassword);
+  $('sCurPw').value = ''; $('sNewPw').value = ''; setMsg('');
+}
+$('sSave').onclick = async () => {
+  const body = {}, newPw = $('sNewPw').value;
+  for (const [id, k] of Object.entries(FIELDS)) body[k] = $(id).value.trim();
+  body.bikeBrand = me.bikeBrand || ''; body.bikeModel = me.bikeModel || '';        // motosiklet bilgisi ayrı sayfada (Ayarlar › Motosiklet Bilgileri)
+  if (newPw) body.newPassword = newPw;
+  if (me.hasPassword && (body.email.toLowerCase() !== me.email || newPw)) body.currentPassword = $('sCurPw').value;
+  try {
+    me = (await api('account', body)).user; remember(me);
+    renderProfile();
+    $('sCurPw').value = ''; $('sNewPw').value = '';
+    $('sCurBox').classList.toggle('hidden', !me.hasPassword);
+    setMsg('Kaydedildi.', true);
+  } catch (e) { setMsg(e.message); }
+};
+
+
+/* ---------- Ayarlar (telefon ayarları düzeni: settings.js) ---------- */
+var setH = null;
+function openSensors() {                    // Kalibrasyon → harita ekranını açar, sensör sayfasını gösterir
+  goTab('world'); let n = 0;
+  const t = setInterval(() => { if (mapH && mapH.openSensors) { clearInterval(t); setTimeout(() => mapH.openSensors(), 500); } else if (++n > 60) clearInterval(t); }, 200);
+}
+function mountSettings() {
+  return window.Settings.mount($('settings-root'), {
+    me: () => me, ask, logout: doLogout,
+    mapPrefs: () => { if (mapH && mapH.prefs) mapH.prefs(); }, openSensors, openAnalysis: () => showScreen('analysis'),
+    motoRefresh: () => { if (myMotoH) myMotoH.refresh(); }, maintChanged: () => paintMaintTip(),
+    saveBike: async (brand, model, more = {}) => {          // yalnızca motosiklet alanları değişir; profil alanları mevcut değerleriyle gider
+      const u = (await api('account', { username: me.username, firstName: me.firstName, lastName: me.lastName, gender: me.gender, email: me.email, phone: me.phone, emergencyName: me.emergencyName, emergencyPhone: me.emergencyPhone, bikeBrand: brand, bikeModel: model, bikeYear: more.year, bikeType: more.type, bikeCc: more.cc })).user;
+      me = u; remember(me); renderProfile(); renderMotor(); return u;
+    }
+  });
+}
+function paintMaintTip() {                  // ana sayfa ipuçlarının başına: zamanı gelen/yaklaşan bakım (My Moto verisinden)
+  const old = $('tipMaint'); if (old) old.remove();
+  if (!me || !window.Settings) return;
+  const due = window.Settings.maintDue(me.username); if (!due.length) return;
+  const li = document.createElement('li'); li.id = 'tipMaint'; li.className = 'flex gap-2';
+  li.innerHTML = '<span class="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amber-400"></span><p class="text-[13px] leading-snug"><b class="font-semibold">Bakım:</b> <span class="text-zinc-300"></span></p>';
+  li.querySelector('span.text-zinc-300').textContent = due.map(x => x.name + (x.state === 'due' ? ' zamanı geçti' : ' yaklaşıyor')).join(', ');
+  $('tips').prepend(li);
+}
+
+// My Moto sayfası
+function renderMotor() {
+  if (!me) return;
+  renderTips(); paintMaintTip();
+  paintBike();
+  if (!window.MyMoto) return;
+  if (!myMotoH || myMotoUser !== me.username) { myMotoUser = me.username; myMotoH = window.MyMoto.mount($('mymoto-root'), { user: me.username }); }
+}
+let myMotoH = null, myMotoUser = '';
+let bikeVol = null, bikeVolKey = '';
+function bikeLayers(t, u) {                       // hacimli (tuval) görünüm; başarısızlıkta CSS dönüşü yedek
+  const sp = document.querySelector('#motor .tt-spin'), key = u && window.Bikes && window.Bikes.layerKey ? window.Bikes.layerKey(t) : ''; if (!sp || key === bikeVolKey) return;
+  bikeVolKey = key; if (bikeVol) { bikeVol.destroy(); bikeVol = null; } sp.classList.remove('fb');
+  if (!key) return;
+  if (!window.BikeVolume) { sp.classList.add('fb'); return; }
+  bikeVol = window.BikeVolume.mount(sp, { center: $('bikeImg'), key, onFail: () => { bikeVol = null; sp.classList.add('fb'); } });
+  if (!bikeVol) sp.classList.add('fb'); window.__bv = bikeVol;
+}
+function paintBike() {
+  const o = { model: me.bikeModel, type: me.bikeType }, t = window.Bikes ? window.Bikes.typeOf(o) : '', u = t ? window.Bikes.src(o) : '', im = $('bikeImg');
+  if (u && im.getAttribute('src') !== u) im.src = u;
+  bikeLayers(t, u);
+  im.hidden = !u; $('bikeNone').hidden = !!u;
+  $('motoName').textContent = [me.bikeBrand, me.bikeModel].filter(Boolean).join(' ') || 'Motosiklet Bilgisi Girilmedi';
+  im.alt = t ? 'Motosiklet: ' + window.Bikes.TYPES[t] : '';
+}
+$('motoEdit').onclick = () => { goTab('settings'); (setH = setH || mountSettings()).show('moto'); };
+
+// --- Bağlantı izinleri ---
+const PERMS = [
+  ['microphone', 'Mikrofon'], ['camera', 'Kamera'], ['geolocation', 'Konum'], ['notifications', 'Bildirimler']
+];
+const askPerm = {
+  microphone: () => navigator.mediaDevices.getUserMedia({ audio: true }).then(st => st.getTracks().forEach(t => t.stop())),
+  camera: () => navigator.mediaDevices.getUserMedia({ video: true }).then(st => st.getTracks().forEach(t => t.stop())),
+  geolocation: () => new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { timeout: 10000 })),
+  notifications: () => Notification.requestPermission()
+};
+const supported = k => k === 'geolocation' ? !!navigator.geolocation
+  : k === 'notifications' ? 'Notification' in window : !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+async function permState(k) {
+  if (!supported(k)) return 'unsupported';
+  if (k === 'notifications') return Notification.permission === 'default' ? 'prompt' : Notification.permission;
+  try {
+    const st = await navigator.permissions.query({ name: k });
+    st.onchange = renderPerms;
+    return st.state;
+  } catch { return 'unknown'; }
+}
+async function renderPerms() {
+  const ul = $('permList');
+  const rows = await Promise.all(PERMS.map(async ([k, label]) => [k, label, await permState(k)]));
+  ul.innerHTML = '';
+  rows.forEach(([k, label, st]) => {
+    const li = document.createElement('li');
+    li.className = 'flex items-center justify-between gap-3 rounded-lg bg-surface px-3 py-2';
+    const txt = { granted: 'İzin Verildi', denied: 'Engellendi', prompt: 'Sorulmadı', unknown: 'Bilinmiyor', unsupported: 'Desteklenmiyor' }[st];
+    const color = { granted: 'text-amber-300', denied: 'text-red-400' }[st] || 'text-zinc-500';
+    li.innerHTML = '<div class="min-w-0"><div class="text-sm font-medium"></div><div class="text-xs"></div></div>';
+    li.querySelector('.font-medium').textContent = label;
+    li.querySelector('.text-xs').textContent = txt;
+    li.querySelector('.text-xs').className = 'text-xs ' + color;
+    if (st !== 'granted' && st !== 'unsupported') {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn-sm btn-accent shrink-0'; b.textContent = 'İzin Ver';
+      b.onclick = async () => {
+        $('permMsg').textContent = st === 'denied' ? 'Bu izin engellenmiş. Tarayıcının site ayarlarından izin vermen gerekir.' : '';
+        try { await askPerm[k](); } catch {}
+        renderPerms();
+      };
+      li.appendChild(b);
+    }
+    ul.appendChild(li);
+  });
+}
+
+/* ---------- Profil paneli ---------- */
+const TIPS = [
+  ['Hatırlatıcı', '#EA8621', [
+    'Yola çıkmadan lastik basıncını soğukken kontrol et.',
+    'Zincirin gerginliğine ve yağlamasına bir göz at.',
+    'Fren balatalarını ve fren hidroliği seviyesini kontrol et.',
+    'Aynalarını ve farlarını temizle, aynaları sürüş pozisyonuna göre ayarla.',
+    'Motor yağı seviyesini üreticinin önerdiği yöntemle kontrol et.',
+    'Kask vizörünün temiz ve çiziksiz olduğundan emin ol.',
+    'Yanında ilk yardım çantası ve temel bir alet seti bulundur.',
+    'Telefonunu şarj et, rotanı önceden hazırla; sürerken ekrana bakma.',
+    'Yağmur kıyafetini ve yedek eldivenini çantanda tut.',
+    'Bakım tarihini ve trafik sigortanın bitiş tarihini kontrol et.',
+    'Uzun yolda yakıt molalarını önceden planla.',
+    'Stop, sinyal ve fren lambalarının çalıştığını kontrol et.'
+  ]],
+  ['Önemli Bilgi', '#5BC0BE', [
+    'Darbe almış kask, dışarıdan sağlam görünse bile yenilenmelidir.',
+    'Üreticiler kaskın yaklaşık beş yılda bir yenilenmesini önerir.',
+    'Lastikteki dört haneli kod, üretim haftasını ve yılını gösterir.',
+    'Islak zeminde fren mesafesi belirgin biçimde uzar.',
+    'Yağmurun ilk dakikalarında yol, biriken yağ nedeniyle çok kaygan olur.',
+    'Yol çizgileri, rögar kapakları ve metal plakalar ıslakken çok kaygandır.',
+    'Frenleme gücünün büyük kısmı ön frenden gelir; ikisini birlikte kullan.',
+    'Hava sıcak olsa da hızlı sürüşte rüzgâr vücudu soğutur; katmanlı giyin.',
+    'Gece görüş mesafen kısalır; hızını farlarının aydınlattığı mesafeye göre ayarla.',
+    'Uzun yolda yaklaşık iki saatte bir mola vermek dikkatini korur.',
+    'Alkol ve bazı ilaçlar tepki süreni uzatır; sürmeden önce kullanma.',
+    'Doğru beden kask sıkı oturur ama baskı yapmaz.'
+  ]],
+  ['Güvenlik', '#F2785C', [
+    'Kask, eldiven, mont ve botla tam teçhizat sür.',
+    'Virajdan önce yavaşla; viraj içinde sert fren yapma.',
+    'Şerit değiştirmeden önce omzunun üzerinden kör noktaya bak.',
+    'Kavşaklarda diğer sürücülerin seni görmediğini varsay.',
+    'Öndeki araçla en az üç saniyelik mesafe bırak; yağmurda artır.',
+    'Gözün gideceğin yöne baksın, kaçınmak istediğin engele değil.',
+    'Açık renkli ya da yansıtıcı kıyafet seni daha görünür kılar.',
+    'Büyük araçların kör noktasında ve hemen arkasında gitme.',
+    'Yolcu varken fren ve dönüş mesafeleri değişir; yolcuna bilgi ver.',
+    'Grup sürüşünde şaşırtmalı sıra kullan, yan yana gitme.',
+    'Yorgunken, uykusuzken ya da sinirliyken sürme.',
+    'Hızını yola, trafiğe ve hava durumuna göre ayarla.'
+  ]]
+];
+// Gün değişince (gece yarısı) notlar değişir; gün boyu sabit kalır
+const dayIndex = () => { const d = new Date(); return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5); };
+let lastTipDay = -1;
+function renderTips() {
+  const d = dayIndex();
+  if (d === lastTipDay) return;
+  lastTipDay = d;
+  const ul = $('tips');
+  ul.innerHTML = '';
+  TIPS.forEach(([label, color, list], k) => {
+    const li = document.createElement('li');
+    li.className = 'flex gap-2';
+    li.innerHTML = '<span class="mt-1.5 h-2 w-2 shrink-0 rounded-full"></span><p class="text-[13px] leading-snug"><b class="font-semibold"></b> <span class="text-zinc-300"></span></p>';
+    li.children[0].style.background = color;
+    li.querySelector('b').textContent = label + ':';
+    li.querySelector('span.text-zinc-300').textContent = list[(d * 5 + k * 4) % list.length];
+    ul.appendChild(li);
+  });
+}
+
+function renderProfile() {
+  if (!me) return;
+  const h = new Date().getHours();
+  const g = h >= 5 && h < 12 ? ['Günaydın', 'Güne enerjiyle başla, yolların açık olsun!']
+    : h >= 12 && h < 18 ? ['İyi Günler', 'Umarım gün güzel geçiyordur. Keyifli sürüşler!']
+    : h >= 18 && h < 22 ? ['İyi Akşamlar', 'Günün yorgunluğunu yolda at ama dikkatli sür!']
+    : ['İyi Geceler', 'Gece sürüşünde dikkatli ol, iyi dinlenmeler!'];
+  $('greetHello').textContent = g[0];
+  $('greetName').textContent = me.firstName || me.username;
+  $('greetMsg').textContent = g[1];
+  const img = $('avatarImg'), ini = $('avatarInit');
+  if (me.avatar) { img.src = me.avatar; img.classList.remove('hidden'); ini.classList.add('hidden'); }
+  else {
+    img.classList.add('hidden'); ini.classList.remove('hidden');
+    ini.textContent = [me.firstName || me.username, me.lastName].filter(Boolean).map(x => x[0]).join('').toLocaleUpperCase('tr');
+  }
+}
+$('avatarBtn').onclick = () => $('avatarFile').click();
+$('avatarFile').onchange = async e => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  try {
+    const bmp = await createImageBitmap(f), s = Math.min(bmp.width, bmp.height), c = document.createElement('canvas');
+    c.width = c.height = 192;
+    c.getContext('2d').drawImage(bmp, (bmp.width - s) / 2, (bmp.height - s) / 2, s, s, 0, 0, 192, 192);
+    me = (await api('avatar', { image: c.toDataURL('image/jpeg', 0.82) })).user; remember(me);
+    renderProfile();
+  } catch (er) { $('greetMsg').textContent = er.message || 'Fotoğraf yüklenemedi.'; }
+};
+
+// --- Hava durumu: sunucu vekili /api/weather (Open-Meteo → MET Norway yedeği, 5 dk önbellek) ---
+const WX = {
+  0: ['Açık', '☀️'], 1: ['Çoğunlukla Açık', '🌤️'], 2: ['Parçalı Bulutlu', '⛅'], 3: ['Kapalı', '☁️'],
+  45: ['Sisli', '🌫️'], 48: ['Kırağılı Sis', '🌫️'],
+  51: ['Hafif Çisenti', '🌦️'], 53: ['Çisenti', '🌦️'], 55: ['Yoğun Çisenti', '🌧️'], 56: ['Dondurucu Çisenti', '🌧️'], 57: ['Dondurucu Çisenti', '🌧️'],
+  61: ['Hafif Yağmur', '🌦️'], 63: ['Yağmurlu', '🌧️'], 65: ['Kuvvetli Yağmur', '🌧️'], 66: ['Dondurucu Yağmur', '🌧️'], 67: ['Dondurucu Yağmur', '🌧️'],
+  71: ['Hafif Kar', '🌨️'], 73: ['Karlı', '🌨️'], 75: ['Yoğun Kar', '❄️'], 77: ['Kar Taneleri', '🌨️'],
+  80: ['Hafif Sağanak', '🌦️'], 81: ['Sağanak', '🌧️'], 82: ['Şiddetli Sağanak', '⛈️'], 85: ['Kar Sağanağı', '🌨️'], 86: ['Yoğun Kar Sağanağı', '❄️'],
+  95: ['Gök Gürültülü Fırtına', '⛈️'], 96: ['Dolu ve Fırtına', '⛈️'], 99: ['Şiddetli Dolu ve Fırtına', '⛈️']
+};
+const wxInfo = c => WX[c] || ['Bilinmiyor', '🌡️'];
+let wxBusy = false, wxHas = false;
+
+function getLoc(fresh) {
+  if (!fresh) try { const sv = JSON.parse(localStorage.getItem('wxloc') || 'null'); if (sv) return Promise.resolve(sv); } catch {}
+  return new Promise((res, rej) => {
+    if (!navigator.geolocation) return rej({ loc: true, msg: 'Bu cihaz konum bilgisini desteklemiyor. Şehir yazarak hava durumunu görebilirsin.' });
+    navigator.geolocation.getCurrentPosition(
+      p => res({ lat: p.coords.latitude, lon: p.coords.longitude, name: '' }),
+      () => rej({ loc: true, msg: 'Konum izni verilmedi. Şehir yazarak hava durumunu görebilirsin.' }),
+      { timeout: 8000, maximumAge: fresh ? 0 : 900000 });
+  });
+}
+// Konumun bulunduğu il (ters coğrafi kodlama); aynı ~1 km'lik alan için sonuç önbellekten gelir
+async function cityName(lat, lon) {
+  const key = lat.toFixed(2) + ',' + lon.toFixed(2);
+  try { const c = JSON.parse(localStorage.getItem('wxcity') || 'null'); if (c && c.key === key) return c.name; } catch {}
+  try {
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 6000);
+    const r = await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client?' +
+      new URLSearchParams({ latitude: lat, longitude: lon, localityLanguage: 'tr' }), { signal: ctl.signal });
+    clearTimeout(t);
+    const j = await r.json();
+    const name = String(j.principalSubdivision || j.city || j.locality || '').replace(/\s+(Province|İli|Ili)$/i, '').trim();
+    if (name) { try { localStorage.setItem('wxcity', JSON.stringify({ key, name })); } catch {} }
+    return name;
+  } catch { return ''; }
+}
+function wxFallback(msg) {
+  $('wxCity').textContent = 'Konum Seçilmedi';
+  $('wxFbMsg').textContent = msg;
+  $('wxFallback').classList.remove('hidden');
+  $('wxMain').classList.add('hidden');
+}
+function wxHm(t, tz) { const d = tz == null ? new Date(t) : new Date(t + tz * 1000); const h = tz == null ? d.getHours() : d.getUTCHours(), m = tz == null ? d.getMinutes() : d.getUTCMinutes(); return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'); }
+function paintWeather(j, loc) {
+  const c = j.current, [desc, icon] = wxInfo(c.code);
+  $('wxFallback').classList.add('hidden');
+  $('wxMain').classList.remove('hidden');
+  $('wxIcon').textContent = icon;
+  $('wxCard').dataset.wx = c.code <= 1 ? 'clear' : c.code <= 3 ? 'cloud' : c.code <= 48 ? 'fog' : c.code >= 95 ? 'storm' : (c.code >= 71 && c.code <= 77) || c.code === 85 || c.code === 86 ? 'snow' : 'rain';
+  $('wxTemp').textContent = Math.round(c.temp) + '°';
+  $('wxCity').textContent = loc.name || 'Konumum';
+  $('wxDesc').textContent = desc;
+  wxHas = true;
+  $('wxSrc').textContent = j.provider || '—';
+  const t = new Date(), hm = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0');
+  $('wxStamp').textContent = j.stale ? 'Eski veri (' + Math.max(1, Math.round(j.ageMs / 60000)) + ' dk önce) · tekrar denenecek' : hm + ' güncellendi · 5 dakikada bir yenilenir';
+}
+let wxRetry = 0;
+async function loadWeather(fresh) {
+  if (wxBusy) return;
+  wxBusy = true;
+  $('wxRefreshIc').classList.add('animate-spin');
+  try {
+    const loc = await getLoc(fresh === true);
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 15000);
+    const [r, city] = await Promise.all([                      // hava verisi (sunucu) ve il adı birlikte alınır
+      fetch('/api/weather?' + new URLSearchParams({ lat: loc.lat, lon: loc.lon }), { signal: ctl.signal, credentials: 'same-origin' }),
+      loc.name ? loc.name : cityName(loc.lat, loc.lon)
+    ]);
+    clearTimeout(t);
+    if (!r.ok) throw new Error('weather');
+    loc.name = city;
+    paintWeather(await r.json(), loc);
+    wxRetry = 0;
+  } catch (e) {
+    if (e && e.loc) wxFallback(e.msg);
+    else {
+      if (wxHas) $('wxStamp').textContent = 'güncellenemedi, tekrar denenecek'; else $('wxDesc').textContent = 'Hava Durumu Alınamadı';
+      if (wxRetry < 3) { wxRetry++; setTimeout(() => { if (!document.hidden) loadWeather(); }, 20000 * wxRetry); }   // kısa kesintide 20/40/60 sn sonra yeniden dene
+    }
+  } finally { wxBusy = false; $('wxRefreshIc').classList.remove('animate-spin'); }
+}
+$('wxCityBtn').onclick = async () => {
+  const name = $('wxCityInput').value.trim();
+  if (!name) return;
+  try {
+    const r = await fetch('https://geocoding-api.open-meteo.com/v1/search?' + new URLSearchParams({ name, count: 1, language: 'tr', format: 'json' }));
+    const g = ((await r.json()).results || [])[0];
+    if (!g) return wxFallback('Şehir bulunamadı. Yazımı kontrol edip tekrar dene.');
+    const il = g.country_code === 'TR' && g.admin1 ? g.admin1 : g.name;   // Türkiye'de ilçe yazılsa da il gösterilir
+    localStorage.setItem('wxloc', JSON.stringify({ lat: g.latitude, lon: g.longitude, name: il }));
+    loadWeather();
+  } catch { wxFallback('Şehir aranamadı. Bağlantını kontrol edip tekrar dene.'); }
+};
+$('wxUseGeo').onclick = () => { try { localStorage.removeItem('wxloc'); } catch {} loadWeather(true); };
+$('wxLocBtn').onclick = () => { try { localStorage.removeItem('wxloc'); } catch {} loadWeather(true); };   // konumu yeniden al
+$('wxRefreshBtn').onclick = () => loadWeather();                                                          // aynı konumda havayı yenile
+
+/* ---------- Ana sayfa: haftalık/aylık km + sürüş puanı (mevcut sürüş kayıtlarından; yeni veri yok) ---------- */
+const loadJs = (src, ok) => (ok() ? Promise.resolve() : new Promise((res, rej) => { const x = document.createElement('script'); x.src = src; x.onload = res; x.onerror = () => rej(new Error(src)); document.head.appendChild(x); }));
+let stRows = null, stAt = 0, stBusy = false, stRange = 'week', stErr = '';
+const lsGet = k => { try { return localStorage.getItem(k); } catch { return null; } };
+const nf1 = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const nf0 = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 });
+const fmtKmS = v => (v >= 100 ? nf0 : nf1).format(v);
+async function loadStats(force) {
+  if (!me || stBusy || (!force && stRows && Date.now() - stAt < 60000)) { paintStats(); return; }
+  stBusy = true; stErr = '';
+  try {
+    await loadJs('/stats-core.js', () => window.StatsCore); await loadJs('/ride-core.js', () => window.RideCore); await loadJs('/ride-store.js', () => window.RideStore); await loadJs('/telemetry-core.js', () => window.TelemetryCore);
+    const RS = window.RideStore; await RS.init();
+    const [dev, srv] = await Promise.allSettled([RS.list(me.username), fetch('/api/rides', { credentials: 'same-origin' }).then(r => (r.ok ? r.json() : Promise.reject(new Error('x'))))]);
+    const m = new Map();
+    if (dev.status === 'fulfilled') for (const d of dev.value) m.set(d.id, { id: d.id, startedAt: d.startedAt, distM: d.summary && d.summary.distM != null ? d.summary.distM : null, tele: null, dev: true });
+    if (srv.status === 'fulfilled') for (const r of (srv.value.rides || [])) m.set(r.id, { id: r.id, startedAt: r.startedAt, distM: r.summary ? r.summary.distM : null, tele: r.tele || null, dev: m.has(r.id) });
+    else stErr = 'Sunucudaki sürüş listesi alınamadı; yalnızca bu cihazdaki sürüşler sayılıyor.';
+    stRows = [...m.values()]; stAt = Date.now(); paintStats();
+    let n = 0;                                                  // yalnız cihazdaki (sunucuya ulaşmamış) sürüşler: özet ve telemetri yerelde hesaplanır
+    for (const r of stRows.sort((a, b) => b.startedAt - a.startedAt)) {
+      if (!r.dev || (r.distM != null && r.tele) || ++n > 40) continue;
+      try {
+        if (r.distM == null) { const l = await RS.load(r.id); if (l && l.data.fixes.length) r.distM = window.RideCore.summarize(l.data).distM; }
+        if (!r.tele) { const t = await RS.loadTele(r.id); if (t && t.state && t.state.final && (t.bins.length || t.evs.length)) r.tele = window.TelemetryCore.summarizeTele({ bins: t.bins, evs: t.evs, meta: t.state.meta }); }
+      } catch {}
+    }
+    paintStats();
+  } catch { stErr = 'Sürüş verileri okunamadı.'; paintStats(); }
+  finally { stBusy = false; }
+}
+function paintStats() {
+  const SC = window.StatsCore, ch = $('stChart'); if (!SC || !ch) return;
+  const cut = Number(lsGet('an_reset:' + (me && me.username))) || 0, now = Date.now();
+  const rows = (stRows || []).filter(r => r.startedAt >= cut), T = SC.totals(rows, now);
+  $('stWk').textContent = stRows ? fmtKmS(T.weekKm) : '—'; $('stMo').textContent = stRows ? fmtKmS(T.monthKm) : '—';
+  $('stWkSub').textContent = stRows ? T.weekRides + ' sürüş · geçen: ' + fmtKmS(T.prevWeekKm) + ' km' : '';
+  $('stMoSub').textContent = stRows ? T.monthRides + ' sürüş · geçen: ' + fmtKmS(T.prevMonthKm) + ' km' : '';
+  for (const b of document.querySelectorAll('#statsCard [data-range]')) { const on = b.dataset.range === stRange; b.setAttribute('aria-pressed', String(on)); b.style.background = on ? 'var(--accent)' : 'transparent'; b.style.color = on ? 'var(--ink)' : '#C9D0D6'; }
+  const bk = SC.buckets(rows, stRange, now), mx = Math.max(1, ...bk.map(x => x.km)), W = 320, H = 128, pb = 20, pt = 16, bw = W / bk.length;
+  ch.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="none" aria-hidden="true"><line x1="0" x2="${W}" y1="${H - pb}" y2="${H - pb}" stroke="rgba(255,255,255,.12)"/>` + bk.map((x, i) => {
+    const h = Math.round((H - pb - pt) * x.km / mx), cx = bw * i + bw / 2, w = Math.min(28, bw * 0.55), y = H - pb - h;
+    return `<rect x="${cx - w / 2}" y="${x.km > 0 ? y : H - pb - 2}" width="${w}" height="${x.km > 0 ? Math.max(h, 2) : 2}" rx="4" fill="${x.future ? 'rgba(255,255,255,.08)' : 'var(--accent)'}" fill-opacity="${x.current ? 1 : x.future ? 1 : .5}"/>`
+      + (x.km > 0 ? `<text x="${cx}" y="${y - 4}" text-anchor="middle" font-size="10" font-weight="600" fill="#E6E1D8">${fmtKmS(x.km)}</text>` : '')
+      + `<text x="${cx}" y="${H - 5}" text-anchor="middle" font-size="10.5" fill="${x.current ? 'var(--accent-2)' : '#93A4B2'}">${x.label}</text>`;
+  }).join('') + '</svg>';
+  $('stMsg').textContent = !stRows ? 'Sürüşler okunuyor…' : stErr || (bk.every(x => x.km === 0) ? 'Bu dönemde kayıtlı sürüş yok. Harita ekranından sürüş kaydı başlatınca burada görünür.' : '') + (cut ? ' Analiz sıfırlaması aktif (' + new Date(cut).toLocaleDateString('tr-TR') + ' öncesi sayılmıyor).' : '');
+  // puan
+  const O = SC.overall(rows, 12), sc = O.score, col = sc == null ? '#667A8A' : sc >= 80 ? '#5CC48E' : sc >= 60 ? '#F2A64E' : '#E8675D', R = 44, C = 2 * Math.PI * R;
+  $('scRing').innerHTML = `<svg viewBox="0 0 104 104" width="104" height="104" aria-hidden="true"><circle cx="52" cy="52" r="${R}" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="9"/>`
+    + (sc != null ? `<circle cx="52" cy="52" r="${R}" fill="none" stroke="${col}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${(C * sc / 100).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 52 52)"/>` : '')
+    + `</svg><div class="absolute inset-0 flex flex-col items-center justify-center"><span class="stat-big text-3xl" style="color:${col}">${sc == null ? '—' : sc}</span><small class="text-[10px] text-zinc-400">/ 100 · tahmini</small></div>`;
+  $('scTxt').textContent = !stRows ? 'Hesaplanıyor…' : sc == null ? 'Puanlanacak sürüş yok. Puan için sensörlü (ivme olaylı), en az 2 km’lik sürüş gerekir.' : (sc >= 85 ? 'Çok akıcı' : sc >= 70 ? 'Dengeli' : sc >= 50 ? 'Hareketli' : 'Sert') + ' sürüş · ' + O.n + ' sürüş puanlandı' + (O.of > O.n ? ' (' + (O.of - O.n) + ' sürüş sensörsüz/kısa)' : '');
+  const tr = O.trend;
+  $('scTrend').innerHTML = tr.length > 1 ? `<svg viewBox="0 0 200 34" width="100%" height="100%" preserveAspectRatio="none" aria-hidden="true"><polyline fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" points="${tr.map((p, i) => (i * 200 / (tr.length - 1)).toFixed(1) + ',' + (32 - 30 * p.s / 100).toFixed(1)).join(' ')}"/></svg>` : '';
+}
+document.addEventListener('click', e => { const b = e.target.closest('#statsCard [data-range]'); if (b) { stRange = b.dataset.range; paintStats(); } });
+let dashTimers = [];
+function startDash() {
+  stopDash();
+  renderProfile(); renderTips(); paintMaintTip(); loadWeather(); loadStats();
+  dashTimers = [setInterval(() => { renderProfile(); renderTips(); paintMaintTip(); }, 60000), setInterval(loadWeather, 300000)];
+}
+function stopDash() { dashTimers.forEach(clearInterval); dashTimers = []; }
+document.addEventListener('visibilitychange', () => { if (!document.hidden && dashTimers.length) { renderProfile(); renderTips(); loadWeather(); } });
+function goTab(t) {
+  showScreen({ home: 'dash', motor: 'motor', world: 'world', analysis: 'analysis', social: 'social', settings: 'settings' }[t]);
+}
+document.querySelectorAll('[data-nav]').forEach(b => { b.onclick = () => goTab(b.dataset.nav); });
+// Klavye açıkken alt çubuk gizlenir (yer kaplamasın)
+document.addEventListener('focusin', e => {
+  if (e.target.matches('input:not([type=range]):not([type=checkbox]),textarea,select')) $('bottomNav').classList.add('kb');
+});
+document.addEventListener('focusout', () => $('bottomNav').classList.remove('kb'));
+
+// Açılış: sıfırlama bağlantısıysa yeni şifre ekranı; oturum varsa gruplar, yoksa giriş / kayıt
+(async () => {
+  if (resetToken) { setAuthMode('reset'); showAuth(); requestAnimationFrame(() => window.hideSplash && window.hideSplash()); return; }
+  setAuthMode('login');
+  try { enterHome((await api('me')).user); } catch { showAuth(); }
+  requestAnimationFrame(() => window.hideSplash && window.hideSplash());
+})();
+if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+</script>
+</body>
+</html>
