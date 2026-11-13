@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 const GENDERS = ['erkek', 'kadin', 'belirtmek-istemiyorum'];
-const BIKE_TYPES = ['sport', 'naked', 'touring', 'cruiser', 'adventure', 'scooter', 'classic', 'enduro'];
+const BIKE_TYPES = ['supersport', 'sporttouring', 'naked', 'adventure', 'touring', 'cruiser', 'cafe', 'retro', 'motocross', 'scooter', 'sport', 'classic', 'enduro'];   // ilk 10 = My Moto tipleri; son 3 = eski kayıtlar
 
 function norm_phone($raw): ?string {
     $t = preg_replace('/[\s().\-]/', '', trim((string)$raw));
