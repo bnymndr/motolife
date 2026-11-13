@@ -1,0 +1,15 @@
+# Moto Life — paylaşımlı hosting (Apache / LiteSpeed). /api/* isteklerini PHP'ye yönlendirir.
+Options -Indexes
+DirectoryIndex index.html
+AddType application/manifest+json .webmanifest
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^api/ api/index.php [L,QSA]
+  # Eski adresler: /icons/<dosya> → /<dosya>
+  RewriteRule ^icons/(.+)$ /$1 [L]
+</IfModule>
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>

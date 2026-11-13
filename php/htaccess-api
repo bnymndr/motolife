@@ -1,0 +1,12 @@
+# api/ içinde yalnızca index.php dışarıdan çağrılabilir; config.php ve diğer PHP dosyaları tarayıcıdan okunamaz.
+<IfModule mod_authz_core.c>
+  <FilesMatch "^(?!index\.php$).*$">
+    Require all denied
+  </FilesMatch>
+</IfModule>
+<IfModule !mod_authz_core.c>
+  <FilesMatch "^(?!index\.php$).*$">
+    Order allow,deny
+    Deny from all
+  </FilesMatch>
+</IfModule>
