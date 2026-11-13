@@ -1,0 +1,308 @@
+# CLAUDE.md — Moto Life (moto-interkom)
+
+Proje hafızası. Her oturumda önce bunu oku; bilgi burada varsa tekrar sorma. Gizli bilgi yazma.
+
+## 1. Hedef
+Motosiklet sürüşü, navigasyon ve topluluk platformu. Mevcut proje korunarak, küçük ve bağımsız aşamalarla geliştirilir (sıfırdan yazım yok).
+Hedef modüller: canlı harita/navigasyon, sürüş ve performans ölçümleri, grup sürüşü + canlı takip, sürüş analiz ekranı.
+
+## 2. Teknik altyapı
+- Sunucu: Node >=18, Express 4, Socket.IO 4, nodemailer. Başlatma: `npm start` (`node server.js`).
+- İstemci: tek dosya `public/index.html` (Tailwind CDN + saf JS). Sosyal ekran React 19 → esbuild ile `public/social.bundle.js` (`npm run build:social`).
+- Veri: DB yok. JSON dosyaları `data/` altında; sürüşler `data/rides/<kullanıcı-id>/<sürüş-id>.json` (+ `.sum.json` özet). Gruplar yalnızca bellekte. İstemcide sürüşler IndexedDB (`motolife-rides`).
+- Gerçek zamanlı: Socket.IO (canlı konum, grup sürüşü, sosyal DM, grup sesi sinyalleşmesi). Ses: WebRTC mesh (aşağıdaki «Grup sesi» bölümü).
+- PWA: `public/manifest.webmanifest`, `public/sw.js`.
+- Harita: Leaflet 1.9.4 (cdnjs, sabit sürüm; `public/map.js` yükler). Karolar OSM varsayılanı, sunucudan yapılandırılır.
+- Ortam değişkenleri (değerleri kaydetme): `PORT`, `SESSION_SECRET`, `APP_URL`, `MAIL_FROM`, `SMTP_HOST/PORT/USER/PASS`, `GEOAPIFY_API_KEY` (motosiklet rotası), `ORS_API_KEY` (araba rotası), `ORS_BASE_URL`, `ROUTE_PROVIDER`, `ROUTE_DAILY_LIMIT`, `ROUTE_USER_DAILY`, `MAP_TILE_URL`, `MAP_TILE_ATTRIBUTION`. Hiçbiri istemciye gitmez. Anahtar yoksa rota anahtarsız Valhalla ile çalışır (`VALHALLA_URL`, varsayılan herkese açık valhalla1.openstreetmap.de; `off` = kapat). `MAP_TILE_URL_DARK` isteğe bağlı koyu karo.
+- Test betikleri: `yerel-test.bat`, `canli-test.bat` (cloudflared tüneli).
+
+## 3. Önemli dosyalar
+- `server.js` (~290 satır): hesaplar, oturum (imzalı çerez), captcha, şifre sıfırlama; modülleri bağlar (social, live, ridegroups, accountdel, maps, rides).
+- `social.js` (~340 satır): sosyal API ve DM (`data/social.json`, görseller `data/social-img/`).
+- `src/SocialProfile.jsx`, `src/social.entry.jsx`: sosyal arayüz kaynağı. `build-social.js`: derleme.
+- `public/index.html` (~1900 satır): tüm ekranlar (`<main id="dash|motor|world|friends|social|settings">`, `#tab-comm`, `#tab-radio`), alt gezinme `#bottomNav` (`data-nav`), ekran geçişi `showScreen`/`goTab` (~satır 1238-1250).
+- `maps.js`: `/api/maps/config`, `/api/geocode` (Nominatim proxy: 1 istek/sn kuyruk, önbellek, kullanıcı sınırı), `/api/route` (sağlayıcı: Geoapify `mode=motorcycle` varsa o, yoksa ORS `driving-car`; kaçınma seçenekleri yalnızca profilin desteklediği kadar; geometri sunucuda sadeleştirilir; önbellek + günlük bütçe + dakikalık sınır).
+- `public/map.js` + `public/map.css`: Harita ekranı (`window.MotoMap.mount/activate/deactivate/setRiders`). `index.html`'de `#world`→`#map-root`, `openMap()`, `showScreen` kancası, `#i-map` ikonu. Çekirdek hesaplar (`RideStats`, `RouteTracker`) Node ile test edilebilir.
+- `public/ride-core.js`: sürüş kaydı çekirdeği (`Recorder`: başlat/duraklat/devam/bitir, GPS filtreleri, özet, `replay`, `validateRide`). İstemci VE sunucu aynı dosyayı kullanır; kuralı değiştirirsen ikisi birden değişir.
+- `public/ride-store.js`: IndexedDB kalıcı kayıt (nokta başına yazım, anahtar = zaman damgası), bellek yedeği, çevrimdışı kuyruk, `sync()`.
+- `rides.js`: `POST /api/rides` (octet-stream gövde, 3 MB; doğrula + özeti ham veriden yeniden hesapla; değişmez/idempotent), `GET /api/rides`, `GET /api/rides/:id`. `server.js`'de tek `require`.
+- `live.js` (~120 satır): canlı sürücü konumu (Socket.IO, yalnızca bellek). `loc:share` (aç/kapat + kapsam `friends|all` + açık rıza bayrağı), `loc:update` (konum+sürüşte mi), `loc:watch` (merkez, km, yalnız-arkadaş) → sunucu `loc:riders` listesini yalnız değişince, 5 sn taramada gönderir. `social.js` artık `{ isFriend }` döndürür, `server.js` bunu `live.js`e verir.
+- `ridegroups.js` (~470 satır): GRUP SÜRÜŞÜ (interkom gruplarından bağımsız). REST `/api/rgroups…` (oluştur, davet koduyla katıl/önizle, ayrıl, çıkar, lider devri, kod yenile, ayar, sil, sürüş başlat/bitir, ana güzergâh PUT/GET/DELETE, sürüş kayıtları) + Socket.IO `grp:watch|unwatch|share|update` → `grp:state` (≤3 sn, değişince), `grp:alert`, `grp:changed` (kullanıcı odasına). Veri: `data/ridegroups.json`, `data/rgroup-rides/<grup>/route.json|<sürüş>.ndjson|<sürüş>.sum.json` (NDJSON biçimi dosya başlığında). `server.js` bağlar.
+- `public/group-ride.js` (~330 satır): grup istemcisi; map.js yükler ve `mount(ctx)` ile bağlar (harita, GPS, `setRiders` map.js'te kalır). Harita ekranı: yan «Grup» düğmesi → alt sayfa (liste/oluştur/katıl/detay/üyeler/güzergâh/davet/ayar), durum çipi.
+- `public/telemetry-core.js` (~530 satır, tarayıcı+sunucu ORTAK): sensör işleme çekirdeği. `Processor` (IMU+GPS → boylamsal/yanal ivme, tahmini yatış, ani fren/hızlanma, dönüş hızı, GPS–IMU gecikme tahmini), `staticCalibrate`, `GpsTrack`, `cleanTele` (sunucu doğrulaması), `summarizeTele`. Üst yorumda yöntem, sözleşme ve sınırlar yazılı.
+- `public/telemetry.js` (~260 satır): tarayıcı bağdaştırıcısı + arayüz (izin, uyumluluk, kalibrasyon akışı, sürüşe bağlama, HUD, «Sensörler» sayfası, özet bölümü). map.js yükler. `ride-store.js`: IndexedDB v2 `tele` deposu + `_syncTele`. `rides.js`: `POST/GET /api/rides/:id/tele`, liste `tele` özeti.
+- `public/analysis-core.js` (~230 satır, tarayıcı+Node ortak): analiz çekirdeği. `soloSeries(kayıt, tele)` (ride-core `Recorder.replay(..,{samples:true})` ile AYNI kural → seriler, duraklamalar, zaman çizelgesi, telemetri bağlama), `parseGroupRide(ndjson)` (üye başına Recorder: paylaşım aç/kapa = duraklat/devam; uyarı sayıları, lider ile mesafe serisi), `compareSolo`, `fmt` (null → «—»), konum/mesafe/zaman yardımcıları. YENİ VERİ SİSTEMİ YOK.
+- `public/analysis.js` (~560 satır) + `analysis.css`: «Analiz» sekmesi (alt gezinme, `#analysis`): sürüş listesi (cihaz IndexedDB + sunucu birleşik), tek sürüş analizi, iki sürüş karşılaştırma, grup sürüşü analizi. Kendi SVG grafik bileşeni (`Chart`), harita Leaflet (yüklenemezse çizgi tabanlı `SvgMap` yedeği). `index.html` `openAnalysis()` ile tembel yükler; harita sürüş özetindeki «Ayrıntılı analiz» ve grup sayfasındaki «Grup sürüşü analizleri» düğmeleri buraya yönlendirir. `ride-core.js`: isteğe bağlı `samples` çıktısı; `ride-store.js`: `list(owner)`.
+- `data/users.json` (kullanıcılar, scrypt özeti), `data/secret.txt` (oturum anahtarı): **gizli, paylaşma, commit etme.**
+
+## 4. Durum
+Tamamlanan:
+- Üyelik: kayıt/giriş, şifre sıfırlama, captcha, profil/avatar, motosiklet bilgisi (My Motor).
+- (Kaldırıldı) Eski interkom: bkz. en alttaki «KALDIRILDI» bölümü.
+- Sosyal: akış, beğeni, yorum, arkadaşlık, arama, canlı DM.
+- Diğer: izin ekranı, wake lock, ana ekran hava durumu, mobil uyum (safe-area, `100dvh`).
+- Bireysel sürüş kaydı: başlat/duraklat/devam/bitir, anlık-ort.-maks. hız, mesafe, aktif/hareket/duruş süresi, iki ortalama hız (hareket ve toplam; panelde dokununca değişir), zaman damgalı ham GPS noktaları, cihaza anında kayıt, sayfa yenilenirse/kapanırsa kurtarma ("Yarım kalan sürüş"), çevrimdışı kuyruk + otomatik/elle eşitleme.
+- Harita ekranı (alt gezinmede "Harita", eski "Açık Dünya" yuvası): canlı GPS konumu, yakınlaştır/uzaklaştır, konumuma dön, koyu/açık tema, hedef arama (düğmeyle), hedef kartı (kuş uçuşu mesafe), sürüş başlat/bitir (mesafe, süre, anlık/ort./maks. hız; özet), `setRiders()` işaret altyapısı, rota + kalan mesafe/ETA + sapınca yeniden hesaplama (ORS_API_KEY ile).
+
+- Canlı sürücü görüntüleme + konum paylaşımı (harita menüsü): paylaşım her açılışta KAPALI, ilk açışta (kapsam başına) rıza penceresi; kapsam Arkadaşlar/Herkes; görüntüleme mesafesi 5–250 km, "yalnızca arkadaşlar" filtresi; sürüşte/değil ayrımı (turuncu halka+nokta); bayat konum (>90 sn) sunucuda ve istemcide düşer, 45 sn+ soluk. Sunucu testi (sahte io, 41 kontrol) ve Playwright istemci testi (sahte Leaflet/GPS/soket, 49 kontrol) geçti; GERÇEK telefon/ikinci kullanıcı/gerçek Socket.IO ile denenmedi.
+- Grup sürüşü (harita → Grup düğmesi): grup oluştur/ad, 8 haneli davet kodu veya `/?grup=KOD` bağlantısı (giriş sonrası katılım onayı), ayrıl, tek lider (devir, üye çıkarma, kod yenileme, ad/mesafe ayarı, silme), lider sürüşü başlatır/bitirir, canlı üye konumu+hız (ölçülen/tahmini «~» ayrımı), lider işaretli, ana güzergâh (liderin haritadaki rotasından; mavi noktalı çizgi), geride kalma/uzaklaşma/güzergâh dışı uyarıları, kayıt (NDJSON). Sunucu testi (sahte io/app, 124 kontrol) ve Playwright istemci testi (52 kontrol) geçti; GERÇEK telefon, gerçek Socket.IO/express ve çoklu hesapla denenmedi.
+- Sensör telemetrisi (harita menüsü → Sensörler): ivmeölçer+jiroskop+GPS. Telefonu montajda dik/hareketsiz kalibre et (yerçekimi yönü), ileri eksen sürüşte GPS ivmesiyle otomatik bulunur, jiroskop işareti/ölçeği ilk virajlarda GPS yön değişimiyle doğrulanır, montaj kayması algılanır. Çıktı: boylamsal/yanal ivme (ölçülen), dönüş hızı (ölçülen), YATIŞ (TAHMİNİ), ani fren/hızlanma olayları (ivmeölçer; kalibrasyon yoksa GPS hız farkı), her biri ölçülen/tahmini/veri yok/desteklenmiyor etiketli; veri yoksa NEDENİ yazılır. Sürüş kaydına kimlikle bağlı EŞ KAYIT (cihazda `tele` deposu, sürüş sunucuya gidince `/api/rides/:id/tele`); sürüş kaydı/doğrulaması değişmedi. Test (hepsi SİMÜLASYON/sahte olay, gerçek donanım YOK): çekirdek fizik simülasyonu 73 kontrol, rides.js tele 22, Playwright istemci 46. GERÇEK telefon/motosikletle DENENMEDİ.
+- Sürüş analizi (Analiz sekmesi): A) mesafe, toplam/hareket süresi, ort./maks. hız, başlangıç/bitiş konumu (koordinat; adres çözümlemesi YOK), tarih; B) hız–zaman, hız–mesafe, yatış (tahmini), ivme grafikleri, hız renkli güzergâh haritası, ani fren/hızlanma + duraklama/kesinti zaman çizelgesi; C) grup üyelerinin mesafe/ort./maks. hız/süre çubukları + performans tablosu + grup güzergâhı + üye izleri + lider ile mesafe; D) geçmiş sürüş listesi (cihaz+sunucu), ayrıntı, iki sürüş karşılaştırma (A=eski, B=yeni), grup sürüşü listesi. Harita↔grafik↔olay listesi ortak imleçle bağlı (zaman bazlı). Test: analysis-core 39, ride-core eşdeğerlik, Playwright arayüz 69 kontrol (sahte Leaflet/sunucu yanıtı, simülasyon + gerçek ridegroups çıktısı); GERÇEK cihaz/uzun sürüş/gerçek harita karosu ile DENENMEDİ.
+Yarım / yer tutucu: "Arkadaşlar" ekranı (boş). Rota/navigasyon kodu yazıldı ve sahte sağlayıcı yanıtlarıyla test edildi; GERÇEK Geoapify/ORS anahtarıyla ve gerçek cihazda test EDİLMEDİ. Adım adım/sesli yönlendirme yok.
+
+Hiç yok: sürüş geçmişi/analiz ekranı (kayıtlar `GET /api/rides` ile okunabilir), sensör verileri (ani fren/hızlanma, yatış, rakım), canlı konum paylaşımı, davet kodu/bağlantısı, grup sürüşü takibi, adım adım/sesli yönlendirme.
+
+## 5. Bilinen sorunlar
+1. İkon yolu: `index.html:8`, `manifest.webmanifest`, `sw.js:4` `/icons/...` bekliyor; dosyalar `public/` kökünde, `/icons` rotası yok → `addAll` hatası, service worker kurulumu düşebilir.
+2. TURN yok → operatör ağlarında bağlantı kurulamayabilir.
+3. Bağlantı kopunca otomatik toparlanma yok (`disconnect` yalnızca uyarı verir, ICE restart yok).
+4. `.gitignore` yok; `data/` hassas veri içerir.
+5. Sürüş kayıtları dosya tabanlı (`data/rides/`); binlerce sürüş/kullanıcıda dizin taraması ve liste yavaşlar → o zaman SQLite/indeks düşünülür. Cihazdaki eski sürüşler otomatik silinmez.
+6. `index.html` tek dosya olarak büyüyor.
+7. Harita: Leaflet cdnjs'ten yükleniyor (CDN'e bağımlı); ağ olan ortamda `public/vendor/`a taşınmalı. OSM karoları yoğun/yaygın dağıtım için uygun değil (karo sağlayıcısı gerekir). Ekran görüntüleri ve akış testleri sahte Leaflet ile yapıldı; gerçek harita çizimi, karolar, GPS ve dokunmatik kullanım gerçek cihazda doğrulanmadı.
+8. Sürüş hızı: cihaz `coords.speed` vermezse konum farkından hesaplanır (daha dalgalı olabilir). Arka planda/ekran kilitliyken konum kesilir; kesintiler özetde belirtilir.
+9. Telemetri gerçek donanımla doğrulanmadı: telefon modeli/işletim sistemi farkları (doğrusal ivme yok, ters işaret, jiroskop birimi, örnekleme hızı <30 Hz), motor titreşimi (60 Hz örneklemede takma ad etkisi), yan ayakta kalibrasyon sapması, sayfa arka plandayken sensör verisinin kesilmesi. iOS'ta izin yalnızca dokunma olayı içinde istenebilir (Başlat/Kalibre/Dene düğmeleri).
+
+## 6. Teknik kararlar
+- Mevcut mimari korunur: Express + Socket.IO, saf JS istemci, sosyal tarafta React paketi. Yeni kütüphane/ücretli servis yalnızca gerçekten gerekliyse.
+- API anahtarları yalnızca sunucuda; istemciye gönderilmez, harita/rota servisleri gerekirse sunucudan proxy'lenir.
+- Konum paylaşımı varsayılan kapalı, kullanıcı iznine bağlı; yetki (arkadaşlık/grup) sunucuda denetlenir.
+- Canlı konum gizlilik tasarımı: yetki her anlık görüntülemede sunucuda denetlenir (arkadaşlık bitince erişim ≤5 sn'de düşer); arkadaş olmayanlara konum ≈100 m yuvarlanır (`approx`); izleyici merkezi ≈1 km yuvarlanarak gönderilir; konum diske yazılmaz, soket kopunca silinir; hız/yön paylaşılmaz. Gönderim: hareketteyken ≥10 sn ve ≥25 m, durağanken 45 sn, sürüş durumu değişince hemen; doğruluk >100 m paylaşılmaz; sunucu en sık 4 sn'de bir kabul eder. Paylaşım açıkken GPS izleme harita ekranından çıkınca da sürer; izleme (alma) yalnızca harita ekranı açıkken. Arka planda/ekran kilitliyken konum gitmez → ≤90 sn sonra görünmez olur.
+- Grup sürüşü kararları: konum paylaşımı SÜRÜŞ BAŞINA açık rıza ister (kayıt uyarısıyla), varsayılan kapalı, yalnız aktif sürüşte, sürüş bitince/bağlantı kopunca/üye çıkarılınca durur; grup bilgisine yalnız üyeler erişir (üye olmayana 404); davet kodunu yalnız lider görür, deneme hız sınırı vardır. Geride kalma = lider ve güzergâh varsa yol boyu fark > eşik (varsayılan 1 km; ayar 0,5–3 km), güzergâh yoksa lider mesafesi > eşik; lider konumu yoksa ÖLÇÜLMEZ (uydurulmaz); 300 m yol dışı = «güzergâh dışı»; 2 ardışık taramada onay (titreşim önleme), uyarı 60 sn'de bir. Bayat konum: >30 sn soluk, >60 sn canlı gösterilmez. Gönderim: hareketteyken ≥4 sn ve ≥8 m, durağanken 20 sn; sunucu ≥1,5 sn kabul eder. Sınırlar: üye ≤25, kullanıcı başına grup ≤8, kayıt ≤15 MB/sürüş, 20 dk kimse paylaşmazsa sürüş otomatik biter. Kayıtlar grup üyelerinin analizi içindir; üye ayrılsa da kendi kayıtları silinmez (silme/saklama süresi kararı bekliyor).
+- Telemetri kararları: YATIŞ = telefonun eğimi DEĞİL; sin(yatış)=hız·W/g (W: jiroskopun motosiklet «yukarı» ekseni üzerindeki bileşeni, hız: GPS). Yalnızca hız ≥5 m/sn, GPS taze, |boylamsal ivme| ≤3 m/sn², jiroskop doğrulanmış, montaj kaymamış ve ivmeölçer büyüklüğü modelle tutarlıysa yazılır; aksi halde «veri yok» + neden. Sürücü duruşu/lastik/montaj hataları nedeniyle gerçek yatıştan sapabilir; gerçek yatışla doğrulanmadı. Eşikler (başlangıç, ayarlanmadı): fren orta/sert/acil ≥3,5/5,5/7,5 m/sn², hızlanma orta/sert ≥3,0/5,0, süre ≥350 ms, fren için hız ≥3 m/sn; GPS-yedek ≥3,15/2,7 ve ≥1 sn. IMU olayı varsa aynı olayın GPS kopyası elenir. Yanal ivme motosiklet ekseni boyunca ölçülür (≈ yatay ivme×cos(yatış)). IMU–GPS zamanı: IMU saati epoch'a çevrilir, GPS gecikmesi çapraz korelasyonla (≈±100 ms) kestirilip uygulanır ve kayda yazılır. Kalibrasyon 12 sa geçerli, her sürüşte ileri yön yeniden doğrulanır. Veri biçimi: satır `[t,aLonOrt,aLonUç,aLatOrt,aLatUç,yatışOrt,yatışUç,dönüşHızı,yuvarlanmaUç,q]` (q bitleri: 1 ölçülen ivme, 2 tahmini ivme, 4 yatış tahmini, 8 gecikme kestirildi, 16 gürültülü, 32 hız konumdan türetildi); olay `[t0,'b'|'a',şiddet,tepe,süreMs,v0,v1,dv,'i'|'g',bayrak,lat,lon]` (bayrak 1 GPS doğruladı, 2 gürültülü, 8 tahmini ivme).
+- Analiz kararları: ölçülmeyen değer asla 0 gösterilmez («—» + neden; sensörsüz sürüşte yatış/ivme grafiği yerine «veri yok»); iki sürüşte biri sensörsüzse olay/yatış farkı hesaplanmaz. Hız kaynağı (cihaz ölçümü / konumdan türetilmiş) okuma panelinde ve grup tablosunda belirtilir. Grup üyesi verisi yalnızca konum paylaştığı süreyi kapsar (süre buna göre); lider ile mesafe yalnızca iki konum ≤15 sn tazeyken hesaplanır. Güzergâh çizgisi Douglas-Peucker ile ≤1600 noktaya sadeleştirilir; grafikler piksel başına min/maks korur. Liste ≤100 sunucu sürüşü + cihazdaki hepsi. Rakım kayıtlı olmadığından rakım grafiği yok.
+- Sensör verileri ayrı etiketlenir: ölçülen / tahmini / desteklenmeyen. Yatış açısı "tahmini" gösterilir (montaj ve kalibrasyona bağlı).
+- Sürüş verisi modeli: olaylar `[t, tür, n]` (n = o ana kadar saklanan nokta sayısı), noktalar `[t,lat,lon,acc,hız|null,bayrak]` (0 kabul, 1 zayıf doğruluk, 2 sıçrama, 3 yeni referans). Elenen noktalar da saklanır. Özet her zaman ham veriden `replay` ile hesaplanır; sunucu istemcinin özetine güvenmez. Duraklatma/boşluk sırasındaki yer değişimi mesafeye eklenmez.
+- Filtre değerleri (`ride-core.js`): doğruluk >50 m elenir; fiziksel olarak mümkün olmayan yer değişimi (ivme 12 m/sn², 83 m/sn üstü) sıçrama sayılır, art arda 3 sıçrama yeni referans olur; >30 sn boşluk + >100 m sıçrama kesinti sayılır; <0,8 m/sn duruş sayılır; sınır 30000 nokta (~8 sa). Değerler gerçek sürüş verisiyle ayarlanmadı.
+- PWA arka planda güvenilir konum kaydetmez; sürüşte wake lock ile ekran açık tutulur.
+- Rota sağlayıcıları: ORS'nin motosiklet profili YOK (araba/kamyon/bisiklet/yaya); eski adresi api.openrouteservice.org kapatılıyor → `api.heigit.org/openrouteservice` (anahtarlar account.heigit.org). Geoapify `motorcycle` modu var (ücretsiz ≈3000 kredi/gün, ≈1 kredi/rota, atıf gerekir) ama otoyol/ücretli kaçınma yalnızca araba modlarında; motosiklette sadece feribot. Google TWO_WHEELER Türkiye'de yok; Mapbox'ta motosiklet yok. Arayüz profile göre dürüst etiket gösterir; araba rotası "motosiklet için optimize değil" der.
+- Rota akışı (gereksiz çağrı yok): hedef seç (çağrı yok) → "Rota oluştur" (1 çağrı) → önizleme → "Navigasyonu başlat" (çağrı yok) → kalan mesafe/ETA yerelde; yeniden hesaplama yalnızca rotadan >max(80 m, 2×doğruluk) ve >10 sn sapınca, en geç 30 sn'de bir (hatada üstel bekleme, en çok 12), çevrimdışıyken denenmez. ETA = plan hızı ile ölçülen gerçek hızın karışımı (trafiksiz tahmin).
+- Arama otomatik tamamlama yapmaz (Nominatim politikası); sonuç sunucuda önbelleklenir.
+- Bekleyen kararlar (netleşmedi, varsayma): rota sağlayıcısı olarak Geoapify hesabı/anahtarı (koşullar: atıf, ticari kullanım) , ikon düzeltme yönü, TURN sağlayıcısı, üretim karo sağlayıcısı.
+
+## 7. Geliştirme sırası
+1. Hazırlık: ikon yolu, `.gitignore` (YAPILMADI).
+2. Harita + anlık konum + izin akışı (YAPILDI, cihazda doğrulanacak).
+3. Sürüş kaydı: ölçüm, cihaza kayıt, kurtarma, sunucuya eşitleme YAPILDI (gerçek cihazda doğrulanacak). Sırada: geçmiş/analiz ekranı.
+4. Hedef arama + rota + navigasyon YAPILDI (sahte yanıtlarla test); gerçek anahtarla ve cihazda doğrulanacak. Sırada: adım adım yönlendirme (ORS/Geoapify talimatları), geçmiş/analiz ekranı.
+5. Sensör telemetrisi (ani fren/hızlanma, ivmeler, TAHMİNİ yatış) YAPILDI, simülasyonla test; gerçek motosikletle eşik/doğruluk ayarı ve kalibrasyon denemesi gerekir.
+6. Canlı konum paylaşımı (YAPILDI, sahte altyapıyla test; gerçek cihazda ve iki hesapla doğrulanacak). Sırada: grup/davet bazlı görünürlük, `Arkadaşlar` ekranı, bildirim.
+7. Grup sürüşü (YAPILDI, sahte altyapıyla test; iki gerçek telefonla doğrulanacak). Sırada: sürüş analizi ekranı (GET /api/rgroups/:id/rides[/:rid] ile NDJSON), grup interkomu bağlantısı + TURN.
+8. Sürüş analiz ekranı YAPILDI (simülasyon/sahte yanıtlarla test; gerçek cihazda ve uzun sürüşte doğrulanacak). Sırada: adım adım/sesli yönlendirme, sürüş verisi için SQLite/indeks, analiz dışa aktarma (CSV/GPX).
+Paralel: TURN ve bağlantı toparlanması, grup sürüşünden (7) önce.
+
+## 8. Çalışma kuralları
+- Önce ilgili dosyayı incele; varsayımla kod yazma. Var olan özelliği yeniden yazma.
+- Tek seferde tek aşama; ilgisiz modüllere dokunma. Teknik engel varsa kod yazmadan önce engeli ve en ucuz çözümü bildir.
+- Yalnızca değişen dosyalarda çalış; dosyaları baştan yazma, kodu sohbete dökme.
+- Her değişiklikten sonra mevcut işlevlerin bozulmadığını kontrol et (en az `node --check`; sosyal kaynak değiştiyse `npm run build:social`).
+- Sahte veriyi gerçekmiş gibi gösterme; gerçek cihazla test gerektiren şeyi "test edilmedi" diye belirt.
+- Silme/taşıma/yeniden adlandırma ve `data/` içeriğini değiştirme: önce onay al.
+- Arayüz: koyu lacivert (`#031420`) + turuncu (`#EA8621`) dili, mobil öncelikli, sürüşte büyük dokunma alanları, gereksiz animasyon yok.
+- Yanıtlar kısa: yapılan değişiklik, etkilenen dosyalar, test sonucu. Aşama bitince bu dosyayı güncelle.
+
+## Güvenlik/Performans/Mobil Denetimi (son aşama)
+- server.js: x-powered-by kapalı; nosniff / X-Frame-Options / Referrer-Policy (+ HTTPS'te HSTS); `/icons/*` → public/ kökünden sunulur (ikon yolu sorunu dosya taşımadan çözüldü); secret.txt 0600; `fails` haritası temizleniyor; SMTP varken APP_URL yoksa uyarı.
+- sw.js: ön-bellek ekleme tek tek ve hata toleranslı (bir dosya 404 olsa SW kurulumu bozulmaz).
+- map.js: sürüş başlarken navigator.storage.persist() istenir (IndexedDB silinmesini zorlaştırır).
+- AÇIK: CSP yok (CDN + satır içi betik); OSM kutuları ağır kullanıma uygun değil; users.json her kayıtta tamamen yazılıyor; gerçek cihazda test EDİLMEDİ.
+
+## Bütünleşik son kontrol (kod değişmedi)
+- Sahte express/socket.io katmanı üstünde GERÇEK rides.js/ridegroups.js/live.js + çekirdek modüller; Chromium'da gerçek analysis.js/ride-store.js. Sentetik (TEST) GPS/IMU: boru hattını doğrular, fiziksel doğruluğu değil.
+- Geçen: sürüş kaydı→yükleme→liste→analiz (mesafe/hız eşleşiyor), telemetri (fren/hızlanma olayı, yatış asla "ölçülen" değil), grup (oluştur/katıl/yetki/canlı konum/uyarı/analiz), canlı konum gizliliği, çevrimdışı kuyruk, çökme sonrası kurtarma, mobil 390 px + masaüstü 1280 px (taşma yok).
+- TEST EDİLMEDİ: gerçek cihaz GPS/sensör, gerçek Leaflet harita + hedef/rota (dış servis anahtarı ve ağ gerekir), tam index.html (CDN), gerçek socket.io, ekran kilidinde GPS.
+- Düşük: analiz ayrıntı başlığı 390 px'te 4 satıra sarıyor (tarih + "Başka sürüşle karşılaştır" düğmesi); karşılaştırma onay kutusu 20 px (etiketi ile dokunulabilir).
+
+## My Moto + alt gezinme (son değişiklik)
+- Alt gezinmeden «İnterkom ve Grup Sürüşü» sekmesi KALDIRILDI (5 sekme: Ana Sayfa, My Moto, Harita, Analiz, Sosyal). İnterkom kodu sonradan tamamen silindi (bkz. «KALDIRILDI» bölümü). Haritadaki GRUP SÜRÜŞÜ (ridegroups) ve analizi etkilenmedi.
+- «My Motor» → «My Moto». `public/mymoto.js` (yeni, tarayıcı+Node): bakım takibi (yağ/zincir/hava filtresi: son bakım km + periyot, «şimdi yapıldı», durum normal/yaklaşıyor/geçti), toplam km, sigorta/muayene bitiş tarihi, yakıt kayıtları + tüketim (depoyu doldur kayıtları arasından L/100km ve TL/km; ilk dolum referans, olağan dışı değer işaretlenir). Marka/model profilden (My Moto ekranındaki mevcut kart). `index.html`: `#mymoto-root`, `renderMotor()` bağlar.
+- Eklenen HTML dosyasındaki sahte/örnek değerler (Yamaha MT-07, 24.520 km, Kerem Demir, 142 saat, yedekleme/bildirim düğmeleri) ALINMADI: gerçek veri ilkesi. Yalnızca düzen ve hesap fikirleri kullanıldı; «Profil & Ayar» sekmesi Ayarlar ekranıyla çakıştığı için eklenmedi.
+- Saklama: localStorage `mymoto:<kullanıcı adı>` (yalnız bu cihaz; sunucuya eşitlenmez, tarayıcı verisi silinirse gider). Sunucu eşitlemesi sonraki aşama kararı.
+- Test: hesap çekirdeği 16, Chromium arayüz 21 (mobil 390 px). Tailwind CDN olmadan test edildi (≥44 px hedefleri gerçek sayfada doğrulanmadı); tam index.html ile DENENMEDİ.
+
+## Ayarlar ekranı (telefon ayarları düzeni)
+- Ayarlar artık alt gezinmenin 6. sekmesi (eski sağ alttaki yuvarlak düğme kaldırıldı). `public/settings.js` (yeni): profil kartı → gruplanmış liste (Ekran, Ses, Tema, Uygulama Dili | Bildirim, Konum ve Gizlilik, Kalibrasyon | Veri ve Depolama, Destek | Çıkış, Hesabı Sil) → alt sayfalar. `window.Settings = {mount, applyDisplay, maintDue}`; kancalar index.html `mountSettings()` içinde.
+- Eski ayar blokları (`#lg-profile`, `#lg-perm`, `#lg-cal`) gizli `#setLegacy` içinde durur, ilgili panele DOM taşıma ile alınır (kimlikler ve index.html JS'i bozulmaz). `#logoutBtn` gizli kalır.
+- Tercihler yalnız localStorage: `ml_fs` (yazı boyutu 88/100/112/125), `ml_rm` (hareketi azalt), `ml_maint` (bakım hatırlatıcı), `ml_vib` (titreşim); harita tercihleri mevcut `mm_wake/mm_avg/mm_theme/mm_cons_*/mm_tcal` ile ORTAK. map.js: `prefs()` ve `openSensors()` eklendi.
+- Hesap silme: `accountdel.js` → `POST /api/account/delete {confirm, password}`; `social.removeUser`, `ridegroups.removeUser` (lider devri/grup kapanışı), sürüş klasörü, oturum/soket temizliği. Yanlış şifre kilit sayacına yazılır.
+- Ana sayfa ipucu: My Moto'dan zamanı gelen bakım/sigorta/muayene (`paintMaintTip`).
+- Yalnız gerçekten çalışan seçenekler etkin; açık tema ve diğer diller «Yakında». İnterkom ses ayarı interkom sekmesi kapalı olduğu için şimdilik etkisiz (arayüzde not düşüldü).
+- Bilinen sınır: başkalarıyla kaydedilmiş grup sürüşü konum izleri (NDJSON) silinmez (arayüzde söylenir); tercihler cihaza özel; push bildirimi yok.
+- Test: hesap silme sunucu 17/17 (sahte express/io, gerçek modüller); Chromium arayüz 102/104 (2'si test sayfasında file:// kaynaklı; mobil 390 + masaüstü 1280, taşma yok, ≥44 px hedef yok eksik). TEST EDİLMEDİ: tam index.html (CDN), gerçek cihaz, gerçek SMTP/oturum akışı.
+
+## Ses / interkom sistemi KALDIRILDI (yeniden kurulacak)
+- Silinenler: LiveKit sesli görüşme (voice.js, voice-floor.js, voice/, worker/, public/voice*.js, supabase/ ses-müzik migration taslakları), grup müziği (music.js, music-store.js, public/music-*.js), ses miksajı/cihazlar (public/audio-*.js), sürüş ekranı (public/ride-screen*), native/ şablonlar, ilgili testler.
+- Eski WebRTC interkom da silindi: server.js'teki oda/soket kodu (create/join/signal/radio/kick…), index.html'deki #join/#app/#tab-comm/#tab-radio, radyo, interkom ayarları ve mikrofon kalibrasyonu (settings.js «Ses» sayfası ve mikrofon bölümü dahil). `socket` (Socket.IO) harita/sosyal/canlı konum için kalır.
+- Kalanlar: hesaplar, sosyal, harita, sürüş kaydı/analiz, telemetri, grup sürüşü (ridegroups), My Moto, ayarlar, hesap silme.
+- `data/` dokunulmadı: varsa `data/group-music*` artık kullanılmıyor (silme onayı bekliyor).
+- Yedek (silmeden önce): oturum dışı `/tmp/moto-backup-pre-delete`. Yeni kurulum sırası kullanıcıyla belirlenecek.
+
+## Alt gezinme + hava durumu (son değişiklik)
+- (ESKİ: 6 sekme; güncel durum en alttaki bölümde) Ana Sayfa, My Moto, Harita, Analiz, Sosyal, Ayarlar. Yüzen turuncu Ayarlar düğmesi (`#dashSettings`) kaldırıldı.
+- Hava durumu: `weather.js` → `GET /api/weather?lat=&lon=` (oturum şart, kullanıcı başına 20/dk). Sağlayıcı sırası: Open-Meteo → MET Norway (yedek, CC BY 4.0; `WEATHER_CONTACT` veya `APP_URL` User-Agent'a yazılır) → bayat önbellek (≤6 sa, «ESKİ VERİ» etiketli). Önbellek 5 dk (konum 0,01° yuvarlanır), aynı anda tek dış istek, sağlayıcı başına 6 sn zaman aşımı. Çıktı ortak biçim; MET'te hissedilen sıcaklık ve yağış ihtimali YOK (null → ekranda gösterilmez, yağış mm). İstemci (`index.html` `loadWeather/paintWeather`) 5 dk'da bir yeniler (`dashTimers`), hata olursa 20/40/60 sn'de yeniden dener, son veriyi ekranda tutar, kaynak adını gösterir. İl adı (bigdatacloud) ve şehir arama (Open-Meteo geocoding) hâlâ istemciden çağrılır.
+- Test: `node test/weather.js` 21 (sahte fetch), `node test/weather-ui.js` 16 (gerçek index.html, sahte yanıt; Tailwind CDN yok). TEST EDİLMEDİ: gerçek Open-Meteo/MET yanıtları (ağ kapalı), gerçek telefon, gerçek Tailwind görünümü.
+
+## Grup sesi (WebRTC, grup sürüşü üyeleri) — yeni kurulum
+- Mimari: ses üyeler arasında DOĞRUDAN WebRTC (mesh), sunucudan geçmez/kaydedilmez. Harici hesap yok. `groupvoice.js` (sunucu; `server.js` `require('./groupvoice')({app,io,userFromCookie,uname,rg:rgApi})`): oda = ridegroups grubu (üyelik `rg.groupOf` ile denetlenir), sinyalleşme aktarımı, lider modu, söz hakkı, ICE. Soket: `gv:join|signal|leave|mode|status|floor|revoke` (ack'li) ↔ `gv:peer-joined|peer-left|mode|floor|status|revoked|kicked|taken`. `GET /api/gvoice/ice` (giriş şart): Google STUN + isteğe bağlı TURN (`GV_TURN_URLS` virgülle, `GV_TURN_USER`, `GV_TURN_CREDENTIAL`; yalnız sunucuda, üyeye bu uçtan verilir). `GV_MAX` oda üst sınırı (varsayılan 6, en çok 8; mesh sınırı).
+- Modlar (lider seçer, varsayılan bas-konuş): `ptt` (tek söz sahibi, kiralama 20 sn/istemci 7 sn'de yeniler, en çok 120 sn tutulur, lider geri alabilir) ve `open` (herkes kendi mikrofonunu açar/kapar). Mod değişince hak ve mikrofon durumları sıfırlanır. Mikrofon katılınca HER ZAMAN kapalı başlar.
+- Güvenlik/sağlamlık: üye olmayan giremez; aynı kullanıcı 2. cihazdan girerse eskisi düşer; 30 sn'de bir üyelik taraması (gruptan çıkarılan/silinen sesten atılır); sinyal ≤16 KB, istek hız sınırı; PTT'de hakkı olmayanın «mikrofon açık» durumu reddedilir; söz hakkı süresi dolunca otomatik düşer (takılı mikrofon yok).
+- İstemci `public/group-voice.js`: `GroupVoice.create({sock})` (çekirdek: ICE al, mikrofon, eşler, teklif/cevap, aday kuyruğu, başarısızlıkta yeniden dene, soket kopunca yeniden gir, alınan ses düzeyiyle «konuşuyor», sesli/titreşimli ipuçları) + `mountBar(ctl)` (ses açıkken HER ekranda nav üstünde sabit çubuk: konuşanlar, 88 px ana düğme PTT/mikrofon, kilit modu, lider mod düğmeleri ve «söz hakkını al», Ayrıl). `group-ride.js`: grup sayfasında «Sesli görüşme» bölümü (katıl/ayrıl), betik tembel yüklenir. Anahtarlar: `ml_gv_latch`, `ml_gv_beep`, `ml_vib`.
+- SINIRLAR (dürüst): TURN yoksa bazı operatör/NAT ağlarında eşler birbirine bağlanamaz (çubukta «bağlantı kurulamadı» yazar); mesh ≤6 kişi; PTT hakkı alıcıda uygulanır (bozuk istemci sunucudan bağımsız yayın yapabilir); ekran kilitlenince/arka planda tarayıcı sesi-mikrofonu kesebilir (PWA; yerel kabuk gerekir); Bluetooth kulaklık yönlendirmesi işletim sistemine bağlıdır, uygulama yönetmez; mikrofon için HTTPS şart; gidon/kask fiziksel kumandası YOK.
+- Test: `node test/gv-server.js` 38 (gerçek groupvoice.js, sahte io), `node test/gv-browser.js` 35 (Chromium: GERÇEK WebRTC iki-üç sekme, sahte mikrofon cihazı, ws üstünde sahte soket; aynı makine → NAT/TURN senaryosu test EDİLMEDİ), `node test/gv-ride.js` 9 (group-ride.js bölümü). TEST EDİLMEDİ: gerçek iki telefon/mobil ağ/TURN, gerçek mikrofon+rüzgâr/yankı, Bluetooth, arka plan/kilit ekranı, gerçek socket.io/express.
+
+## Harita: konum kararlılığı + arama→otomatik rota + yol tarifi (son değişiklik)
+- `maps.js`: `/api/route` artık `steps` döner (`{text,dist,time,mod,lat,lon}`; `mod`: depart|arrive|straight|slight-/sharp-left|right|left|right|uturn|roundabout|merge|ferry). Sağlayıcılar: Geoapify (`lang=tr`, legs/steps), ORS (`instructions:true`, `language:tr`), VALHALLA (anahtarsız, `costing=motorcycle`, `tr-TR`, polyline6 çözülür; kaçınma = `use_highways/use_tolls/use_ferry=0`, yani güçlü tercih). `ROUTE_PROVIDER=auto`: geoapify → ors → valhalla; birincil sağlayıcı 502/ağ hatası verirse Valhalla'ya düşer (404/kota hatasında düşmez). Yanıtta kullanılan sağlayıcının `label/attr`ı vardır. `/api/maps/config`: `tileUrlDark`, `tileRetina`.
+- `public/map.js` çekirdeği (Node ile test edilir): `Smoother` (ekran konumu için Kalman: duran cihazda titreme azalır; doğruluğu >100 m nokta iyi konum varken reddedilir; imkânsız sıçrama 3 kez gelmedikçe reddedilir) ve `nextStep` (rota üzerindeki konuma göre sıradaki manevra). Sürüş KAYDI, canlı paylaşım, grup ve telemetri HAM noktaları kullanmaya devam eder (ride-core kendi filtrelerini uygular); düzeltilmiş konum yalnız işaret/takip/rota başlangıcı/navigasyon için (`S.me` düzeltilmiş, `S.raw` ham).
+- Konum arayüzü: mavi nokta + nabız halkası, hız >1,5 m/sn ise yön oku (yumuşatılmış), doğruluk dairesi (≥12 m), 12 sn konum gelmezse «Sinyal zayıf · son konum N sn önce» + soluk işaret, takip yalnız işaret ekran merkezinden >24 px uzaklaşınca kaydırır, ilk kaba (baz istasyonu) konumdan sonra iyi konuma yaklaşır.
+- Akış: arama sonucu seçilince (tek sonuç varsa liste açılmadan) hedef + rota OTOMATİK istenir (1 çağrı); konum yoksa ilk konum gelince; rota servisi kapalıysa yalnız hedef. Önizleme kartında katlanabilir «Yol tarifi · N adım» listesi (`mm_steps` tercihi); «Navigasyonu başlat» yeni çağrı atmaz; navigasyonda üstte dönüş bandı (ikon + mesafe + talimat), dokununca tam liste (mevcut adım işaretli). Yeniden hesaplama kuralları aynı. Sesli yönlendirme YOK.
+- Görünüm/performans: backdrop-filter (bulanıklık) kaldırıldı, opak zemin; hap arama kutusu, yuvarlak düğmeler; Leaflet `preferCanvas`, `updateWhenIdle/updateWhenZooming:false`, `keepBuffer:1`, `zoomSnap:.5`. Koyu tema: `MAP_TILE_URL_DARK` yoksa OSM karoları CSS filtresiyle koyulaştırılır (bu filtre telefonda en pahalı kısım); hazır koyu karo (ör. CARTO dark_matter) tanımlanırsa filtre kalkar — lisansı kontrol et (CARTO ücretsiz katmanı yalnız ticari olmayan kullanım). Varsayılan hâlâ OSM (yoğun kullanım için uygun değil).
+- Düzeltilen eski hata: sürüş özetinde «Ayrıntılı analiz» düğmesi hiç görünmüyordu (`status` yerine `mode`).
+- Test: `node test/maps.js` 15 (sahte fetch; Valhalla/Geoapify/ORS yanıtları SAHTE), `node test/map-ui.js` 33 (gerçek map.js/css Chromium'da; Leaflet, GPS, /api SAHTE; çekirdek Smoother/nextStep dahil). TEST EDİLMEDİ: gerçek Valhalla/Geoapify/ORS yanıt biçimi ve Türkçe talimat kalitesi, gerçek Leaflet çizimi ve karolar, gerçek telefon GPS (Kalman ayarı sahte gürültüyle), Valhalla herkese açık sunucusunun erişilebilirliği/kotası.
+
+## Analiz → Ayarlar, ana sayfa istatistikleri, tema (son değişiklik)
+- Alt gezinme 5 sekme: Ana Sayfa, My Moto, Harita, Sosyal, Ayarlar (`grid-cols-5`). Analiz artık Ayarlar › Kalibrasyon içindeki karttan açılır (`settings.js` `data-act="analysis"` → `openAnalysis()`); `TAB_OF.analysis:'settings'`, geri dönüş `Analysis.mount(..., {user, onExit})`.
+- Analiz: filtre Tümü/Hafta/Ay (hafta Pzt 00:00 yerel, ay takvim ayı; `localStorage an_range`). «Sıfırla» = SAYAÇ SIFIRLAMA: `an_reset:<kullanıcı>` zaman damgası; liste/toplamlar o andan önceki sürüşleri saymaz. Sürüş kayıtları ASLA silinmez; «Geri al» var.
+- `public/stats-core.js` (tarayıcı+Node): `weekStart/monthStart/rideScore/overall/totals/buckets`. Yeni veri sistemi yok; mevcut sürüş özeti (`distM`, `startedAt`) + `summarizeTele` kullanır. Ana sayfa «Günlük Bilgiler» kartları: haftalık/aylık km (Hafta = 7 günlük çubuk, Ay = son 6 ay) + genel sürüş puanı.
+- SÜRÜŞ PUANI TAHMİNİ (eşikler gerçek sürüşle ayarlanmadı): ≥2 km ve ölçülebilir ivme olayı olan sürüşler; ağırlıklı olay = orta×1+sert×2,5+acil×5; puan = 100 − 8×(ağırlıklı olay/10 km), 0–100; genel = mesafe ağırlıklı ortalama; puanlanamayan sürüş 0 sayılmaz, hariç tutulur.
+- «Günlük Bilgiler» (ipuçları, `#tips`) ana sayfadan My Moto'ya taşındı (`renderMotor` → `renderTips`).
+- Navigasyon açıkken harita alt paneli gizlenir; sol altta küçük hız hapı (`#mm-spill`), dokununca tam panel (+ «Küçült»); kayıt varsa kırmızı nokta.
+- Yazı tipi: harici font yok; sistem yığını `system-ui,-apple-system,'Segoe UI',Roboto,...`; tabular rakamlar. Tema: daha koyu gradyan zemin, yuvarlak gradyan kartlar, aktif sekme çizgisi, backdrop-filter yok.
+- Düzeltme: `map.js showSummary` içinde tanımsız `status` → `mode` (Ayrıntılı analiz düğmesi görünmüyordu).
+- Testler: stats 29, map-ui 38, weather-ui 16 (5 sekme), maps 15, weather 21, gv-server 38, gv-browser 35, gv-ride 9. GERÇEK telefon/GPS/harita karosu, sistem fontları ve gerçek Tailwind CDN (yerel yapıyla yaklaşıklandı) DENENMEDİ.
+
+## Harita: tam ekran harita + Rota sayfası (son değişiklik)
+- Ana harita ekranında arama kutusu YOK; harita bütün halde (diğer sürücülerin hareketi görünsün). Üstte yalnız GPS/paylaşım çipleri (+ navigasyonda yön bandı).
+- Sağ düğmeler: +, −, konum, [Grup], **Rota** (`#mm-rtbtn`), Ayarlar. Rota → `#mm-rt` sayfası: üstte «Harita» geri düğmesi, arama kutusu + sonuçlar, hedef kartı (mesafe/süre, kaçınma seçenekleri, adım adım yol tarifi, sabit «Navigasyonu başlat»); altta aynı ana harita açıkta, güzergâh sokak üzerinde çizili (`fitPad()` rotayı sayfanın kapatmadığı alana sığdırır; masaüstünde sol 420 px sütun).
+- Davranış: sonuç seçilince rota otomatik; navigasyon başlayınca sayfa kapanır; navigasyonda «Yeni hedef» sayfayı açar. İkinci Leaflet haritası yok (tek harita örneği, performans korunur).
+- Test: map-ui 46 kontrol (sahte Leaflet). GERÇEK telefonda/harita karosuyla DENENMEDİ.
+
+## Yazı tipi, uygulama temaları, Ayarlar sırası (son değişiklik)
+- Yazı tipi: Google Fonts CSS bağlantısı (index.html `<link>`): **Barlow** (metin, 400–700) + **Barlow Condensed** (`.road`, büyük rakamlar/başlıklar, 600–700; sportif, kolay okunur, Türkçe karakter destekli). Yedek: system-ui yığını (`--font`, `--font-d`); font yüklenemezse/çevrimdışıysa sistem fontu görünür. map.css/analysis.css/group-voice artık `var(--font)`/`var(--font-d)` kullanır. KENDİ SUNUCUMUZDAN BARINDIRMA YAPILMADI (ağ yok); istenirse woff2 dosyaları public/fonts'a konup @font-face ile eklenebilir.
+- Temalar: `:root[data-apptheme=asphalt|forest|ocean]` (varsayılan `moto` = öznitelik yok). Değişkenler: `--a3/--a4/--a5` (vurgu rgb), `--z2..--z8` (gri tonlar), `--ink-rgb`, `--bg1..3`, `--glow`, `--panel`, `--deep/--deep2/--deep3`. Tailwind `amber/zinc/ink` renkleri `rgb(var(--x) / <alpha-value>)` ile bu değişkenlere bağlı. Seçim `localStorage ml_theme` (başlıkta erken betik uygular, titreme yok). Ayarlar › Tema: 4 kart (Gece Turuncu, Asfalt Kırmızı, Orman Yeşili, Okyanus Mavi). Açık tema YOK.
+- Harita rota/iz rengi `accent()` ile tema vurgusunu okur (rota oluşturulurken); harita karoları temadan bağımsız.
+- Ayarlar listesi: Bildirim → Konum ve Gizlilik → Kalibrasyon → **Sürüş Analizi** (ayrı satır, `data-go="analysis"` → `openAnalysis()`); Kalibrasyon sayfasından analiz kartı kaldırıldı.
+- Test: stats 36 (liste sırası, tema uygulama/saklama, font), map-ui 46. Gerçek font yüklemesi, telefonlarda tema görünümü DENENMEDİ.
+
+## Başlık kaldırıldı, açılış resmi, mobil uyum, motora sabit kalibrasyon (son değişiklik)
+- Ana sayfadaki üst başlık (Moto Life yazısı, tarih-saat, çıkış düğmesi) KALDIRILDI (çıkış Ayarlar'da). `tickClock`/`dashClock`/`dashDate` silindi; ana sayfa zamanlayıcısı 2 (ipucu, hava).
+- Açılış resmi (`#splash`): sabit 5 sn bekleme İPTAL. Resim yükleme sırasında görünür; ilk ekran (giriş ya da ana sayfa) çizilir çizilmez `window.hideSplash()` ile 200 ms'de kalkar. Ağ takılırsa 6 sn güvenlik zamanlayıcısı.
+- Mobil uyum denetimi (Playwright, 320×568, 360×640, 390×844, 430×932, 768×1024; 5 sekme): yatay taşma yok.
+- Ayarlar › Kalibrasyon: «Telefon motora sabit — Kalibre et» (5 sn hazırlık + 4 sn ölçüm, `TelemetryCore.staticCalibrate`, sonuç `mm_tcal` — harita sensör sayfasıyla AYNI kayıt; `ml-cal-changed` olayıyla açık harita modülü güncellenir, sürüş sırasında yok sayılır). İzin iOS'ta düğme dokunuşunda istenir. Harita içi gelişmiş sensör sayfası «Gelişmiş sensör ayarları» olarak duruyor.
+- Testler: stats 39 (kalibrasyon: sahte devicemotion), weather-ui 16, splash 2 (test/splash.js). Gerçek telefon sensörüyle kalibrasyon DENENMEDİ (yalnız sahte olaylar).
+
+## Hava kartı, yazı tipi/punto, alt menü simgeleri, Motosiklet Bilgileri ayrı (son değişiklik)
+- Ana sayfa hava kartı minimal: konum + yenile/konum düğmeleri, anlık sıcaklık/durum; saatlik tahmin (`#wxHours`) ve ayrıntı satırı (`#wxMeta`) CSS ile gizli (JS aynı kalır). Kaynak/güncelleme satırı (atıf + «güncellenemedi» uyarısı) duruyor.
+- Ayarlar › Ekran: 4 yazı tipi (Barlow varsayılan, Sistem, Exo 2, Okunaklı=Atkinson Hyperlegible; `localStorage ml_font`, `:root[data-font]`, başlıkta erken betik) + 4 punto (88/100/112/125, `ml_fs`). Google Fonts bağlantısı Exo 2 ve Atkinson'u da içerir; font yüklenemezse sistem yazı tipi.
+- Alt menü simgeleri 28 px (h-7), etiket 11 px, `--nav` 70 px; aktif sekmede hafif dolgu (Ayarlar hariç); simgeler yeniden çizildi (`i-home/i-moto/i-map/i-social`).
+- Motosiklet bilgileri profilden AYRILDI: Ayarlar › «Motosiklet Bilgileri» (marka/model, `h.saveBike` → `/api/account`; profil alanları mevcut değerle gider). «Profili Düzenle» formundan marka/model çıkarıldı; profil kaydı bike alanlarını `me`'den gönderir (sunucu doğrulaması zorunlu tutar). My Moto «Motosiklet Bilgilerini Güncelle» → Motosiklet Bilgileri sayfası.
+- My Moto üst kartı: satır içi SVG 2B motosiklet çizimi (özgün, vurgu rengine bağlı) + marka/model.
+- Testler: stats 51, weather-ui 17.
+
+## Müzik + sadeleştirme (son değişiklik)
+- Harita görünümü seçenekleri (voyager/koyu/uydu/arazi, `STYLE_CATALOG`, `MAP_STYLES`, Ayarlar › Harita Görünümü, ≡ menüsü seçicisi) KALDIRILDI; harita yalnızca standart (OSM + Koyu/Açık tema). 3B ve canlı trafik yok (3B için vektör harita kütüphanesi = yeni bağımlılık, onay gerekir; trafik ücretli veri ister).
+- Müzik: haritada sağ düğme (nota ikonu) → `#mm-music` sayfası. YouTube: bağlantı `Core.parseYouTube` ile doğrulanır (yalnız youtube/youtu.be/music.youtube; 11 karakter video kimliği / liste kimliği), `youtube-nocookie.com/embed` iframe'i kurulur. Cihazdan: `<input type=file accept=audio/* multiple>` + klasör (`webkitdirectory`), blob adresiyle çalar (sunucuya gitmez; sayfa yenilenince yeniden seçilir), sonraki/önceki, Media Session. Sayfa kapanınca (class `off`, `display:none` DEĞİL) çalma sürer. Ekran kilitliyken YouTube yayını durabilir.
+- Ayarlar › Ekran: yazı tipi tek satır; dokununca seçenekler satırın ALTINA açılır (`data-act="fontdd"`, `role=listbox`), seçince kapanır.
+- Ana sayfa hava kartı yenilendi: konum (pin), büyük sıcaklık, durum hapı, hava durumuna göre renk tonu (`data-wx`: clear/cloud/fog/rain/snow/storm, `--wxc`); saatlik/ayrıntı gizli.
+- DÜZELTME: `rgba(var(--x), a)` boşluk ayrımlı değişkenle GEÇERSİZDİ (tema parlaması/arka plan ışıması hiç çizilmiyordu); hepsi `rgb(var(--x) / a)` oldu. Renk değişkenleri boşluk ayrımlı (`234 134 33`) kalmalı.
+- Testler: map-ui 56, maps 15, stats 53, weather-ui 17. Gerçek YouTube/dosya seçici/ekran kilidi DENENMEDİ.
+
+## Kayıt/giriş genişletildi, Motosiklet Bilgileri + 3B görünüm (son değişiklik)
+- `server.js`: kullanıcıya `phone` (+90 biçimine normalleştirilir, `normPhone`), `emergencyName/emergencyPhone` (isteğe bağlı, ikisi birlikte), `bikeYear/bikeType/bikeCc` eklendi (`data/users.json`'a yalnız yeni isteğe bağlı alanlar; migrasyon yok). Kayıtta telefon zorunlu; eski hesaplar telefonsuz kalabilir ama doluysa boşaltılamaz. Kullanıcı adı (büyük/küçük harf duyarsız), e-posta ve telefon benzersiz (409). Telefonla da giriş yapılır.
+- `social-auth.js`: Google/Apple ID token girişi. Env: `GOOGLE_CLIENT_ID`, `APPLE_CLIENT_ID` (Apple: Services ID + redirect domain). Tanımlı değilse düğmeler görünmez. Uçlar: `/api/auth/config|google|apple|complete`. Yeni kullanıcı için imzalı 15 dk bilet + «Kaydı Tamamla» formu (kullanıcı adı, telefon, motosiklet zorunlu). Aynı e-postalı hesaba bağlanır. Gmail/iCloud adresleri normal e-posta kaydıyla da çalışır.
+- `public/moto3d.js`: kütüphanesiz prosedürel 3B motosiklet (canvas). Tip (8) şekli, marka rengi, cc motor boyutu belirler; sürükleyerek döner. Genel model; markaya özel gerçek model değildir.
+- Ayarlar › Motosiklet Bilgileri: Marka, Model, Yıl, Motor Hacmi, Tipi. Profili Düzenle'ye telefon + acil kişi eklendi.
+- Testler: `test/auth.js` (gerçek server.js, sahte express/socket.io: `test/fake-modules`, çünkü bu ortamda kurulu değil), `test/auth-ui.js`.
+- TEST EDİLMEDİ: gerçek Google/Apple girişi (yalnızca imzalı sahte token ile), gerçek cihazlarda 3B performansı.
+
+## Yazım ve büyük/küçük harf düzeni (son değişiklik)
+- Kural: başlık, etiket ve düğmeler «Her Kelimenin İlk Harfi Büyük» (ve/ya da/ile/mi küçük); cümleler normal cümle düzeni; tamamı büyük harfli vurgular kaldırıldı (kısaltmalar GPS/HTTPS/JPEG hariç).
+- Düzeltilenler: sesli görüşme durum yazıları (BAĞLANIYOR… vb.), «ESKİ VERİ», «KAPALI/SABİTLENDİKTEN/TAHMİNDİR», sosyal yer tutucuları, ayar/harita/grup/analiz düğme ve başlıkları, «Fren / Hızlanma», «bir ana dokun» → «bir zamana dokun».
+- `src/SocialProfile.jsx` değişince `public/social.bundle.js` da aynı metinle yamalanır (esbuild bu ortamda yok; `npm run build:social` ile yeniden derlenebilir).
+
+## Atıl kod temizliği (son değişiklik)
+- Kaldırıldı: ulaşılamayan «Arkadaşlar» placeholder ekranı, hiç görünmeyen hava kartı öğeleri (`#wxHours`, `#wxMeta` ve doldurma kodu), eski interkomdan kalan `.row-on/.row-off` CSS'i, kullanılmayan 8 SVG sembolü, `public/stations.js` (kullanılmıyordu), sunucuda açılışta `u.groups` temizliği, kullanılmayan değişken/fonksiyonlar (`clamp`, `str`, `slider`, `ll`, `r1` vb.).
+- Kontrol: tüm rotalar ve socket olayları istemciyle eşleşiyor; kullanılmayan CSS sınıfı kalmadı (dinamik `flag-*`, `ev-*`, `rel-*` hariç). ESLint no-unused-vars temiz (social.bundle.js derleme çıktısı hariç).
+
+## PHP + MySQL sürümü (paylaşımlı hosting için, son değişiklik)
+- Node sürümü (server.js …) AYNEN duruyor (Render). Hosting için ayrı bir arka uç: `php/` klasörü, `node build-php.js [çıktıKlasörü]` ile `dist-php/` paketini üretir (public/ + php/api + rt.js + .htaccess; index.html'de `/socket.io/socket.io.js` yerine `/rt.js`).
+- `php/api/*.php`: bağımlılıksız PHP 8.1+; PDO MySQL (üretim) / SQLite (`DB_DRIVER=sqlite`, yerel test). Şema ilk istekte kurulur (`ensure_schema`, tablolar `ml_`). Ayarlar `api/config.php` → ortam değişkeni → varsayılan (`cfg()`).
+- Dosyalar: bootstrap (db, kv, oturum), auth (kayıt/giriş/Google-Apple JWT RS256/hesap silme), social, live, rgroups, gvoice, rides + ridecore (ride-core/telemetry-core PHP portu), weather, maps, rt (yoklama), index (rota tablosu). Oturum: imzalı `sid` çerezi (HMAC, `sv` şifre değişince geçersiz kılar).
+- Gerçek zamanlı: Socket.IO yerine `php/rt.js` (`window.io` yoksa tanımlanır) → `POST /api/rt`; olay kuyruğu `ml_rte`, oturum `ml_rts`, odalar `ml_rtr`; arka plan süreci yok, grup tick'i ve süpürme yoklamaların içinde (kv ile kilitli).
+- Test: `node test/php-api.js` (php -S + SQLite, 208 kontrol; JS ride-core/telemetry-core özetiyle birebir eşitlik dahil). Kurulum rehberi: `php/KURULUM.md`.
+- Kısıtlar: etki alanı kökü gerekir (mutlak /api yolları); eski scrypt parolalar taşınmaz.
+- TEST EDİLMEDİ: gerçek MySQL/cPanel, mail()/SMTP, gerçek Google/Apple, dış API'ler (Nominatim, Geoapify, Valhalla, hava), gerçek cihazda yoklamalı konum/ses/arka plan davranışı, yük altında hosting CPU sınırı.
+
+## My Moto: tip görselleri (son değişiklik)
+- 3B tuval (`moto3d.js`) yerine seçilen motosiklet TİPİNİN çizimi gösterilir: `public/bike-<tip>.webp` (6 görsel, beyaz zemin kaldırıldı/saydam), temalı sahne `.bike-stage` (accent ışıması + zemin gölgesi; `--a3/--a4/--ink-rgb` ile tema değişince uyum sağlar). Kod: `public/bikes.js` (`Bikes.TYPES/typeOf/src`), `paintBike()` index.html'de.
+- Görsel eşlemesi: sport, naked, cruiser, adventure, scooter, enduro; görseli olmayanlar → touring=adventure, classic=cruiser. Marka/model/tip yazısı YOK (yalnızca görsel). Tip seçilmediyse model adından tahmin, bulunamazsa «Tip Seçilmedi».
+- `moto3d.js` artık yüklenmiyor (dosya silindi). Testler: auth-ui 22, stats 53.
+
+## Render'da veri kaybı (uyarı)
+- Node sürümü kullanıcıları/sürüşleri/gönderileri `data/` altında JSON olarak tutar. Render ÜCRETSİZ planında dosya sistemi geçicidir: her dağıtım ve (boşta uyku sonrası) yeniden başlatmada `data/` (users.json, secret.txt, rides…) silinir → hesaplar ve sürüş kayıtları kaybolur, oturumlar düşer.
+- Çözümler: (1) `DATA_DIR` ortam değişkeni (server.js destekler) + Render ücretli plan kalıcı disk (örn. `/var/data`); (2) `SESSION_SECRET` ortam değişkeni sabitlensin; (3) kalıcı veri için PHP + MySQL sürümü (php/) kullanılsın.
+
+## Giriş ekranından güvenlik sorusu kaldırıldı (son değişiklik)
+- Giriş (`#loginForm`) ve hızlı giriş (`#quickForm`) formlarında güvenlik sorusu YOK; `server.js` ve `php/api/auth.php` `/api/login` artık captcha istemez. Kayıt formunda captcha duruyor. Kaba kuvvet koruması: IP başına 5 yanlış → 60 sn kilit (değişmedi).
+- Testler: auth 36, auth-ui 22, php-api 209.
+
+## Güvenlik sorusu tamamen kaldırıldı (son değişiklik)
+- Kayıt formundan da kaldırıldı; `/api/captcha`, `checkCaptcha/check_captcha`, honeypot ve ilgili istemci kodu SİLİNDİ (Node + PHP). Yerine kayıt kötüye kullanım sınırı: IP başına saatte en çok 10 hesap (`REG_LIMIT` ortam değişkeni/`config.php` ile değişir; 429). Giriş kilidi (5 yanlış → 60 sn) duruyor.
+- Risk: botla toplu kayıt artık yalnızca IP sınırıyla yavaşlatılıyor.
+- Testler: auth 36, auth-ui 22, php-api 207.
+
+## My Moto üst kart: dönen stant (son değişiklik)
+- Görsel artık ışıklı bir STANT/plaka (`.tt-plate`) üzerinde kendi ekseninde sürekli döner (`.tt-spin`, CSS 3B `rotateY`, 14 sn; ±3 px iki ek katman kalınlık hissi verir; «Hareketi Azalt» açıkken durur). Resim altında marka + model yazısı (`#motoName`; boşsa «Motosiklet Bilgisi Girilmedi»). «Güncelle» artık resmin sağ üstünde 🛠️ yuvarlak düğme (`#motoEdit`, aria-label «Motosiklet Bilgilerini Güncelle») → Motosiklet Bilgileri sayfası.
+- SINIR: görseller TİP bazlı (6 çizim); markaya/modele özel maket görseli yok (telifsiz model fotoğrafı bu ortamdan indirilemiyor). İstenirse model başına görsel dosyaları `public/bike-<marka>-<model>.webp` olarak eklenip `bikes.js` eşlemesine bağlanır.
+- Testler: stats 53, auth-ui 23.
+
+## Sosyal › Gruplarım (son değişiklik)
+- Üst sekmeler 5: Akış, Profil, Arkadaşlar, **Gruplarım**, Sohbet. TEK GRUP VARLIĞI: `ridegroups` (REST `/api/rgroups…`) hem haritadaki «Grup» sayfasında hem Sosyal › Gruplarım'da görünür; asıl oluşturma Sosyal'de (haritadaki «Yeni Grup (Sosyal)» ve «Grup Sayfası ve Gönderiler (Sosyal)» düğmeleri `window.openSocialGroups(gid)` ile geçer; bileşen `ml:social-goto` olayını / `window.__socialGoto`yu okur). Koda katılma ve sürüş/konum/güzergâh/ses haritada kalır.
+- Grup sayfası (`GroupPage` in `src/SocialProfile.jsx`): Gönderiler (foto, ruh hali, emoji, beğeni, yorum; silme = yazar veya lider), Üyeler (avatar, motor, lider/üye, konum açık; lider: Lider Yap/Çıkar), Bilgi (açıklama, lider, kuruluş, üye/gönderi sayısı, sürüş ve güzergâh durumu, davet kodu+bağlantı yalnız lider, ad/açıklama düzenle, ayrıl, sil).
+- Sunucu: `desc` (≤200) grup oluşturma/PATCH/görünümde; üyeler `av/bike/joinedAt` (telefon YOK); `g.posts` ≤300/grup. Uçlar: `GET|POST /api/rgroups/:id/posts`, `DELETE …/posts/:pid`, `POST …/posts/:pid/like|comments`, `DELETE …/comments/:cid`. Yalnız üyeler (üye olmayana 404). Grup gönderileri genel akışa/profile SIZMAZ. Fotoğraf `/api/social/upload` ile yüklenir; `/api/social/img/:id` grup fotoğrafını YALNIZ grup üyelerine verir (`social.setImageGate`, kayıt `post='g:<id>'` Node'da; PHP'de `ml_images.post` = grup gönderi id'si). Üye ayrılınca/çıkarılınca/hesap silinince gönderi, beğeni, yorum ve fotoğrafları silinir; grup silinince hepsi silinir. Soket `grp:changed` kind `post` üyelere gider.
+- PHP: yeni tablolar `ml_rgx` (açıklama), `ml_gp`, `ml_gpl`, `ml_gpc`; `SCHEMA_VERSION` = 4 (mevcut kurulumda ilk istekte `CREATE TABLE IF NOT EXISTS` ile eklenir, eski tablolara dokunulmaz); `php/veritabani.sql` yeniden üretildi.
+- Derleme: `public/social.bundle.js` bu ortamda `/opt/npm-tools/node_modules` esbuild ile derlendi (`nodePaths`); normalde `npm run build:social`.
+- Testler: `node test/groups-node.js` 32 (gerçek server/social/ridegroups, sahte express), `node test/groups-ui.js` 11 (gerçek paket Chromium'da, sahte API), php-api 235; auth 36, auth-ui 23, stats 53, map-ui 56, weather-ui 16, splash 2, gv-server 38, gv-ride 9. TEST EDİLMEDİ: gerçek telefon, gerçek MySQL, gerçek express/socket.io, canlı `grp:changed` bildirimi arayüzde (sahte soket), gerçek fotoğraf yükleme/küçültme akışı grup yolunda (yalnız sunucu tarafı test edildi).
+- Sınırlar: grup gönderi sayfalaması 20'lik; grup başına en çok 300 gönderi (eskiler silinir); bildirim yalnız toast/yenileme (push yok); grup içi gönderi düzenleme yok.
+
+## Yazım denetimi, duygu listesi, grup sesi netliği (son değişiklik)
+- Yazım kuralı (tüm arayüz): başlık, etiket, düğme, sekme, aria-label ve iletişim kutusu başlıkları «Her Kelimenin İlk Harfi Büyük» (ve/ya da/ile/mi/için küçük; soru eki «mı/mi» küçük kalır); cümleler (not, durum, hata, toast, ipucu metni) normal cümle düzeni. CSS'teki `text-transform:uppercase` kuralları KALDIRILDI (map.css, analysis.css, SocialProfile) — başlıklar artık yazıldığı gibi görünür. Baş harf/kod büyütme `toLocaleUpperCase('tr')` (davet kodu `'en'`). Aksansız Türkçe sözcük, tamamı büyük sözcük (kısaltma hariç), İngilizce sızıntı taraması temiz.
+- Duygu durumu: `MoodChips` artık TEK seçimli liste (`role=listbox`, `aria-selected`). Profil › Durum: açılır liste (seçince kapanır, dışarı dokun/Esc kapatır); gönderi yazarken (😊) satır içi liste. İlk seçenek «Duygu Durumu Yok».
+- Grup sesi (`public/group-voice.js`): mikrofon zinciri = tarayıcı yankı/gürültü/AGC (+goog/voiceIsolation ipuçları, mono) → 130 Hz alçak geçiren (motor/rüzgâr uğultusu) → 7 kHz üstü kes → sıkıştırıcı → GÜRÜLTÜ KAPISI (ortam tabanını kendi öğrenir; konuşma aralarında −24 dB; hassasiyetle eşik ayarlanır). `track.contentHint='speech'`. Kapı konuşma SIRASINDAKİ sürekli gürültüyü silemez. Gerçek kask/rüzgâr/motor ile AYARLANMADI.
+- Ses çubuğunda küçük hoparlör simgesi → panel: Mikrofon Hassasiyeti (+canlı seviye çubuğu, turuncu çizgi = eşik), Konuşma Sesi (karşı tarafın sesi, `audio.volume`), Müzik Sesi (AYRI), Gürültü Filtresi aç/kapat, Konuşurken Müziği Kıs. Saklama: `ml_gv_gate`, `ml_vol_voice`, `ml_vol_music`, `ml_gv_ns`, `ml_duck`. Müzik: `map.js` `ml:music-volume` ve `ml:voice-activity` olaylarını dinler; yerel dosya `audio.volume`, YouTube `enablejsapi=1` + postMessage `setVolume`. Müzik sayfasında da aynı «Müzik Sesi» kaydırıcısı var. SINIRLAR: iOS `audio.volume` değerini yok sayar (cihaz ses tuşu geçerli); YouTube ses komutu gerçek YouTube ile DENENMEDİ; müziği kısma oranı sabit %30.
+- Testler: gv-browser 42 (panel/kaydırıcılar/zincir dahil), groups-ui 18 (duygu listeleri dahil); diğerleri aynı (auth 36, auth-ui 23, stats 53, map-ui 56, weather-ui 16, splash 2, gv-server 38, gv-ride 9, groups-node 32, php-api 235). TEST EDİLMEDİ: gerçek telefon/mikrofon (gürültü azalması öznel ve ortama bağlıdır), gerçek rüzgâr/motor sesi, gerçek YouTube sesi, Bluetooth kulaklık.
+
+## My Moto görselleri: yumuşak 3D (son değişiklik)
+- `public/bike-*.webp` (6 adet) yumuşak 3D gölgelendirmeli sürümlerle değiştirildi (640 px, RGBA); orijinaller scratchpad `bikes-orig/` altında yedekli. İşleme: mesafe haritasından yükseklik → normal → Lambert+specular+AO, median/bilateral/gaussian yumuşatma, yumuşak alfa kenar.
+- Boyutlar küçüldü: `.bike-stage` 218px, `.tt` 160px, görsel max 112px / %58 genişlik, keskin beyaz çizgi yerine yumuşak `drop-shadow`.
+- Sınır: gerçek 3D model değil, gölgelendirilmiş 2D çizim; görsel marka/modele değil TİPE göre seçilir.
+- 2. tur (yumuşatma artırıldı): bilateral×3 + gauss σ1.5 (+σ4 karışımı), yükseklik haritası σ6, alfa σ1.8, gamma 0.84 ile koyu tonlar açıldı. Betik: scratchpad `soft3d3.py`.
+- 3. tur: daha net (gauss σ1.0 + unsharp 0.9), silüet kenarı mesafe tabanlı yumuşak geçiş (3.5 px). Betik: scratchpad `soft3d4.py`.
+- 4. tur (metalik + daha net): unsharp 1.5, sıkı specular (^60) + yumuşak yansıma bantları, kontrast ×1.14, doygunluk ×0.9, parlak alanlara soğuk ton. Betik: scratchpad `soft3d5.py`.
+
+## Sosyal sekmeleri: Arkadaşlar Profil içine, Sohbet → Mesajlar (son değişiklik)
+- Üst sekmeler 4: Akış, Profil, Gruplarım, Mesajlar (en sağda; eski «Sohbet»). «Arkadaşlar» ayrı sekme değil: Profil sekmesi → üstte «Profilim | Arkadaşlar» geçişi (yalnız kendi profilinde; gelen istek sayısı Profil sekmesinde ve geçişte rozet). `ml:social-goto {tab:'friends'}` Profil › Arkadaşlar'a yönlenir.
+- Kod: `src/SocialProfile.jsx` (`profSub` durumu), `public/social.bundle.js` yeniden derlendi. Test: groups-ui 19, groups-node 32, gv-browser 42, gv-ride 9. TEST EDİLMEDİ: gerçek telefon.
+
+## Sürüş paneli: yatış açısı (son değişiklik)
+- Harita › sürüş açıkken hız/mesafe/süre/maks. bloğunun altında «Yatış (tahmini)» satırı (`#mm-lean`): değer «N° Sol/Sağ» ya da «Dik · 0°», yatay gösterge (nokta sola yatışta sola kayar, ±50°), altında not. Ölçülemezse «—» + neden (sensör kapalı / bekleniyor / duraklatıldı / `REASON_TR`); 0 gösterilmez. Dokununca sensör ayrıntı sayfası açılır. Kod: `map.js` (HTML), `map.css`, `telemetry.js` `paintLean()` (500 ms).
+- Sensör verisi varsayılanı AÇIK oldu (`mm_tele` kayıtsızsa '1'; Ayarlar › Sensörler'den kapatılır). Yatış, kalibrasyon ve hız ≥5 m/sn olmadan hesaplanmaz; TAHMİNDİR.
+- Test: map-ui 60 (satır görünür/≥44 px/«—»+neden/ayrıntı sayfası). TEST EDİLMEDİ: gerçek sensörle sayısal yatış gösterimi, gerçek telefon.
+
+## Grup sesi ekranı yenilendi (son değişiklik)
+- `public/group-voice.js` `mountBar`: modern kart (degrade zemin, yuvarlak köşe). Üstte «Grup Sesi · Grup Adı» + durum noktası ve «N kişi · Bas-Konuş/Açık Mikrofon · k/n bağlı», yanda ayar (kaydırıcı simgesi) ve «Ayrıl». Katılımcı avatarları (baş harf; konuşanın halkası yeşil yanar, bağlı olmayan soluk), «Konuşuyor: …» satırı, büyük mikrofon düğmesi (≥80 px, simgeli).
+- Seçenekler ayar paneline alındı ve sadeleşti: «Konuşma Modu» (Bas-Konuş | Açık Mikrofon; yalnız lider değiştirir, üyeye «Modu grup lideri belirler» notu), «Düğme Davranışı» (Basılı Tut | Dokun-Konuş; yalnız Bas-Konuş modunda), modun tek cümlelik açıklaması, lider için «Söz Hakkını Al»; altında Mikrofon Hassasiyeti, Konuşma Sesi, Müzik Sesi, Gürültü Filtresi ve Konuşurken Müziği Kıs (Açık/Kapalı rozetli).
+- Metinler: Başlık/düğme Title Case, cümleler normal; «Bas · Konuş · Tekrar Bas» → «Konuşmak İçin Dokun», «Söz isteniyor» → «Söz İsteniyor», «bas-konuş/açık mikrofon» → «Bas-Konuş/Açık Mikrofon».
+- Testler: gv-browser 42 (güncellendi), gv-ride 9, gv-server 38, map-ui 60. TEST EDİLMEDİ: gerçek telefon (Chromium 390 px ekran görüntüsüyle kontrol edildi).
+
+## Güvenlik sorusu geri geldi + Google/Apple düğmeleri her zaman görünür (son değişiklik; eski «kaldırıldı» bölümlerini geçersiz kılar)
+- Giriş, hızlı giriş, kayıt ve şifremi unuttum formlarında insan doğrulaması: `GET /api/captcha` → `{token, q}` (ör. «7 + 5 kaç eder?»; toplama, çıkarma, çarpma). Jeton `nonce.exp.mac` (HMAC-SHA256, gizli anahtar sunucuda), 5 dk geçerli, TEK KULLANIMLIK (Node: bellekte, PHP: `ml_kv` `cap:<nonce>`), gizli bal küpü alanı `website`. İstek gövdesi: `cToken`, `cAns`, `website`. Hata: 400 `{error:'Güvenlik sorusunu doğru yanıtla.', code:'captcha'}`; yanlış soru giriş kilit sayacını artırmaz. Google/Apple girişi captcha istemez (kimlik sağlayıcı doğrular). Kod: `server.js` (`capNew/capOk`), `php/api/auth.php` (`h_captcha/cap_check`, rota `index.php`), istemci `public/index.html` (`capInit/capData/capReload`; formlara JS ile eklenir, yanlışta soru yenilenir).
+- Google ve Apple (iCloud) düğmeleri artık anahtar tanımlı olmasa da giriş/kayıt ekranında görünür; tanımsızsa dokununca «GOOGLE_CLIENT_ID/APPLE_CLIENT_ID ayarı yapılmalı» uyarısı çıkar. Gerçek girişin çalışması için `GOOGLE_CLIENT_ID` / `APPLE_CLIENT_ID` (Node: ortam değişkeni, PHP: `api/config.php`) gerekir; adım adım rehber `php/KURULUM.md`.
+- Testler: auth 45, auth-ui 29, php-api 244, groups-node 32, stats 53, map-ui 60, weather-ui 16, splash 2, groups-ui 19, gv-ride 9, gv-server 38, gv-browser 42. TEST EDİLMEDİ: GERÇEK Google/Apple girişi (anahtar ve alan adı gerekir; yalnız imzalı sahte token ile test edildi), gerçek MySQL/cPanel, gerçek telefon.
+- Sınır: işlem sorusu gelişmiş botları durdurmaz (IP kayıt sınırı ve giriş kilidi ile birlikte hafif koruma); daha güçlü koruma için Cloudflare Turnstile/reCAPTCHA eklenebilir (anahtar + dış servis ister).
+
+## My Moto: garaj arka planı + hacimli 3B motosiklet (son değişiklik)
+- Arka plan: `public/garage-bg.svg` (özgün çizim: oluklu duvar, delikli alet panosu, tezgâh, raf/kask/yağ bidonları, lastik yığını, sarkan lamba ışığı, beton zemin); `.bike-stage` arka planı = tema parlaması + bu SVG + kenar karartması (`::after`). Dönen stant (`.tt-plate`) zeminde duruyor.
+- Hacim: `public/bike-volume.js` (`BikeVolume.mount/paint`, tuval 2B, kütüphanesiz). İki aile: YAN KATMANLAR `public/bike3d/<tip>-<1..7>.webp` (gövde kalınlık haritasına göre aşındırılmış kesitler; z düzlemleri, 14 katman/yön) ve ÖN/ARKA DİLİMLER `public/bike3d/<tip>-sl.webp` (84 dilim, her sütunun kesiti; x düzlemleri). Açı ≤52° yan katmanlar, ≥78° dilimler, arası yumuşak geçiş; ressam sıralaması + zemin gölgesi. Böylece önden/arkadan bakınca gövde, lastik, kuyruk görünür (ince karton değil). 16 sn'de tam tur; «Hareketi Azalt» (`data-rm`) açıkken sabit 3/4 açı; ekranda değilken çizim durur. Tuval kurulamazsa CSS dönüşü yedeği (`.tt-spin.fb`). `#bikeImg` (orijinal görsel) merkez katman ve yedek olarak kalır (tuval hazır olunca opacity 0). Katmanlar `bikes.js` `layerKey(tip)` ile tipe bağlanır.
+- Üretim: scratchpad `volume3d.py` (kaynak: `public/bike-*.webp`; kalınlık = mesafe haritası^0.65, uçlara doğru incelir; iç katmanlar koyu → oblique görünümde yan duvar hissi). Yeni tip/görsel eklenirse betik yeniden çalıştırılır.
+- Sınır: gerçek 3B model DEĞİL, çizimden türetilmiş yaklaşık hacim (ön/arka görünüm yan görselin sütun renklerinden üretilir; far/gidon detayı gerçeğe uymaz). 52–78° arası geçişte hafif bantlaşma görülebilir. Yükleme ≈ 130 KB/tip (cache'lenir).
+- Test: auth-ui 33 (tuval çalışır, garaj arka planı, dönüş, ön/arka dolu gövde), stats 53, weather-ui 16, splash 2. Chromium 390 px ekran görüntüleriyle 6 açıda kontrol edildi. TEST EDİLMEDİ: gerçek telefon (GPU/pil, 60 fps), gerçek dokunmatik.

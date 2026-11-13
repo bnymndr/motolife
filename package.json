@@ -1,0 +1,23 @@
+{
+  "name": "moto-interkom",
+  "version": "1.0.0",
+  "description": "Moto Life: motosikletliler için sürüş, grup sürüşü, sosyal ve My Moto uygulaması",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build:social": "node build-social.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5",
+    "nodemailer": "^6.9.14"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}

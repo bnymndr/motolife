@@ -1,0 +1,17 @@
+<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>gv host</title><style>body{margin:0;background:#06202f;--nav:64px}</style></head><body>
+<script>
+(function () {
+  const q = new URLSearchParams(location.search), USER = q.get('u');
+  window.io = function () {
+    const H = {}, acks = {}; let n = 0, ws, open = false; const s = { connected: false, id: '', on(e, f) { (H[e] = H[e] || []).push(f); return s; }, emit(e, d, cb) { if (!open) return; const id = cb ? ++n : 0; if (cb) acks[id] = cb; ws.send(JSON.stringify({ e, d, id })); } };
+    const fire = (e, a) => (H[e] || []).forEach(f => f(a));
+    function conn() { ws = new WebSocket('ws://' + location.host + '/ws?u=' + USER); ws.onmessage = m => { const j = JSON.parse(m.data); if (j.hello) { s.id = j.hello; open = true; s.connected = true; fire('connect'); } else if (j.ack) { const f = acks[j.ack]; delete acks[j.ack]; f && f(j.res); } else fire(j.e, j.d); }; ws.onclose = () => { if (open) { open = false; s.connected = false; fire('disconnect'); } if (!window.__noReconnect) setTimeout(conn, 600); }; window.__ws = ws; }
+    conn(); return s;
+  };
+  window.__sock = window.io();
+  window.__log = [];
+  const getMedia = q.get('deny') ? () => Promise.reject(Object.assign(new Error('x'), { name: 'NotAllowedError' })) : async c => { const s = await navigator.mediaDevices.getUserMedia(c); window.__stream = s; return s; };
+  window.addEventListener('load', () => {});
+  const sc = document.createElement('script'); sc.src = '/group-voice.js'; sc.onload = () => { window.__ctl = GroupVoice.create({ sock: window.__sock, getMedia }); window.__ctl.onChange(v => { window.__last = v; if (v.toast) window.__log.push(v.toast); }); GroupVoice.mountBar(window.__ctl); window.__ready = true; }; document.body.appendChild(sc);
+})();
+</script></body></html>

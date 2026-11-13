@@ -1,0 +1,88 @@
+'use strict';
+// Kayıt/giriş formları (telefon, acil kişi, Google/Apple düğmeleri, kaydı tamamla) ve Motosiklet Bilgileri + 3B görünüm: gerçek index.html, SAHTE /api. node test/auth-ui.js
+const { chromium } = require(process.env.PLAYWRIGHT_PATH || '/opt/npm-tools/node_modules/playwright'); const http = require('http'), fs = require('fs'), path = require('path');
+let p = 0, f = 0; const ok = (c, m) => { c ? p++ : f++; console.log((c ? 'ok: ' : 'FAIL: ') + m); };
+const root = path.join(__dirname, '../public'), mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json' };
+const calls = []; let cfg = { google: 'gid', apple: 'aid' }, USER = null;
+const srv = http.createServer((q, r) => { const u = new URL(q.url, 'http://x'), J = (o, s = 200) => { r.writeHead(s, { 'content-type': 'application/json' }); r.end(JSON.stringify(o)); };
+  if (u.pathname === '/api/captcha') return J({ token: 'n.1.m', q: '7 + 5 kaç eder?' });
+  if (u.pathname === '/api/auth/config') return J(cfg);
+  if (u.pathname === '/api/me') return USER ? J({ user: USER }) : J({ error: 'x' }, 401);
+  if (q.method === 'POST' && u.pathname.startsWith('/api/')) { let b = ''; q.on('data', c => (b += c)); q.on('end', () => { const body = JSON.parse(b || '{}'); calls.push([u.pathname, body]);
+    if (u.pathname === '/api/auth/apple') return J({ needProfile: true, ticket: 'TK', email: 'x@icloud.com', firstName: 'Mert', lastName: 'Demir' });
+    if (u.pathname === '/api/account') return J({ user: { ...USER, bikeBrand: body.bikeBrand, bikeModel: body.bikeModel, bikeYear: body.bikeYear, bikeType: body.bikeType, bikeCc: body.bikeCc } });
+    USER = { username: 'ben', firstName: 'Ben', lastName: 'X', gender: 'erkek', email: 'a@b.c', hasPassword: true, phone: '+905321234567', bikeBrand: 'Yamaha', bikeModel: 'MT-07' }; J({ user: USER }); }); return; }
+  if (u.pathname.startsWith('/api/')) return J({}, 404);
+  const pa = path.join(root, u.pathname === '/' ? 'index.html' : u.pathname); if (!fs.existsSync(pa)) { r.writeHead(404); return r.end(); } r.writeHead(200, { 'content-type': mime[path.extname(pa)] || 'application/octet-stream' }); r.end(fs.readFileSync(pa)); });
+srv.listen(0, async () => {
+  const base = 'http://127.0.0.1:' + srv.address().port, b = await chromium.launch(), errs = [];
+  const open = async () => { const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true }), pg = await ctx.newPage();
+    pg.on('pageerror', e => errs.push(e.message)); await pg.route(/^https?:\/\/(?!127\.0\.0\.1)/, r => r.fulfill({ status: 200, contentType: 'text/javascript', body: '{}' }));
+    await pg.addInitScript(() => { window.tailwind = { config: {} }; window.io = () => ({ on() {}, off() {}, emit() {}, connect() {}, connected: false, id: 'x' });
+      window.AppleID = { auth: { init() {}, signIn: async () => ({ authorization: { id_token: 'IDT' }, user: { name: { firstName: 'Mert', lastName: 'Demir' } } }) } }; });
+    await pg.addStyleTag({ content: '.hidden{display:none!important}' }).catch(() => {}); return pg; };
+  const css = '.hidden{display:none!important}';
+  // 1) sağlayıcı tanımsız → sosyal düğmeler yok
+  cfg = null; USER = null; let pg = await open(); await pg.goto(base + '/'); await pg.addStyleTag({ content: css }); await pg.waitForSelector('#loginForm', { timeout: 8000 }); await pg.waitForTimeout(400);
+  ok(await pg.isVisible('#socialAuth') && await pg.isVisible('#gBtn button') && await pg.isVisible('#aBtn'), 'sağlayıcı tanımlı değilken de Google ve Apple (iCloud) düğmeleri görünür');
+  await pg.click('#gBtn button'); ok(/GOOGLE_CLIENT_ID/.test(await pg.textContent('#authMsg')), 'Google yapılandırılmamışsa tıklayınca açıklayıcı uyarı çıkar');
+  await pg.click('#aBtn'); ok(/APPLE_CLIENT_ID/.test(await pg.textContent('#authMsg')), 'Apple yapılandırılmamışsa tıklayınca açıklayıcı uyarı çıkar');
+  ok(await pg.$$eval('.cap', a => a.length) === 4 && /7 \+ 5 kaç eder\?/.test(await pg.textContent('#loginFormCap .capq')), 'giriş, hızlı giriş, kayıt ve şifre sıfırlama formlarında güvenlik sorusu var');
+  ok(await pg.$eval('#loginFormCap .capa', e => e.required && e.getBoundingClientRect().height >= 44) && await pg.$eval('#loginFormCap .capr', e => e.getBoundingClientRect().height >= 44), 'güvenlik sorusu cevap kutusu zorunlu ve ≥44 px; yenile düğmesi ≥44 px');
+  ok(await pg.$eval('#loginFormCap .hp', e => e.getBoundingClientRect().left < -1000 && e.tabIndex === -1), 'bal küpü alanı ekran dışında ve odaklanamaz');
+  ok(await pg.getAttribute('#lLogin', 'placeholder').then(x => /Telefon/.test(x)), 'giriş alanı kullanıcı adı, e-posta veya telefon kabul eder');
+  await pg.click('#tabRegister');
+  ok(await pg.$eval('#rPhone', e => e.required && e.type === 'tel') && await pg.$eval('#rEmName', e => !e.required) && await pg.$eval('#rEmPhone', e => !e.required), 'kayıt: telefon zorunlu, acil kişi adı/numarası zorunlu değil');
+  ok(/isteğe bağlı/.test(await pg.textContent('#registerForm fieldset legend')), 'acil kişi bölümü «isteğe bağlı» etiketli');
+  ok(await pg.getAttribute('#rEmail', 'placeholder').then(x => /Gmail/.test(x) && /iCloud/.test(x)), 'e-posta alanı Gmail/iCloud örneği gösterir');
+  const fill = async o => { for (const [k, v] of Object.entries(o)) await pg.fill('#' + k, v); };
+  await fill({ rUser: 'ali_k', rFirst: 'Ali', rLast: 'Kaya', rBrand: 'Yamaha', rModel: 'MT-07', rEmail: 'ali@icloud.com', rPhone: '0532 123 45 67', rEmName: 'Can', rEmPhone: '0544 000 11 22', rPw: 'sifre123' }); await pg.fill('#registerFormCap .capa', '12');
+  await pg.click('#registerForm button[type=submit]'); await pg.waitForTimeout(400);
+  const rc = calls.find(c => c[0] === '/api/register'); ok(rc && rc[1].cToken === 'n.1.m' && rc[1].cAns === '12' && rc[1].website === '', 'kayıt isteği güvenlik sorusu cevabını ve jetonunu gönderir'); ok(rc && rc[1].phone === '0532 123 45 67' && rc[1].emergencyName === 'Can' && rc[1].emergencyPhone === '0544 000 11 22' && rc[1].email === 'ali@icloud.com', 'kayıt isteği telefon ve acil kişiyi gönderir');
+  await pg.context().close();
+  // 2) sağlayıcılar tanımlı → düğmeler, Apple akışı, kaydı tamamla
+  cfg = { google: 'gid', apple: 'aid' }; USER = null; calls.length = 0; pg = await open(); await pg.goto(base + '/'); await pg.addStyleTag({ content: css }); await pg.waitForSelector('#loginForm'); await pg.waitForTimeout(600);
+  ok(await pg.isVisible('#socialAuth') && await pg.isVisible('#aBtn'), 'sağlayıcı tanımlıyken Google/Apple bölümü görünür');
+  await pg.click('#tabRegister'); ok(await pg.isVisible('#socialAuth'), 'sosyal düğmeler kayıt sekmesinde de var');
+  await pg.click('#aBtn'); await pg.waitForTimeout(400);
+  const ac = calls.find(c => c[0] === '/api/auth/apple'); ok(ac && ac[1].credential === 'IDT' && ac[1].firstName === 'Mert', 'Apple jetonu sunucuya gönderilir');
+  ok(await pg.isVisible('#socialForm') && !(await pg.isVisible('#registerForm')) && await pg.inputValue('#oFirst') === 'Mert' && /x@icloud\.com/.test(await pg.textContent('#sInfo')), 'yeni kullanıcıya «Kaydı Tamamla» formu açılır, ad ve e-posta bilgisi gelir');
+  ok(await pg.$eval('#oPhone', e => e.required) && await pg.$eval('#oEmName', e => !e.required), 'tamamlama: telefon zorunlu, acil kişi isteğe bağlı');
+  await fill({ oUser: 'mert', oBrand: 'Honda', oModel: 'CB650R', oPhone: '0538 000 00 00' }); await pg.click('#socialForm button[type=submit]'); await pg.waitForTimeout(400);
+  const cc = calls.find(c => c[0] === '/api/auth/complete'); ok(cc && cc[1].ticket === 'TK' && cc[1].username === 'mert' && cc[1].phone === '0538 000 00 00' && cc[1].emergencyName === '', 'tamamlama isteği bilet + alanlarla gider');
+  await pg.context().close();
+  // 3) oturum açık: Motosiklet Bilgileri + 3B
+  cfg = null; USER = { username: 'ben', firstName: 'Ben', lastName: 'X', gender: 'erkek', email: 'a@b.c', hasPassword: true, phone: '+905321234567', bikeBrand: 'Ducati', bikeModel: 'Monster', bikeType: 'naked', bikeYear: 2020, bikeCc: 937 };
+  calls.length = 0; pg = await open(); await pg.goto(base + '/'); await pg.addStyleTag({ content: css }); await pg.waitForSelector('#bottomNav', { state: 'attached', timeout: 8000 }); await pg.waitForTimeout(600);
+  await pg.evaluate(() => document.querySelector('[data-nav="motor"]').click()); await pg.waitForTimeout(600);
+  ok(!(await pg.$('#motor svg[aria-label="Motosiklet çizimi"]')) && !(await pg.$('#moto3d')), 'My Moto: eski 2B/3B çizim yok');
+  await pg.waitForFunction(() => { const i = document.getElementById('bikeImg'); return i && !i.hidden && i.complete && i.naturalWidth > 100; }, null, { timeout: 5000 }).catch(() => {});
+  const bi = await pg.$eval('#bikeImg', i => ({ src: i.getAttribute('src'), vis: !i.hidden, w: i.naturalWidth, bw: i.getBoundingClientRect().width }));
+  ok(bi.vis && bi.src === '/bike-naked.webp' && bi.w > 100 && bi.bw > 150, `My Moto: seçilen tipin (naked) görseli gösterilir (${bi.src}, ${bi.bw | 0}px)`);
+  ok(!(await pg.$('#motoBrand')) && !(await pg.$('#motoModel')), 'My Moto: marka/model yazısı yok, yalnızca görsel');
+  // hacimli (3B) görünüm + garaj arka planı
+  await pg.waitForFunction(() => { const c = document.querySelector('.tt-spin canvas.bv'); return c && c.style.opacity === '1'; }, null, { timeout: 8000 }).catch(() => {});
+  const vv = await pg.evaluate(() => { const c = document.querySelector('.tt-spin canvas.bv'), st = document.querySelector('.bike-stage'), bg = getComputedStyle(st).backgroundImage; return { cv: !!c && c.style.opacity === '1', garage: /garage-bg\.svg/.test(bg), fb: document.querySelector('.tt-spin').classList.contains('fb'), h: st.getBoundingClientRect().height }; });
+  ok(vv.cv && !vv.fb, 'My Moto: hacimli (katman+dilim) tuval görünümü çalışır, CSS yedeğe düşmedi');
+  ok(vv.garage, 'My Moto: kartın arka planı garaj sahnesi (garage-bg.svg)');
+  const shotA = await pg.evaluate(() => { const c = document.querySelector('.tt-spin canvas.bv'); return c.toDataURL().length + ':' + c.toDataURL().slice(-200); }); await pg.waitForTimeout(1500);
+  const shotB = await pg.evaluate(() => { const c = document.querySelector('.tt-spin canvas.bv'); return c.toDataURL().length + ':' + c.toDataURL().slice(-200); });
+  ok(shotA !== shotB, 'My Moto: motosiklet dönüyor (tuval içeriği zamanla değişir)');
+  const fr = await pg.evaluate(() => { const pt = a => { window.__bv.setAngle(a); const c = document.querySelector('.tt-spin canvas.bv'), x = c.getContext('2d'), d = x.getImageData(0, 0, c.width, c.height).data; let minX = c.width, maxX = 0, n = 0; for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 200) { const px = (i / 4) % c.width; if (px < minX) minX = px; if (px > maxX) maxX = px; n++; } return { wd: maxX - minX, n }; }; return { side: pt(0), front: pt(Math.PI / 2), rear: pt(Math.PI * 1.5) }; });
+  ok(fr.front.n > 300 && fr.rear.n > 300 && fr.front.wd > 15 && fr.front.wd < fr.side.wd * 0.5, `önden/arkadan bakınca ince çizgi değil hacimli gövde görünür (ön genişlik ${fr.front.wd}px, yan ${fr.side.wd}px, dolu piksel ${fr.front.n}/${fr.rear.n})`);
+  await pg.evaluate(() => { document.querySelector('[data-nav="settings"]').click(); }); await pg.waitForTimeout(300);
+  await pg.click('#settings [data-go="moto"]'); await pg.waitForTimeout(150);
+  const fl = await pg.$$eval('#settings [data-moto]', e => e.map(x => x.dataset.moto)); ok(fl.join() === 'brand,model,year,cc,type', 'Motosiklet Bilgileri alanları: Marka, Model, Yıl, Motor Hacmi, Tipi (' + fl + ')');
+  const types = await pg.$$eval('#settings [data-moto=type] option', e => e.map(x => x.value)); ok(types.length === 9 && types.includes('sport') && types.includes('scooter') && types.includes('enduro'), 'Tipi seçenekleri: 8 tip + «Seçilmedi»');
+  ok(await pg.inputValue('#settings [data-moto=year]') === '2020' && await pg.inputValue('#settings [data-moto=cc]') === '937' && await pg.inputValue('#settings [data-moto=type]') === 'naked', 'kayıtlı değerler forma dolar');
+  await pg.fill('#settings [data-moto=brand]', 'Yamaha'); await pg.fill('#settings [data-moto=model]', 'R1'); await pg.fill('#settings [data-moto=year]', '2022'); await pg.fill('#settings [data-moto=cc]', '998'); await pg.selectOption('#settings [data-moto=type]', 'sport');
+  await pg.click('#settings [data-act="motosave"]'); await pg.waitForTimeout(500);
+  const sv = calls.find(c => c[0] === '/api/account'); ok(sv && sv[1].bikeBrand === 'Yamaha' && sv[1].bikeYear === '2022' && sv[1].bikeType === 'sport' && sv[1].bikeCc === '998' && sv[1].phone === '+905321234567', 'kayıt isteği yeni motosiklet alanlarını gönderir, telefon silinmez');
+  await pg.evaluate(() => document.querySelector('[data-nav="motor"]').click()); await pg.waitForTimeout(500);
+  await pg.waitForFunction(() => document.getElementById('bikeImg').getAttribute('src') === '/bike-sport.webp', null, { timeout: 4000 }).catch(() => {}); ok(await pg.$eval('#bikeImg', i => i.getAttribute('src')) === '/bike-sport.webp', 'tip değişince görsel değişir (naked → sport)');
+  const mn = await pg.textContent('#motoName'), me2 = await pg.$eval('#motoEdit', b => ({ t: b.textContent.trim(), a: b.getAttribute('aria-label') })); ok(mn.trim().length > 2 && !/Güncelle/.test(mn) && me2.t === '🛠️' && /Güncelle/.test(me2.a), `My Moto: resim altında marka/model (${mn.trim()}), resim üstünde 🛠️ düğmesi`);
+  await pg.evaluate(() => document.querySelector('[data-nav="settings"]').click()); await pg.waitForTimeout(200); await pg.click('#settings [data-go="profile"]').catch(() => {});
+  await pg.waitForTimeout(150); ok(await pg.$('#sPhone') !== null && await pg.$('#sEmName') !== null, 'Profili Düzenle: telefon ve acil kişi alanları var');
+  ok(errs.length === 0, 'sayfa hatası yok ' + errs.join('|'));
+  await b.close(); srv.close(); console.log(`\n${p} geçti, ${f} kaldı`); process.exit(f ? 1 : 0);
+});

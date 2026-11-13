@@ -1,0 +1,12 @@
+<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>gv ride host</title><style>body{margin:0;background:#06202f;--nav:64px}#mm-gsheet{position:fixed;inset:0;overflow:auto;background:#031420;color:#fff;display:none}#mm-gsheet.open{display:block}</style></head><body>
+<div id="mm-gsheet"></div><div id="mm-gchip"></div><button id="mm-gbtn"></button>
+<script>
+(function () {
+  const USER = new URLSearchParams(location.search).get('u');
+  window.io = function () { const H = {}, acks = {}; let n = 0, ws, open = false; const s = { connected: false, id: '', on(e, f) { (H[e] = H[e] || []).push(f); return s; }, emit(e, d, cb) { if (!open) return; const id = typeof cb === 'function' ? ++n : 0; if (id) acks[id] = cb; ws.send(JSON.stringify({ e, d, id })); }, timeout() { return s; } };
+    const fire = (e, a) => (H[e] || []).forEach(f => f(a)); ws = new WebSocket('ws://' + location.host + '/ws?u=' + USER); ws.onmessage = m => { const j = JSON.parse(m.data); if (j.hello) { s.id = j.hello; open = true; s.connected = true; fire('connect'); } else if (j.ack) { const f = acks[j.ack]; delete acks[j.ack]; f && f(j.res); } else fire(j.e, j.d); }; return s; };
+  window.__sock = window.io(); window.__toasts = [];
+  const noop = () => {}; const ctx = new Proxy({ sock: window.__sock, $: id => document.getElementById(id), esc: s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])), toast: t => window.__toasts.push(t), modal: noop, closeModal: noop, store: { get: (k, d) => d, set: noop }, haversine: () => 0, user: 'Ali', currentRoute: () => null, me: () => null, modalEl: document.createElement('div'), isActive: () => true, refresh: noop, openAnalysis: noop }, { get: (t, k) => (k in t ? t[k] : noop) });
+  const sc = document.createElement('script'); sc.src = '/group-ride.js'; sc.onload = () => { window.__gr = GroupRide.mount(ctx); window.__ready = true; }; document.body.appendChild(sc);
+})();
+</script></body></html>
