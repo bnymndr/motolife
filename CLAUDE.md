@@ -364,3 +364,12 @@ Paralel: TURN ve bağlantı toparlanması, grup sürüşünden (7) önce.
 - Test: auth-ui 61 (alanlar, kayıt, marka/model ayrımı, tek sözcük, km reddi, bilgi kartı, bölüm sırası, 🛠️ yönlendirme), stats 53, weather-ui 16, splash 2. 390 px ekran görüntüsüyle kontrol edildi. TEST EDİLMEDİ: gerçek telefon, gerçek sunucu kaydı.
 
 - Güncelleme: bilgi kartındaki «Motosiklet Bilgileri» başlığı kaldırıldı (kart yalnız satırlardan oluşur; erişilebilirlik için `aria-label` duruyor). Test: auth-ui 61, stats 53, weather-ui 16, splash 2.
+
+## Giriş/kayıt düzeni, isteğe bağlı motor, Vazgeç/Kaydet, profil + kapak fotoğrafı (son değişiklik)
+- Giriş ve kayıt: «Veya Şununla Devam Et» + Google/iCloud (`#socialAuth`) artık formların EN ALTINDA. Güvenlik sorusu yalnız TOPLAMA (`a + b kaç eder?`; Node `capNew`, PHP `h_captcha`; çıkarma/çarpma kalktı).
+- Kayıt ve «Kaydı Tamamla»: Marka/Model isteğe bağlı (sunucuda zorunluluk kaldırıldı: Node + PHP). Girilirse `bikeBrand/bikeModel` kaydolur; My Moto bilgi kartı «Motor Adı»nı doğrudan buradan okur. Motosiklet Ayarları formunda motor adı boş bırakılıp kaydedilebilir.
+- Motosiklet Ayarları › Motosiklet Bilgileri: alanlardan biri değişince formun en altında «Değişiklikten Vazgeç» + «Kaydet» çubuğu çıkar (`[data-motobar]`; değişiklik yokken gizli). Vazgeç alanları açılış değerine döndürür; Kaydet sonrası çubuk kapanır.
+- Ana sayfa karşılama kartı (`#greetCard`): kapak fotoğrafı kartın arkasında (`#coverImg` + okunurluk gölgesi), yuvarlak profil resmi turuncu halkalı. Profil resmine (`#avatarBtn`) basınca ya da kapağa (kart/📷 `#coverBtn`) basınca alt menü (`public/photo.js`, `Photo.menu`): Fotoğraf Yükle, Fotoğraf Çek (`capture` girişi; masaüstünde dosya seçici), Yeniden Konumlandır (sürükle + yakınlaştır; profil için daire, kapak için 8:3 çerçeve; seçilen alan kırpılıp JPEG olarak kaydedilir), Fotoğrafı Kaldır.
+- Saklama: PROFİL resmi sunucuda (mevcut `avatar`, 256 px JPEG; `/api/avatar` boş `image` ile kaldırmayı da kabul eder — Node + PHP). KAPAK fotoğrafı yalnız bu cihazda (`localStorage ml_cover:<kullanıcı>`, 800×300 JPEG); sunucuya yazılmaz (sunucu sütunu = DB migrasyonu, onay ister).
+- Ayarlar › Profili Düzenle'nin başına «Profil Fotoğrafı» ve «Kapak Fotoğrafı» düğmeleri eklendi (aynı menü, aynı veri; `sAvBtn/sCvBtn`).
+- Test: auth-ui 80, stats 53, weather-ui 16, splash 2, auth 46, php-api 245. TEST EDİLMEDİ: gerçek telefon kamerası (`capture` davranışı cihaza/tarayıcıya bağlı), gerçek büyük fotoğraf yükleme, çok büyük fotoğrafta bellek.

@@ -55,7 +55,7 @@ app.post('/api/avatar', express.json({ limit: '200kb' }), (req, res) => {
   const u = userFromCookie(req.headers.cookie);
   if (!u) return res.status(401).json({ error: 'Giriş gerekli.' });
   const img = String((req.body || {}).image || '');
-  if (img.length > 90000 || !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(img)) {
+  if (img !== '' && (img.length > 90000 || !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(img))) {
     return res.status(400).json({ error: 'Fotoğraf geçersiz ya da çok büyük.' });
   }
   u.avatar = img;
@@ -134,8 +134,6 @@ function readProfile(b, o = {}) {
   if (!f.firstName) return { error: 'İsmini gir.' };
   if (!f.lastName) return { error: 'Soyismini gir.' };
   if (!GENDERS.includes(f.gender)) return { error: 'Cinsiyet seç.' };
-  if (!f.bikeBrand) return { error: 'Motosiklet markasını gir.' };
-  if (!f.bikeModel) return { error: 'Motosiklet modelini gir.' };
   if (!EMAIL_RE.test(f.email)) return { error: 'Geçerli bir e-posta gir.' };
   // telefon: kayıtta zorunlu; eski hesaplarda boş olabilir, doluysa silinemez (bunu rota kontrol eder)
   const rawPh = clean(b.phone, 30);
@@ -180,11 +178,9 @@ const capUsed = new Map();
 setInterval(() => { const n = Date.now(); for (const [k, e] of capUsed) if (e < n) capUsed.delete(k); }, 300000).unref();
 const capMac = (nonce, exp, ans) => crypto.createHmac('sha256', SECRET).update('cap|' + nonce + '|' + exp + '|' + ans).digest('base64url');
 function capNew() {
-  const r = n => crypto.randomInt(n), a = 3 + r(7), b = 2 + r(8), k = r(3);
-  const [q, ans] = k === 0 ? [a + ' + ' + b, a + b] : k === 1 ? [(a + b) + ' − ' + b, a] : [a + ' × ' + (2 + r(4)), 0];
-  let ansN = ans, qq = q; if (k === 2) { const m = Number(q.split('× ')[1]); ansN = a * m; }
+  const r = n => crypto.randomInt(n), a = 3 + r(7), b = 2 + r(8);
   const nonce = crypto.randomBytes(9).toString('base64url'), exp = Date.now() + 300000;
-  return { token: nonce + '.' + exp + '.' + capMac(nonce, exp, ansN), q: qq + ' kaç eder?' };
+  return { token: nonce + '.' + exp + '.' + capMac(nonce, exp, a + b), q: a + ' + ' + b + ' kaç eder?' };
 }
 function capOk(b) {
   const t = String((b && b.cToken) || '').split('.'), ans = String((b && b.cAns) || '').trim().replace(/\s/g, '');
