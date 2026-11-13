@@ -344,3 +344,23 @@ Paralel: TURN ve bağlantı toparlanması, grup sürüşünden (7) önce.
 ## Motosiklet tipi kaydı düzeltildi (son değişiklik)
 - Sorun: sunucudaki izin listesi `BIKE_TYPES` (`server.js`, `php/api/auth.php`) eski 8 tipte kalmıştı; yeni tiplerden supersport, sporttouring, cafe, retro, motocross kaydedilirken «Motosiklet tipi geçersiz.» dönüyordu. Düzeltme: liste 10 My Moto tipi + eski 3 tip (sport, classic, enduro) olarak güncellendi. Yeni tip eklenirse `public/bikes.js` TYPES ile BU İKİ liste birlikte güncellenmeli.
 - Test: auth 46 (13 tipin hepsi kaydedilir), php-api 245. Sunucu kodu değiştiği için canlıda yeniden yükleme/dağıtım gerekir.
+
+## My Moto: görünüm ayarları düğmesi (son değişiklik)
+- Ayarlar › Motosiklet Bilgileri'nden «Tipi» alanı KALDIRILDI (Marka, Model, Yıl, Motor Hacmi kalır). Kaydet mevcut tipi korur (`settings.js` `me().bikeType`).
+- Resmin sağ üstünde 🛠️ düğmesinin altına ikinci düğme: 🎨 `#motoLook` (aynı boyut/stil, `aria-label` «Görünüm Ayarları»). Alt sayfa `#bikeSheet` (dialog; ✕, arka plana dokunma ve Esc kapatır): «Motosiklet Tipi» (Seçilmedi + 10 tip, radiogroup) ve «Renk» (6 düğme). Renkler artık kartın altında GÖRÜNMEZ, yalnız bu pencerede.
+- Tip seçince görsel anında değişir, `/api/account` arkadan kaydeder (`bikeSave()` index.html; Ayarlar'ın `saveBike`'i de bunu kullanır); hata olursa eski tipe döner ve pencerede mesaj gösterir. Yalnız bikeType değişir; marka/model/yıl/cc/telefon korunur. Tip yokken renk düğmeleri gizli, ipucu görünür.
+- Test: auth-ui 46, stats 53, weather-ui 16, splash 2. 390 px ekran görüntüsü kontrol edildi. TEST EDİLMEDİ: gerçek telefon.
+
+## My Moto: görünüm ayarları tek satır + açılır liste (son değişiklik)
+- Görünüm Ayarları penceresi (`#bikeSheet`) iki TEK SATIR ayara indi: «Motosiklet Tipi — <seçili>» (`#bikeTypeRow`) ve «Renk — ● <seçili>» (`#bikeColorRow`). Satıra dokununca seçenek listesi satırın ALTINDA açılır (`role=listbox`, seçenekler `role=option` + `aria-selected`, ✓ işareti; tip listesi `#bikeTypes`, renk listesi `#bikeColors`); seçince liste kapanır ve satırda seçilen değer yazar; aynı anda yalnız bir liste açık (`listOpen()`). Tip yokken renk satırı pasif + ipucu.
+- Test: auth-ui 51 (tek satır, açılma/kapanma, karşılıklı kapanma, seçili değer yazısı, tip/renk uygulama), stats 53, weather-ui 16, splash 2. 390 px ekran görüntüsüyle kontrol edildi. TEST EDİLMEDİ: gerçek telefon.
+
+## My Moto: bilgi kartı + 🛠️ ayarlarına taşınan bakım/yakıt (son değişiklik; önceki «My Moto» bölümlerini geçersiz kılar)
+- My Moto sayfası 3 bölüm: (1) motor resmi (🛠️ ve 🎨 düğmeleri aynı), (2) «Motosiklet Bilgileri» OKUNUR bilgi kartı `#motoInfo` (Motor Sahibi, Motor Adı, Model Yılı, Km, Motor Hacmi, Muayene Tarihi; girilmeyen «Girilmedi»; muayene altında kalan gün), (3) Günlük Bilgiler. Resim altındaki büyük beyaz motor adı (`#motoName`) KALDIRILDI (ad bilgi kartında). `#mymoto-root` sayfadan çıktı.
+- 🛠️ → Ayarlar › «Motosiklet Ayarları» (`settings.js` `moto` paneli; eski ad «Motosiklet Bilgileri»): Bölüm 1 «Motosiklet Bilgileri» formu (`data-moto`: owner, name, year, km, cc, inspection; tek Kaydet), Bölüm 2 «Bakım ile Yakıt ve Tüketim» = `MyMoto.mount` (sekmeler Bakım / Yakıt ve Tüketim; `data-slot="mymoto"`). 
+- Motor Adı tek alan: ilk sözcük marka, kalan model olarak sunucuya ayrılır (`bikeBrand`/`bikeModel`, ikisi de zorunlu → tek sözcükte ikisi aynı değeri alır, bilgi kartı tekrarı gizler). Sunucuya giden: ad, model yılı, hacim (mevcut tip korunur). Cihazda (`mymoto:<kullanıcı>`, localStorage; sunucuya eşitlenmez): sahip (`owner`), km, muayene tarihi. Motor Sahibi boşsa profil adı gösterilir/önerilir. Km önceki değerden küçük kaydedilemez.
+- `mymoto.js`: `owner` alanı + `MyMoto.read(user)` / `MyMoto.write(user, fn)` (form ve bilgi kartı aynı depoyu okur/yazar). Bakım sekmesinde km girişi ve Muayene tarihi kaldırıldı (km salt okunur, «Motosiklet Bilgileri bölümünden güncellenir»; Sigorta tarihi Bakım sekmesinde kalır; yakıt kaydı km'yi hâlâ günceller).
+- Sınır: Motor Sahibi/km/muayene yalnız bu cihazda (sunucu alanı = DB migrasyonu, onay ister).
+- Test: auth-ui 61 (alanlar, kayıt, marka/model ayrımı, tek sözcük, km reddi, bilgi kartı, bölüm sırası, 🛠️ yönlendirme), stats 53, weather-ui 16, splash 2. 390 px ekran görüntüsüyle kontrol edildi. TEST EDİLMEDİ: gerçek telefon, gerçek sunucu kaydı.
+
+- Güncelleme: bilgi kartındaki «Motosiklet Bilgileri» başlığı kaldırıldı (kart yalnız satırlardan oluşur; erişilebilirlik için `aria-label` duruyor). Test: auth-ui 61, stats 53, weather-ui 16, splash 2.
