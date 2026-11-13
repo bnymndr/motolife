@@ -133,7 +133,10 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
 
   // ---------- Görünümler ----------
   const sharingNow = (gid, uid) => { const L = liveG.get(gid), e = L && L.m.get(uid); return !!e; };
-  const roleOf = (g, uid) => (g.leader === uid ? 'leader' : 'member');
+  const roleOf = (g, uid) => (g.leader === uid ? 'leader' : (g.members.find(m => m.uid === uid) || {}).role === 'admin' ? 'admin' : 'member');
+  const isStaff = (g, uid) => roleOf(g, uid) !== 'member';          // lider + yönetici
+  const picVer = (g, k) => { const c = g[k]; if (!c) return ''; let h = c.length; for (let i = 0; i < c.length; i += 997) h = (h * 31 + c.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
+  const picUrl = (g, k) => (g[k] ? '/api/rgroups/' + g.id + '/pic/' + k + '?v=' + picVer(g, k) : '');
   const MAX_GPOSTS = 300, MAX_DESC = 200;
   const memberView = (g, m) => {
     const u = users.get(m.uid), c = social ? social.cardOf(m.uid) : {};
@@ -142,24 +145,25 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
   const gpostView = (g, p, viewer) => ({
     id: p.id, author: social ? social.cardOf(p.uid) : { username: nameOf(p.uid), name: fullOf(p.uid), av: '', bike: '' }, text: p.text, at: p.at, mood: p.mood || '',
     image: p.image ? '/api/social/img/' + p.image : '', likes: p.likes.length, liked: p.likes.includes(viewer), commentCount: p.comments.length,
-    mine: p.uid === viewer, canDelete: p.uid === viewer || g.leader === viewer,
-    comments: p.comments.slice(-20).map(c => ({ id: c.id, author: social ? social.cardOf(c.uid) : { username: nameOf(c.uid), name: fullOf(c.uid), av: '', bike: '' }, text: c.text, at: c.at, canDelete: c.uid === viewer || g.leader === viewer }))
+    mine: p.uid === viewer, canDelete: p.uid === viewer || isStaff(g, viewer),
+    comments: p.comments.slice(-20).map(c => ({ id: c.id, author: social ? social.cardOf(c.uid) : { username: nameOf(c.uid), name: fullOf(c.uid), av: '', bike: '' }, text: c.text, at: c.at, canDelete: c.uid === viewer || isStaff(g, viewer) }))
   });
   const dropPost = p => { if (p.image && social) social.dropImage(p.image); };
-  const brief = (g, u) => ({ id: g.id, name: g.name, desc: g.desc || '', role: roleOf(g, u.id), leader: nameOf(g.leader), count: g.members.length, active: !!g.ride, hasRoute: !!g.route, posts: (g.posts || []).length, lastAt: (g.posts || []).length ? g.posts[g.posts.length - 1].at : 0 });
+  const brief = (g, u) => ({ id: g.id, photo: picUrl(g, 'photo'), name: g.name, desc: g.desc || '', role: roleOf(g, u.id), leader: nameOf(g.leader), count: g.members.length, active: !!g.ride, hasRoute: !!g.route, posts: (g.posts || []).length, lastAt: (g.posts || []).length ? g.posts[g.posts.length - 1].at : 0 });
   const view = (g, u) => ({
-    id: g.id, name: g.name, desc: g.desc || '', role: roleOf(g, u.id), leader: nameOf(g.leader), createdAt: g.createdAt, gap: g.gap, postCount: (g.posts || []).length,
+    id: g.id, photo: picUrl(g, 'photo'), cover: picUrl(g, 'cover'), name: g.name, desc: g.desc || '', role: roleOf(g, u.id), leader: nameOf(g.leader), createdAt: g.createdAt, gap: g.gap, postCount: (g.posts || []).length,
     members: [...g.members].sort((a, b) => (b.uid === g.leader) - (a.uid === g.leader)).map(m => memberView(g, m)),
     ride: g.ride ? { id: g.ride.id, startedAt: g.ride.startedAt } : null,
     route: g.route ? { v: g.route.v, len: g.route.len, n: g.route.n, name: g.route.name } : null,
-    code: g.leader === u.id ? g.code : undefined
+    code: isStaff(g, u.id) ? g.code : undefined
   });
   const authed = (req, res) => { const u = userFromCookie(req.headers.cookie); if (!u) { fail(res, 401, 'Giriş gerekli.'); return null; } return u; };
-  function ctxOf(req, res, leaderOnly) {
+  function ctxOf(req, res, need) {            // need: true = yalnız lider, 'staff' = lider ya da yönetici
     const u = authed(req, res); if (!u) return null;
     const g = db.groups[req.params.id];
     if (!g || !isMember(g, u.id)) { fail(res, 404, 'Grup bulunamadı.'); return null; }
-    if (leaderOnly && g.leader !== u.id) { fail(res, 403, 'Bu işlem için grup lideri olmalısın.'); return null; }
+    if (need === true && g.leader !== u.id) { fail(res, 403, 'Bu işlem için grup lideri olmalısın.'); return null; }
+    if (need === 'staff' && !isStaff(g, u.id)) { fail(res, 403, 'Bu işlem için grup lideri ya da yöneticisi olmalısın.'); return null; }
     return { u, g };
   }
   const memberByName = (g, n) => g.members.find(m => lower(nameOf(m.uid)) === lower(n));
@@ -283,7 +287,7 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
     g.posts = (g.posts || []).filter(p => { if (p.uid !== uid) return true; dropPost(p); return false; });
     for (const p of g.posts) { p.likes = p.likes.filter(x => x !== uid); p.comments = p.comments.filter(c => c.uid !== uid); }
     if (!g.members.length) return destroyGroup(g, 'deleted');
-    if (g.leader === uid) { g.leader = g.members[0].uid; rec(g, ['e', Date.now(), 'leader', nameOf(g.leader), 'otomatik']); }
+    if (g.leader === uid) { const nx = g.members.find(m => m.role === 'admin') || g.members[0]; delete nx.role; g.leader = nx.uid; rec(g, ['e', Date.now(), 'leader', nameOf(g.leader), 'otomatik']); }
     save(); notify(g, kind); if (g.ride) emitState(g, true);
   }
 
@@ -326,7 +330,7 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
   });
   app.get('/api/rgroups/:id', (req, res) => { const c = ctxOf(req, res); if (c) res.json({ group: view(c.g, c.u) }); });
   app.patch('/api/rgroups/:id', (req, res) => {
-    const c = ctxOf(req, res, true); if (!c) return;
+    const c = ctxOf(req, res, 'staff'); if (!c) return;
     const b = req.body || {};
     if (b.name !== undefined) { const n = txt(b.name, 40); if (n.length < 2) return fail(res, 400, 'Grup adı en az 2 karakter olmalı.'); c.g.name = n; }
     if (b.desc !== undefined) c.g.desc = txt(b.desc, MAX_DESC);
@@ -359,7 +363,7 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
   app.delete('/api/rgroups/:id/posts/:pid', (req, res) => {
     const c = ctxOf(req, res); if (!c) return;
     const p = findGPost(c, req, res); if (!p) return;
-    if (p.uid !== c.u.id && c.g.leader !== c.u.id) return fail(res, 403, 'Bu gönderiyi silemezsin.');
+    if (p.uid !== c.u.id && !isStaff(c.g, c.u.id)) return fail(res, 403, 'Bu gönderiyi silemezsin.');
     dropPost(p); c.g.posts = c.g.posts.filter(x => x !== p); save(); res.json({ ok: true });
   });
   app.post('/api/rgroups/:id/posts/:pid/like', (req, res) => {
@@ -383,15 +387,16 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
     const p = findGPost(c, req, res); if (!p) return;
     const cm = p.comments.find(x => x.id === req.params.cid);
     if (!cm) return fail(res, 404, 'Yorum bulunamadı.');
-    if (cm.uid !== c.u.id && c.g.leader !== c.u.id) return fail(res, 403, 'Bu yorumu silemezsin.');
+    if (cm.uid !== c.u.id && !isStaff(c.g, c.u.id)) return fail(res, 403, 'Bu yorumu silemezsin.');
     p.comments = p.comments.filter(x => x !== cm); save(); res.json({ ok: true });
   });
   app.post('/api/rgroups/:id/leave', (req, res) => { const c = ctxOf(req, res); if (!c) return; removeMember(c.g, c.u.id, 'leave'); res.json({ ok: true }); });
   app.post('/api/rgroups/:id/kick', (req, res) => {
-    const c = ctxOf(req, res, true); if (!c) return;
+    const c = ctxOf(req, res, 'staff'); if (!c) return;
     const m = memberByName(c.g, (req.body || {}).username);
     if (!m) return fail(res, 404, 'Üye bulunamadı.');
     if (m.uid === c.u.id) return fail(res, 400, 'Kendini çıkaramazsın; gruptan ayrıl.');
+    if (m.uid === c.g.leader || (roleOf(c.g, m.uid) === 'admin' && c.g.leader !== c.u.id)) return fail(res, 403, 'Bu üyeyi çıkarma yetkin yok.');
     removeMember(c.g, m.uid, 'kick'); res.json({ ok: true });
   });
   app.post('/api/rgroups/:id/leader', (req, res) => {
@@ -399,28 +404,57 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
     const m = memberByName(c.g, (req.body || {}).username);
     if (!m) return fail(res, 404, 'Üye bulunamadı.');
     if (m.uid === c.g.leader) return res.json({ group: view(c.g, c.u) });
-    c.g.leader = m.uid; rec(c.g, ['e', Date.now(), 'leader', nameOf(m.uid), uname(c.u)]);
+    delete m.role; c.g.leader = m.uid; rec(c.g, ['e', Date.now(), 'leader', nameOf(m.uid), uname(c.u)]);
     save(); notify(c.g, 'leader'); if (c.g.ride) emitState(c.g, true);
     res.json({ group: view(c.g, c.u) });
   });
-  app.post('/api/rgroups/:id/code', (req, res) => {
+  app.post('/api/rgroups/:id/role', (req, res) => {          // yalnız lider: Yönetici ata / geri al
     const c = ctxOf(req, res, true); if (!c) return;
+    const b = req.body || {}, m = memberByName(c.g, b.username);
+    if (!m) return fail(res, 404, 'Üye bulunamadı.');
+    if (m.uid === c.g.leader) return fail(res, 400, 'Liderin rolü değiştirilemez; önce lideri devret.');
+    if (b.role !== 'admin' && b.role !== 'member') return fail(res, 400, 'Geçersiz rol.');
+    if (b.role === 'admin') m.role = 'admin'; else delete m.role;
+    rec(c.g, ['e', Date.now(), 'role', nameOf(m.uid), b.role]); save(); notify(c.g, 'role');
+    res.json({ group: view(c.g, c.u) });
+  });
+  // Grup fotoğrafı (photo) ve grup içi kapak (cover): JPEG ham gövde ≤150 KB, boş gövde = kaldır; lider/yönetici. Yalnız üyeler okur.
+  const PIC = { photo: 1, cover: 1 };
+  app.put('/api/rgroups/:id/pic/:kind', express.raw({ type: 'application/octet-stream', limit: '200kb' }), (req, res) => {
+    const c = ctxOf(req, res, 'staff'); if (!c) return;
+    if (!PIC[req.params.kind]) return fail(res, 404, 'Bilinmeyen görsel türü.');
+    const b = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    if (!b.length) delete c.g[req.params.kind];
+    else {
+      if (b.length > 150000 || b[0] !== 0xff || b[1] !== 0xd8 || b[2] !== 0xff) return fail(res, 400, 'Fotoğraf geçersiz ya da çok büyük.');
+      c.g[req.params.kind] = b.toString('base64');
+    }
+    save(); notify(c.g, 'settings'); res.json({ group: view(c.g, c.u) });
+  });
+  app.get('/api/rgroups/:id/pic/:kind', (req, res) => {
+    const c = ctxOf(req, res); if (!c) return;
+    const d = PIC[req.params.kind] && c.g[req.params.kind];
+    if (!d) return res.status(404).end();
+    res.set({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=86400' }); res.send(Buffer.from(d, 'base64'));
+  });
+  app.post('/api/rgroups/:id/code', (req, res) => {
+    const c = ctxOf(req, res, 'staff'); if (!c) return;
     codes.delete(c.g.code); c.g.code = newCode(); codes.set(c.g.code, c.g.id); save();     // eski kod/bağlantı geçersiz olur
     res.json({ code: c.g.code });
   });
   app.post('/api/rgroups/:id/start', (req, res) => {
-    const c = ctxOf(req, res, true); if (!c) return;
+    const c = ctxOf(req, res, 'staff'); if (!c) return;
     if (c.g.ride) return fail(res, 409, 'Grup sürüşü zaten başlamış.');
     startRide(c.g, c.u); res.json({ group: view(c.g, c.u) });
   });
   app.post('/api/rgroups/:id/end', (req, res) => {
-    const c = ctxOf(req, res, true); if (!c) return;
+    const c = ctxOf(req, res, 'staff'); if (!c) return;
     if (!c.g.ride) return fail(res, 409, 'Aktif grup sürüşü yok.');
     endRide(c.g, c.u, null); res.json({ group: view(c.g, c.u) });
   });
   // Ana güzergâh: liderin haritada oluşturduğu rota. İçerik türü octet-stream (genel 10 KB JSON sınırına takılmasın; rides.js ile aynı yöntem).
   app.put('/api/rgroups/:id/route', express.raw({ type: 'application/octet-stream', limit: '400kb' }), (req, res) => {
-    const c = ctxOf(req, res, true); if (!c) return;
+    const c = ctxOf(req, res, 'staff'); if (!c) return;
     if (limited('rgr:' + c.u.id, 6, 600000)) return fail(res, 429, 'Güzergâh çok sık değiştirildi, biraz bekle.');
     let b = req.body;
     try { if (Buffer.isBuffer(b)) b = JSON.parse(b.toString('utf8')); } catch { return fail(res, 400, 'Güzergâh okunamadı.'); }
@@ -449,7 +483,7 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
     res.json({ v: c.g.route.v, name: c.g.route.name, len: c.g.route.len, pts: rc.pts });
   });
   app.delete('/api/rgroups/:id/route', (req, res) => {
-    const c = ctxOf(req, res, true); if (!c) return;
+    const c = ctxOf(req, res, 'staff'); if (!c) return;
     if (c.g.route) { c.g.route = null; rcache.delete(c.g.id); fs.unlink(routeFile(c.g.id), () => {}); if (c.g.ride) rec(c.g, ['r', Date.now(), null]); save(); notify(c.g, 'route'); if (c.g.ride) emitState(c.g, true); }
     res.json({ ok: true });
   });

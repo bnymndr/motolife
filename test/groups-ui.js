@@ -6,7 +6,7 @@ const BUNDLE = fs.readFileSync(path.join(__dirname, '..', 'public', 'social.bund
 const card = (u, n) => ({ username: u, name: n, av: '', bike: 'Honda CB' });
 const ME = card('ben', 'Ben Test');
 const G = { id: 'a'.repeat(16), name: 'Hafta Sonu', desc: 'Pazar sürüşleri', leader: 'ben', role: 'leader', code: 'ABCD2345', createdAt: Date.now() - 86400000, gap: 1000, ride: null, route: null,
-  members: [{ ...card('ben', 'Ben Test'), role: 'leader', sharing: false, joinedAt: 1 }, { ...card('veli', 'Veli Yılmaz'), role: 'member', sharing: true, joinedAt: 2 }] };
+  members: [{ ...card('ben', 'Ben Test'), role: 'leader', sharing: false, joinedAt: 1 }, { ...card('veli', 'Veli Yılmaz'), role: 'member', sharing: true, joinedAt: 2 }, { ...card('kaan', 'Kaan Demir'), role: 'admin', sharing: false, joinedAt: 3 }] };
 let posts = [], seq = 0; const calls = [];
 const view = p => ({ ...p, mine: p.author.username === 'ben', canDelete: true });
 const srv = http.createServer((q, r) => {
@@ -15,13 +15,16 @@ const srv = http.createServer((q, r) => {
   if (u.pathname === '/tw.js') { r.writeHead(200, { 'content-type': 'text/javascript' }); return r.end(TW); }
   if (u.pathname === '/social.bundle.js') { r.writeHead(200, { 'content-type': 'text/javascript' }); return r.end(BUNDLE); }
   let body = ''; q.on('data', d => body += d); q.on('end', () => {
-    const b = body ? JSON.parse(body) : {}, m = q.method, p = u.pathname; calls.push(m + ' ' + p);
+    let b = {}; try { b = body ? JSON.parse(body) : {}; } catch {} const m = q.method, p = u.pathname; calls.push(m + ' ' + p);
     if (p === '/api/social/me') return J({ me: { ...ME, bio: '', status: '', stats: { posts: 0, friends: 0, likes: 0 } } });
     if (p === '/api/social/friends') return J({ friends: [], incoming: [], outgoing: [], unreadTotal: 0 });
     if (p === '/api/social/users/ben') return J({ profile: { ...ME, bio: '', status: '', mood: '', statusAt: 0, bike: 'Honda CB', stats: { posts: 0, friends: 0, likes: 0 } }, rel: 'self', locked: false });
     if (p === '/api/social/users/ben/posts') return J({ posts: [], more: false });
     if (p === '/api/social/profile' && m === 'PUT') { calls.push('MOOD=' + b.mood); return J({ ok: true }); }
     if (p === '/api/social/feed') return J({ posts: [], more: false });
+    if (p === `/api/rgroups/${G.id}/role` && m === 'POST') { const t = G.members.find(x => x.username === b.username); if (t) t.role = b.role; return J({ group: { ...G, postCount: posts.length } }); }
+    if (/\/pic\/(photo|cover)$/.test(p) && m === 'PUT') { G[p.split('/').pop()] = body.length ? '/x.png' : ''; calls.push('PIC ' + p.split('/').pop() + ' ' + (q.headers['content-type'] || '') + ' ' + body.length); return J({ group: { ...G, postCount: posts.length } }); }
+    if (p === '/api/social/cover' && m === 'PUT') { calls.push('COVER ' + body.length); return J({ me: { ...ME, cv: body.length ? 'v1' : '' } }); }
     if (p === '/api/rgroups' && m === 'GET') return J({ groups: [{ id: G.id, name: G.name, desc: G.desc, role: 'leader', leader: 'ben', count: 2, active: false, hasRoute: false, posts: posts.length }] });
     if (p === '/api/rgroups' && m === 'POST') return J({ group: { ...G, name: b.name, desc: b.desc || '' } });
     if (p === '/api/rgroups/' + G.id && m === 'GET') return J({ group: { ...G, postCount: posts.length } });
@@ -76,6 +79,23 @@ srv.listen(0, async () => {
   T(await pg.$$eval('ul[role=listbox] li[role=option]', l => l.length) === 13 && await pg.$$eval('li[aria-selected=true]', l => l.length) === 1, 'profil: açılır liste, tek seçim (varsayılan: Duygu Durumu Yok)');
   await pg.click('ul[role=listbox] >> text=Huzurlu'); T(await pg.$$eval('ul[role=listbox]', l => l.length) === 0 && (await pg.textContent('button[aria-haspopup=listbox]')).includes('Huzurlu'), 'profil: seçince kapanır, düğmede görünür');
   await pg.click('form:has(button[aria-haspopup=listbox]) button[type=submit]'); await pg.waitForFunction(() => true); await new Promise(r => setTimeout(r, 300)); T(calls.includes('MOOD=huzurlu'), 'profil: seçilen duygu durumu sunucuya gider');
+  // ---- Roller, grup fotoğrafı/kapağı, profil kapağı ----
+  await pg.evaluate(() => { window.Photo = { menu: (k, c) => { window.__pm = { k, c }; } }; });
+  await pg.evaluate(id => window.dispatchEvent(new CustomEvent('ml:social-goto', { detail: { tab: 'groups', gid: id } })), G.id); await pg.waitForSelector('[aria-label="Grup Kapağını Değiştir"]', { timeout: 4000 });
+  T(await pg.isVisible('[aria-label="Grup Fotoğrafını Değiştir"]'), 'lider: grup fotoğrafı ve kapağı düğmeleri görünür');
+  await pg.click('[aria-label="Grup Kapağını Değiştir"]'); T(await pg.evaluate(() => window.__pm && window.__pm.k) === 'cover', 'kapak düğmesi Photo menüsünü «cover» ile açar');
+  await pg.evaluate(() => window.__pm.c.save('data:image/jpeg;base64,/9j/4AAQ')); await new Promise(r => setTimeout(r, 250));
+  T(calls.some(c => /^PIC cover application\/octet-stream \d+$/.test(c)), 'kapak octet-stream olarak PUT edilir');
+  await pg.click('[aria-label="Grup Fotoğrafını Değiştir"]'); T(await pg.evaluate(() => window.__pm.k) === 'photo', 'fotoğraf düğmesi «photo» menüsünü açar');
+  await pg.click('[role=tab]:has-text("Üyeler")'); await new Promise(r => setTimeout(r, 200));
+  const mem = await pg.textContent('#root, body');
+  T(/Yönetici/.test(mem) && /Kaan Demir/.test(mem), 'üyeler listesinde rol etiketi (Yönetici) görünür');
+  T(await pg.isVisible('button:has-text("Yönetici Yap")') && await pg.isVisible('button:has-text("Yöneticiliği Al")'), 'lider: Yönetici Yap / Yöneticiliği Al düğmeleri');
+  await pg.click('[role=tab]:has-text("Bilgi")'); await new Promise(r => setTimeout(r, 200));
+  T(await pg.isVisible('summary:has-text("Roller ve Yetkiler")'), 'Bilgi: Roller ve Yetkiler açıklaması');
+  await pg.click('[aria-label="Gruplarım"]'); await pg.click('button:has-text("Profil")').catch(() => {}); await new Promise(r => setTimeout(r, 300));
+  if (await pg.isVisible('[aria-label="Kapak Fotoğrafını Değiştir"]')) { await pg.click('[aria-label="Kapak Fotoğrafını Değiştir"]'); T(await pg.evaluate(() => window.__pm.k) === 'cover', 'profil: kapak düğmesi Photo menüsünü açar'); await pg.evaluate(() => window.__pm.c.save('data:image/jpeg;base64,/9j/4AAQ')); await new Promise(r => setTimeout(r, 250)); T(calls.some(c => /^COVER \d+$/.test(c)), 'profil kapağı /api/social/cover ucuna gider'); }
+  else T(false, 'profil: kapak düğmesi bulunamadı');
   // dışarıdan açma (harita → Sosyal)
   await pg.evaluate(() => window.dispatchEvent(new CustomEvent('ml:social-goto', { detail: { tab: 'groups', gid: null } })));
   T(errs.length === 0, 'sayfa hatası yok ' + errs.join('|'));

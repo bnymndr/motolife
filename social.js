@@ -43,6 +43,7 @@ module.exports = function mountSocial({ app, io, users, userFromCookie, uname, d
     for (let i = 0; i < u.avatar.length; i += 997) h = (h * 31 + u.avatar.charCodeAt(i)) | 0;
     return (h >>> 0).toString(36);
   };
+  const coverVer = c => { let h = c.length; for (let i = 0; i < c.length; i += 997) h = (h * 31 + c.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
   const GONE = { username: 'silinmis', name: 'Silinmiş Kullanıcı', av: '', bike: '' };
   const card = u => u ? ({
     username: uname(u), name: [u.firstName, u.lastName].filter(Boolean).join(' ') || uname(u),
@@ -72,7 +73,7 @@ module.exports = function mountSocial({ app, io, users, userFromCookie, uname, d
   };
   const profile = u => {
     const p = db.profiles[u.id] || {};
-    return { ...card(u), bio: p.bio || '', status: p.status || '', mood: p.mood || '', statusAt: p.statusAt || 0, since: u.createdAt || 0, stats: stats(u.id) };
+    return { ...card(u), cv: p.cover ? coverVer(p.cover) : '', bio: p.bio || '', status: p.status || '', mood: p.mood || '', statusAt: p.statusAt || 0, since: u.createdAt || 0, stats: stats(u.id) };
   };
   const relation = (meId, other) => {
     if (isFriend(meId, other.id)) return { rel: 'friend' };
@@ -144,6 +145,21 @@ module.exports = function mountSocial({ app, io, users, userFromCookie, uname, d
     save();
     toFriends(req.u.id, 'social:status', { username: uname(req.u), status: p.status || '', mood: p.mood || '', statusAt: p.statusAt || 0 });
     res.json({ me: profile(req.u) });
+  });
+  // Profil kapak fotoğrafı: JPEG (≤150 KB), ham gövde (octet-stream); boş gövde = kaldır. Profil görüntüleyen herkes okur.
+  r.put('/cover', express.raw({ type: 'application/octet-stream', limit: '200kb' }), (req, res) => {
+    const b = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0), p = db.profiles[req.u.id] || (db.profiles[req.u.id] = {});
+    if (!b.length) delete p.cover;
+    else {
+      if (b.length > 150000 || b[0] !== 0xff || b[1] !== 0xd8 || b[2] !== 0xff) return fail(res, 400, 'Kapak fotoğrafı geçersiz ya da çok büyük.');
+      p.cover = b.toString('base64');
+    }
+    save(); res.json({ me: profile(req.u) });
+  });
+  r.get('/cover/:username', (req, res) => {
+    const u = byName(req.params.username), c = u && (db.profiles[u.id] || {}).cover;
+    if (!c) return res.status(404).end();
+    res.set({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=86400' }); res.send(Buffer.from(c, 'base64'));
   });
   r.get('/avatar/:username', (req, res) => {
     const u = byName(req.params.username), m = u && /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(u.avatar || '');
