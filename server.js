@@ -72,7 +72,7 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const USER_RE = /^[A-Za-z0-9_.]{3,20}$/;
 const sign = v => crypto.createHmac('sha256', SECRET).update(v).digest('base64url');
 const uname = u => u.username || u.name || 'Sürücü';   // eski hesaplar için
-const BIKE_TYPES = ['sport', 'naked', 'touring', 'cruiser', 'adventure', 'scooter', 'classic', 'enduro'];
+const BIKE_TYPES = ['supersport', 'sporttouring', 'naked', 'adventure', 'touring', 'cruiser', 'cafe', 'retro', 'motocross', 'scooter', 'sport', 'classic', 'enduro'];   // ilk 10 = My Moto tipleri; son 3 = eski kayıtlar
 // Telefon: Türkiye numaraları (0532…, 532…, +90 532…) +90xxxxxxxxxx biçimine; diğer ülkeler +kodlu 8-15 hane. Geçersizse null.
 function normPhone(raw) {
   let t = String(raw || '').trim().replace(/[\s().-]/g, '');

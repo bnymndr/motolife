@@ -54,6 +54,7 @@ const reg = async o => post('/api/register', { ...base0, ...o });
   r = await post('/api/account', { ...me, phone: '0533 111 22 33' }, ck); ok(r.s === 409, 'hesap: başkasının telefonu alınamaz');
   r = await post('/api/account', { ...me, phone: '' }, ck); ok(r.s === 400, 'hesap: telefon boşaltılamaz');
   r = await post('/api/account', { ...me, bikeYear: 2019, bikeType: 'sport', bikeCc: 600, emergencyName: 'Ece', emergencyPhone: '0536 111 22 33' }, ck); ok(r.s === 200 && r.j.user.bikeType === 'sport' && r.j.user.emergencyName === 'Ece', 'hesap: motosiklet ve acil kişi güncellenir');
+  { let bad = []; for (const t of ['supersport','sporttouring','naked','adventure','touring','cruiser','cafe','retro','motocross','scooter','sport','classic','enduro']) { const q = await post('/api/account', { ...me, bikeYear: 2019, bikeType: t, bikeCc: 600, emergencyName: 'Ece', emergencyPhone: '0536 111 22 33' }, ck); if (!(q.s === 200 && q.j.user.bikeType === t)) bad.push(t); } ok(bad.length === 0, 'hesap: 10 My Moto tipi + 3 eski tip kaydedilir' + (bad.length ? ' (reddedilen: ' + bad + ')' : '')); }
   r = await post('/api/login', { login: 'ali_k', password: 'sifre123' }); ok(r.s === 200, 'giriş: güvenlik sorusu olmadan girer');
   r = await post('/api/login', { login: '0532 123 45 67', password: 'sifre123' }); ok(r.s === 200, 'telefonla giriş yapılabilir');
   // sosyal giriş

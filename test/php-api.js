@@ -84,6 +84,7 @@ const T0 = Date.now() - 3600e3;
   r = await A0.post('/api/account', { ...meU, phone: '0533 111 22 33' }); ok(r.s === 409 && /telefon/i.test(r.j.error), 'hesap: başkasının telefonu alınamaz');
   r = await A0.post('/api/account', { ...meU, phone: '' }); ok(r.s === 400, 'hesap: telefon boşaltılamaz');
   r = await A0.post('/api/account', { ...meU, bikeModel: 'MT-09', bikeYear: 2023 }); ok(r.s === 200 && r.j.user.bikeModel === 'MT-09' && r.j.user.bikeYear === 2023, 'hesap: motosiklet bilgisi güncellenir');
+  { let bad = []; for (const t of ['supersport','sporttouring','naked','adventure','touring','cruiser','cafe','retro','motocross','scooter','sport','classic','enduro']) { const q = await A0.post('/api/account', { ...meU, bikeType: t }); if (!(q.s === 200 && q.j.user.bikeType === t)) bad.push(t); } ok(bad.length === 0, 'hesap: 10 My Moto tipi + 3 eski tip kaydedilir' + (bad.length ? ' (reddedilen: ' + bad + ')' : '')); }
   r = await A0.post('/api/account', { ...meU, email: 'yeni@gmail.com' }); ok(r.s === 401, 'hesap: e-posta değişimi mevcut şifre ister');
   r = await A0.post('/api/account', { ...meU, email: 'yeni@gmail.com', currentPassword: 'sifre123' }); ok(r.s === 200 && r.j.user.email === 'yeni@gmail.com', 'hesap: şifreyle e-posta değişir');
   const old = A0.ck;

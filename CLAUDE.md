@@ -340,3 +340,7 @@ Paralel: TURN ve bağlantı toparlanması, grup sürüşünden (7) önce.
 - Maskeler (scratchpad `mm/mk.py`): renkli fotoğraflar (motocross, naked, sporttouring, retro, supersport, touring) baskın boya tonuna göre OTOMATİK; gri/siyah/beyaz olanlar (adventure, cafe, cruiser, scooter) elle çizilen kaba çokgen + parlaklık ölçütü. Yeni fotoğraf eklenirse maske yeniden üretilmeli.
 - SINIR: otomatik maske kusursuz değil; renkli parçalar (jant şeridi, çatal, çerçeve) boyayla birlikte döner; siyah motorda (cruiser) yalnız depo/çamurluklar boyanır; Scooter/Cafe maskeleri kabadır, kenarlarda hafif taşma olabilir. Gerçek boya değil, renk tonu kaydırma.
 - Test: auth-ui 38 (6 düğme, mavi seçimi: arka plan pikseli değişmez/gövde maviye döner, saklama, Orijinal = dosya aynen geri), stats 53, weather-ui 16, splash 2. 390 px ekran görüntüleriyle 7 tip/renk kombinasyonu kontrol edildi. TEST EDİLMEDİ: gerçek telefon; 10×5 kombinasyonun hepsi tek tek incelenmedi.
+
+## Motosiklet tipi kaydı düzeltildi (son değişiklik)
+- Sorun: sunucudaki izin listesi `BIKE_TYPES` (`server.js`, `php/api/auth.php`) eski 8 tipte kalmıştı; yeni tiplerden supersport, sporttouring, cafe, retro, motocross kaydedilirken «Motosiklet tipi geçersiz.» dönüyordu. Düzeltme: liste 10 My Moto tipi + eski 3 tip (sport, classic, enduro) olarak güncellendi. Yeni tip eklenirse `public/bikes.js` TYPES ile BU İKİ liste birlikte güncellenmeli.
+- Test: auth 46 (13 tipin hepsi kaydedilir), php-api 245. Sunucu kodu değiştiği için canlıda yeniden yükleme/dağıtım gerekir.
