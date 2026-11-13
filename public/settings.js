@@ -159,7 +159,7 @@
           + fld('km', 'Km', `<input data-moto="km" class="field mt-1" type="number" inputmode="numeric" min="0" max="999999" placeholder="24500" value="${D.km == null ? '' : D.km}">`) + `</div>`
           + `<div class="grid grid-cols-2 gap-3">` + fld('cc', 'Motor Hacmi (cc)', `<input data-moto="cc" class="field mt-1" type="number" inputmode="numeric" min="20" max="3000" placeholder="689" value="${esc(m.bikeCc || '')}">`)
           + fld('inspection', 'Muayene Tarihi', `<input data-moto="inspection" class="field mt-1" type="date" value="${esc((D.dates && D.dates.inspection) || '')}">`) + `</div>`
-          + `</div>` + btn('motosave', 'Kaydet', 'btn-accent') + `<p class="px-1 text-xs leading-snug text-zinc-500">Motor sahibi, km ve muayene tarihi yalnızca bu cihazda saklanır. Motosiklet tipi ve rengi My Moto sayfasında, resmin sağındaki görünüm düğmesinden seçilir.</p>`
+          + `</div><div data-motobar style="display:none" class="grid grid-cols-2 gap-3">` + btn('motocancel', 'Değişiklikten Vazgeç') + btn('motosave', 'Kaydet', 'btn-accent') + `</div><p class="px-1 text-xs leading-snug text-zinc-500">Motor sahibi, km ve muayene tarihi yalnızca bu cihazda saklanır. Motosiklet tipi ve rengi My Moto sayfasında, resmin sağındaki görünüm düğmesinden seçilir.</p>`
           + `<h2 class="road pt-2 text-xl font-semibold">Bakım ile Yakıt ve Tüketim</h2><div data-slot="mymoto"></div></div>`; },
       calib: () => `<div class="space-y-3"><div class="rounded-2xl bg-white/[.055] p-4"><p class="font-medium">Sensör Kalibrasyonu</p><p class="mt-1 text-sm text-zinc-300">Durum: <span data-cal-state>${esc(calSub())}</span></p><p class="mt-1 text-xs text-zinc-400">Yatış, ivme ve ani fren/hızlanma için telefon motosiklete sabitlendikten sonra yapılır. Yatış açısı bir tahmindir.</p></div>`
         + `<ol class="space-y-1 rounded-2xl bg-white/[.055] p-4 text-sm text-zinc-300"><li>1. Telefonu motosiklete her zamanki gibi sıkıca sabitle.</li><li>2. Motosikleti dik ve düz zeminde hareketsiz tut (motor çalışabilir).</li><li>3. Aşağıdaki düğmeye bas; 5 sn hazırlık + 4 sn ölçüm sırasında dokunma.</li></ol>`
@@ -191,8 +191,11 @@
       window.scrollTo(0, 0);
       if (name === 'display' || name === 'data' || name === 'moto') after(name);
     }
+    function motoFields() { return [...el.querySelectorAll('[data-moto]')]; }
+    function motoDirty() { const bar = el.querySelector('[data-motobar]'); if (bar) bar.style.display = motoFields().some(i => i.value !== i.dataset.v0) ? '' : 'none'; }
+    function motoDirtyInit() { motoFields().forEach(i => { i.dataset.v0 = i.value; i.addEventListener('input', motoDirty); i.addEventListener('change', motoDirty); }); motoDirty(); }
     function after(name) {
-      if (name === 'moto') { const sl = el.querySelector('[data-slot="mymoto"]'); motoH = sl && root.MyMoto && root.MyMoto.mount ? root.MyMoto.mount(sl, { user: me().username }) : null; return; }
+      if (name === 'moto') { motoDirtyInit(); const sl = el.querySelector('[data-slot="mymoto"]'); motoH = sl && root.MyMoto && root.MyMoto.mount ? root.MyMoto.mount(sl, { user: me().username }) : null; return; }
       if (name === 'data') {
         const R = $('stRides');
         loadRides().then(RS => RS.counts(me().username).then(c => { R.textContent = `Bu cihazda ${c.total} tamamlanmış sürüş var. ${c.pending} tanesi sunucuya gönderilmeyi bekliyor${c.failed ? `, ${c.failed} tanesi sunucu tarafından reddedildi (cihazda duruyor)` : ''}.`; })).catch(() => { R.textContent = 'Sürüş kayıtları okunamadı.'; });
@@ -225,10 +228,10 @@
       if (a === 'logout') h.ask('Çıkış Yapılsın mı?', h.logout);
       else if (a === 'notifperm') { try { await Notification.requestPermission(); } catch {} show('notif'); }
       else if (a === 'resetcons') { LS.del('mm_cons_friends'); LS.del('mm_cons_all'); msg('Onaylar sıfırlandı. Bir sonraki paylaşımda yeniden sorulur.'); }
+      else if (a === 'motocancel') { el.querySelectorAll('[data-moto]').forEach(i => { i.value = i.dataset.v0 || ''; }); motoDirty(); msg(''); }
       else if (a === 'motosave') {
         const g = k => (el.querySelector('[data-moto=' + k + ']').value || '').trim(), nm = g('name').replace(/\s+/g, ' '), M = root.MyMoto, u = me().username;
-        if (!nm) return msg('Motor adını gir.', true);
-        const sp = nm.indexOf(' '), br = sp < 0 ? nm : nm.slice(0, sp), mo = sp < 0 ? nm : nm.slice(sp + 1);
+        const sp = nm.indexOf(' '), br = sp < 0 ? nm : nm.slice(0, sp), mo = !nm ? '' : sp < 0 ? nm : nm.slice(sp + 1);
         if (br.length > 40 || mo.length > 40) return msg('Motor adı çok uzun (marka ve model en çok 40 karakter).', true);
         const kmS = g('km').replace(',', '.'), km = kmS === '' ? null : Number(kmS), insp = g('inspection'), prev = M.read(u);
         if (km !== null && !(Number.isInteger(km) && km >= 0 && km <= 999999)) return msg('Kilometre geçersiz (0 ile 999999 arasında tam sayı).', true);
@@ -238,6 +241,7 @@
           b.disabled = true; await h.saveBike(br, mo, { year: g('year'), type: me().bikeType || '', cc: g('cc') });
           const ok = M.write(u, D => { D.owner = g('owner'); if (km !== null) D.km = km; D.dates.inspection = insp; });
           if (motoH && motoH.refresh) motoH.refresh(); if (h.motoRefresh) h.motoRefresh();
+          motoFields().forEach(i => { i.dataset.v0 = i.value; }); motoDirty();
           msg(ok ? 'Kaydedildi.' : 'Motosiklet bilgileri kaydedildi; sahip, km ve muayene tarihi bu tarayıcıda saklanamadı.', !ok);
         } catch (err) { msg(err.message || 'Kaydedilemedi.', true); } finally { b.disabled = false; }
       }

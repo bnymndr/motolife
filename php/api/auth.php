@@ -34,8 +34,6 @@ function read_profile(array $b, bool $needPhone = false): array {
     if ($f['firstName'] === '') return ['error' => 'İsmini gir.'];
     if ($f['lastName'] === '') return ['error' => 'Soyismini gir.'];
     if (!in_array($f['gender'], GENDERS, true)) return ['error' => 'Cinsiyet seç.'];
-    if ($f['bikeBrand'] === '') return ['error' => 'Motosiklet markasını gir.'];
-    if ($f['bikeModel'] === '') return ['error' => 'Motosiklet modelini gir.'];
     if (!preg_match('/^[^@\s]+@[^@\s]+\.[^@\s]+$/', $f['email'])) return ['error' => 'Geçerli bir e-posta gir.'];
     $rawPh = clean($s('phone'), 30);
     if ($rawPh !== '') { $f['phone'] = norm_phone($rawPh); if (!$f['phone']) return ['error' => 'Geçerli bir telefon numarası gir (ör. 0532 123 45 67).']; }
@@ -120,8 +118,7 @@ function h_me(): never { $u = me(); $u ? out(['user' => pub_user($u)]) : fail(40
 // Güvenlik sorusu (insan doğrulaması): imzalı, 5 dk geçerli, tek kullanımlık; harici servis yok.
 function cap_mac(string $nonce, int $exp, int $ans): string { return b64u(hash_hmac('sha256', 'cap|' . $nonce . '|' . $exp . '|' . $ans, secret(), true)); }
 function h_captcha(): never {
-    $a = random_int(3, 9); $b = random_int(2, 9); $k = random_int(0, 2); $m = random_int(2, 5);
-    [$q, $ans] = $k === 0 ? ["$a + $b", $a + $b] : ($k === 1 ? [($a + $b) . " − $b", $a] : ["$a × $m", $a * $m]);
+    $a = random_int(3, 9); $b = random_int(2, 9); $q = "$a + $b"; $ans = $a + $b;
     $nonce = b64u(random_bytes(9)); $exp = now_ms() + 300000;
     header('Cache-Control: no-store');
     out(['token' => $nonce . '.' . $exp . '.' . cap_mac($nonce, $exp, $ans), 'q' => $q . ' kaç eder?']);
@@ -183,7 +180,7 @@ function h_account(): never {
 }
 function h_avatar(): never {
     $u = need_user(); $img = (string)(body(200000)['image'] ?? '');
-    if (strlen($img) > 90000 || !preg_match('#^data:image/jpeg;base64,[A-Za-z0-9+/=]+$#', $img)) fail(400, 'Fotoğraf geçersiz ya da çok büyük.');
+    if ($img !== '' && (strlen($img) > 90000 || !preg_match('#^data:image/jpeg;base64,[A-Za-z0-9+/=]+$#', $img))) fail(400, 'Fotoğraf geçersiz ya da çok büyük.');
     q('UPDATE ml_users SET avatar = ? WHERE id = ?', [$img, $u['id']]);
     out(['user' => pub_user(user_by_id($u['id']))]);
 }

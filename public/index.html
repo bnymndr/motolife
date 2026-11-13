@@ -156,12 +156,6 @@ try{var _fs=+localStorage.getItem("ml_fs");if(_fs>=88&&_fs<=125&&_fs!==100)docum
     <button id="tabRegister" type="button">Kayıt Ol</button>
   </div>
 
-  <div id="socialAuth" class="hidden flex flex-col gap-2">
-    <div id="gBtn" class="flex min-h-[44px] justify-center"></div>
-    <button id="aBtn" type="button" class="btn-sec flex items-center justify-center gap-2" style="min-height:44px"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 12.7c0-2.3 1.9-3.400 2-3.500-1.100-1.600-2.800-1.800-3.400-1.800-1.400-.1-2.800.9-3.500.9s-1.800-.8-3-.8c-1.500 0-3 .9-3.800 2.300-1.600 2.800-.4 7 1.200 9.300.8 1.100 1.700 2.400 2.900 2.300 1.200 0 1.600-.7 3-.7s1.800.7 3 .7 2-1.100 2.800-2.200c.9-1.300 1.200-2.500 1.200-2.600 0 0-2.400-.9-2.400-3.600zM14.200 5.800c.6-.8 1.100-1.800.9-2.800-.9 0-2 .6-2.600 1.400-.6.700-1.100 1.700-.9 2.700 1 .1 2-.5 2.600-1.300z"/></svg>Apple (iCloud) ile Devam Et</button>
-    <div class="flex items-center gap-3 text-xs text-zinc-500"><span class="h-px flex-1 bg-white/10"></span>Veya e-posta (Gmail, iCloud…) ile<span class="h-px flex-1 bg-white/10"></span></div>
-  </div>
-
   <form id="loginForm" class="flex flex-col gap-3">
     <input id="lLogin" class="field" autocomplete="username" autocapitalize="none" placeholder="Kullanıcı Adı, E-posta veya Telefon" required>
     <input id="lPw" class="field" type="password" autocomplete="current-password" placeholder="Şifre" required>
@@ -181,8 +175,8 @@ try{var _fs=+localStorage.getItem("ml_fs");if(_fs>=88&&_fs<=125&&_fs!==100)docum
       <option value="belirtmek-istemiyorum" selected>Belirtmek İstemiyorum</option>
     </select>
     <div class="grid grid-cols-2 gap-3">
-      <input id="rBrand" class="field" list="brands" maxlength="40" placeholder="Marka" required>
-      <input id="rModel" class="field" maxlength="40" placeholder="Model" required>
+      <input id="rBrand" class="field" list="brands" maxlength="40" placeholder="Marka (isteğe bağlı)">
+      <input id="rModel" class="field" maxlength="40" placeholder="Model (isteğe bağlı)">
     </div>
     <input id="rEmail" class="field" type="email" autocomplete="email" placeholder="E-posta (Gmail, iCloud, Outlook…)" required>
     <input id="rPhone" class="field" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" placeholder="Telefon (05xx xxx xx xx)" required>
@@ -205,8 +199,8 @@ try{var _fs=+localStorage.getItem("ml_fs");if(_fs>=88&&_fs<=125&&_fs!==100)docum
     </div>
     <select id="oGender" class="field" aria-label="Cinsiyet"><option value="erkek">Erkek</option><option value="kadin">Kadın</option><option value="belirtmek-istemiyorum" selected>Belirtmek İstemiyorum</option></select>
     <div class="grid grid-cols-2 gap-3">
-      <input id="oBrand" class="field" list="brands" maxlength="40" placeholder="Marka" required>
-      <input id="oModel" class="field" maxlength="40" placeholder="Model" required>
+      <input id="oBrand" class="field" list="brands" maxlength="40" placeholder="Marka (isteğe bağlı)">
+      <input id="oModel" class="field" maxlength="40" placeholder="Model (isteğe bağlı)">
     </div>
     <input id="oPhone" class="field" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" placeholder="Telefon (05xx xxx xx xx)" required>
     <fieldset class="flex flex-col gap-2 rounded-xl p-3" style="box-shadow:inset 0 0 0 1px rgba(255,255,255,.09)">
@@ -234,6 +228,13 @@ try{var _fs=+localStorage.getItem("ml_fs");if(_fs>=88&&_fs<=125&&_fs!==100)docum
     <button class="link self-center" type="button" data-back>← Girişe Dön</button>
   </form>
 
+  <div id="socialAuth" class="hidden flex flex-col gap-2">
+    <div class="flex items-center gap-3 text-xs text-zinc-500"><span class="h-px flex-1 bg-white/10"></span>Veya şununla devam et<span class="h-px flex-1 bg-white/10"></span></div>
+    <div id="gBtn" class="flex min-h-[44px] justify-center"></div>
+    <button id="aBtn" type="button" class="btn-sec flex items-center justify-center gap-2" style="min-height:44px"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 12.7c0-2.3 1.9-3.400 2-3.500-1.100-1.600-2.800-1.800-3.400-1.800-1.400-.1-2.800.9-3.500.9s-1.800-.8-3-.8c-1.500 0-3 .9-3.800 2.300-1.600 2.800-.4 7 1.200 9.300.8 1.100 1.700 2.400 2.900 2.300 1.200 0 1.600-.7 3-.7s1.800.7 3 .7 2-1.100 2.800-2.200c.9-1.300 1.200-2.500 1.200-2.600 0 0-2.400-.9-2.400-3.600zM14.200 5.800c.6-.8 1.100-1.800.9-2.800-.9 0-2 .6-2.600 1.400-.6.700-1.100 1.700-.9 2.700 1 .1 2-.5 2.600-1.300z"/></svg>Apple (iCloud) ile Devam Et</button>
+  </div>
+
+
   <p id="authMsg" class="min-h-5 text-sm"></p>
   <datalist id="brands"><option value="Honda"><option value="Yamaha"><option value="Kawasaki"><option value="Suzuki"><option value="BMW"><option value="Ducati"><option value="KTM"><option value="Triumph"><option value="Harley-Davidson"><option value="Royal Enfield"><option value="Aprilia"><option value="Husqvarna"><option value="Moto Guzzi"><option value="Benelli"><option value="CFMOTO"><option value="Voge"><option value="Vespa"><option value="Piaggio"><option value="SYM"><option value="Kymco"><option value="Bajaj"><option value="TVS"><option value="Kuba"><option value="Mondial"><option value="RKS"><option value="Arora"><option value="Lifan"><option value="Mash"><option value="Hero"><option value="Diğer"></datalist>
 </main>
@@ -244,16 +245,18 @@ try{var _fs=+localStorage.getItem("ml_fs");if(_fs>=88&&_fs<=125&&_fs!==100)docum
   <!-- 0. Üst kuşak: ayarlar | tarih - saat | çıkış -->
 
   <!-- 1. Profil ve karşılama -->
-  <section class="card flex items-center gap-3">
-    <button id="avatarBtn" type="button" aria-label="Profil Fotoğrafını Değiştir" class="relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-full">
+  <section id="greetCard" class="card relative flex min-h-[112px] items-center gap-3" style="cursor:pointer">
+    <img id="coverImg" class="hidden absolute inset-0 h-full w-full object-cover" alt="" aria-hidden="true">
+    <div id="coverShade" class="hidden absolute inset-0" style="background:linear-gradient(90deg,rgb(3 20 32 / .88),rgb(3 20 32 / .55) 60%,rgb(3 20 32 / .25))"></div>
+    <button id="coverBtn" type="button" aria-label="Kapak Fotoğrafını Değiştir" class="absolute right-2 top-2 z-10 flex h-11 w-11 items-center justify-center rounded-full text-lg" style="background:rgb(3 20 32 / .6)">📷</button>
+    <button id="avatarBtn" type="button" aria-label="Profil Fotoğrafını Değiştir" class="relative z-10 h-[72px] w-[72px] shrink-0 overflow-hidden rounded-full" style="box-shadow:0 0 0 3px #EA8621">
       <img id="avatarImg" class="hidden h-full w-full object-cover" alt="Profil Fotoğrafı">
       <span id="avatarInit" class="flex h-full w-full items-center justify-center bg-amber-400 road text-3xl font-bold text-ink"></span>
     </button>
-    <input id="avatarFile" type="file" accept="image/*" class="hidden">
-    <div class="min-w-0 flex-1">
+    <div class="relative z-10 min-w-0 flex-1 pr-10">
       <p id="greetHello" class="road text-3xl font-bold leading-none"></p>
       <p id="greetName" class="mt-1 truncate text-base font-medium"></p>
-      <p id="greetMsg" class="mt-0.5 text-xs leading-snug text-zinc-400"></p>
+      <p id="greetMsg" class="mt-0.5 text-xs leading-snug text-zinc-300"></p>
     </div>
   </section>
 
@@ -370,6 +373,10 @@ try{var _fs=+localStorage.getItem("ml_fs");if(_fs>=88&&_fs<=125&&_fs!==100)docum
   <!-- Eski ayar blokları (kimlikleri ve JS'leri korunur); settings.js ilgili alt sayfaya taşır -->
   <div id="setLegacy" class="hidden">
     <div id="lg-profile" class="card">
+    <div class="grid grid-cols-2 gap-3 pt-1">
+      <button id="sAvBtn" type="button" class="btn-sec flex min-h-[56px] items-center justify-center gap-2"><span id="sAvThumb" class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-amber-400 text-sm font-bold text-ink"></span>Profil Fotoğrafı</button>
+      <button id="sCvBtn" type="button" class="btn-sec flex min-h-[56px] items-center justify-center gap-2"><span aria-hidden="true">🖼️</span>Kapak Fotoğrafı</button>
+    </div>
     <div class="space-y-3 pt-3">
       <label class="block text-xs text-zinc-400">Kullanıcı Adı<input id="sUser" class="field mt-1" maxlength="20" autocapitalize="none"></label>
       <div class="grid grid-cols-2 gap-3">
@@ -456,6 +463,7 @@ try{var _fs=+localStorage.getItem("ml_fs");if(_fs>=88&&_fs<=125&&_fs!==100)docum
 <script src="/mymoto.js"></script>
 <script src="/bikes.js"></script>
 <script src="/bike-color.js"></script>
+<script src="/photo.js"></script>
 <script src="/settings.js"></script>
 <script>
 const $ = id => document.getElementById(id);
@@ -959,6 +967,8 @@ function renderProfile() {
   $('greetHello').textContent = g[0];
   $('greetName').textContent = me.firstName || me.username;
   $('greetMsg').textContent = g[1];
+  paintCover();
+  const th = $('sAvThumb'); th.innerHTML = ''; if (me.avatar) { const i = document.createElement('img'); i.src = me.avatar; i.alt = ''; i.className = 'h-full w-full object-cover'; th.appendChild(i); } else th.textContent = [me.firstName || me.username, me.lastName].filter(Boolean).map(x => x[0]).join('').toLocaleUpperCase('tr');
   const img = $('avatarImg'), ini = $('avatarInit');
   if (me.avatar) { img.src = me.avatar; img.classList.remove('hidden'); ini.classList.add('hidden'); }
   else {
@@ -966,19 +976,31 @@ function renderProfile() {
     ini.textContent = [me.firstName || me.username, me.lastName].filter(Boolean).map(x => x[0]).join('').toLocaleUpperCase('tr');
   }
 }
-$('avatarBtn').onclick = () => $('avatarFile').click();
-$('avatarFile').onchange = async e => {
-  const f = e.target.files[0];
-  e.target.value = '';
-  if (!f) return;
-  try {
-    const bmp = await createImageBitmap(f), s = Math.min(bmp.width, bmp.height), c = document.createElement('canvas');
-    c.width = c.height = 192;
-    c.getContext('2d').drawImage(bmp, (bmp.width - s) / 2, (bmp.height - s) / 2, s, s, 0, 0, 192, 192);
-    me = (await api('avatar', { image: c.toDataURL('image/jpeg', 0.82) })).user; remember(me);
-    renderProfile();
-  } catch (er) { $('greetMsg').textContent = er.message || 'Fotoğraf yüklenemedi.'; }
+const coverKey = () => 'ml_cover:' + (me && me.username);
+const coverGet = () => { try { return localStorage.getItem(coverKey()) || ''; } catch { return ''; } };
+function paintCover() {
+  const c = coverGet(), im = $('coverImg');
+  if (c) im.src = c;
+  im.classList.toggle('hidden', !c); $('coverShade').classList.toggle('hidden', !c);
+}
+const photoCfg = {
+  avatar: {
+    current: () => (me && me.avatar) || '',
+    save: async d => { me = (await api('avatar', { image: d })).user; remember(me); renderProfile(); },
+    remove: async () => { me = (await api('avatar', { image: '' })).user; remember(me); renderProfile(); }
+  },
+  cover: {
+    current: coverGet,
+    save: async d => { try { localStorage.setItem(coverKey(), d); } catch { throw new Error('Kapak fotoğrafı bu cihazda saklanamadı.'); } paintCover(); },
+    remove: async () => { try { localStorage.removeItem(coverKey()); } catch {} paintCover(); }
+  }
 };
+window.openPhotoMenu = k => window.Photo && window.Photo.menu(k, photoCfg[k]);
+$('avatarBtn').onclick = e => { e.stopPropagation(); openPhotoMenu('avatar'); };
+$('coverBtn').onclick = e => { e.stopPropagation(); openPhotoMenu('cover'); };
+$('greetCard').onclick = () => openPhotoMenu('cover');
+$('sAvBtn').onclick = () => openPhotoMenu('avatar');
+$('sCvBtn').onclick = () => openPhotoMenu('cover');
 
 // --- Hava durumu: sunucu vekili /api/weather (Open-Meteo → MET Norway yedeği, 5 dk önbellek) ---
 const WX = {
