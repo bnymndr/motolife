@@ -264,6 +264,7 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
         endedBy: by ? uname(by) : null, reason: why || null, recFull: !!(r && r.full), route: g.route ? { len: g.route.len, v: g.route.v } : null,
         members: r ? [...r.members].map(([u, m]) => ({ username: u, fixes: m.n, firstAt: m.first, lastAt: m.last })) : [] }));
     } catch (e) { console.error('Sürüş özeti yazılamadı:', e.message); }
+    if (R.music) io.to('rg:' + g.id).emit('grp:music', { gid: g.id, music: null });
     g.ride = null;
     if (L) emitState(g, true);                                              // izleyiciler boş durumu görür
     recs.delete(g.id); liveG.delete(g.id);
@@ -508,6 +509,50 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
     fs.createReadStream(file).on('error', () => res.end()).pipe(res);
   });
 
+  const YT_ID = /^[A-Za-z0-9_-]{11}$/, YT_LIST = /^[A-Za-z0-9_-]{10,64}$/;
+  const musicView = m => ({ video: m.video, list: m.list, playing: m.playing, seq: m.seq, by: m.by });
+  // ---------- Etkinlikler (grup içi plan: başlangıç, mola/uğrak noktaları, varış) ----------
+  const MAX_EVENTS = 20, MAX_STOPS = 8;
+  const cleanPt = (p, withKind) => {
+    if (!p || typeof p !== 'object') return null;
+    const la = num(p.lat), lo = num(p.lon), name = txt(p.name, 60);
+    if (la == null || lo == null || Math.abs(la) > 90 || Math.abs(lo) > 180 || !name) return null;
+    const o = { name, lat: r5(la), lon: r5(lo) }; if (withKind) o.kind = p.kind === 'ugrak' ? 'ugrak' : 'mola'; return o;
+  };
+  function cleanEvent(b) {
+    b = b || {};
+    const title = txt(b.title, 60); if (title.length < 2) return { error: 'Etkinlik adı en az 2 karakter olmalı.' };
+    let at = null; if (b.at != null && b.at !== '') { at = num(b.at); const now = Date.now(); if (at == null || at < now - 86400000 || at > now + 3 * 365 * 86400000) return { error: 'Etkinlik tarihi geçersiz.' }; }
+    const start = cleanPt(b.start), dest = cleanPt(b.dest);
+    if (!start) return { error: 'Başlangıç yeri seçilmeli.' }; if (!dest) return { error: 'Varış noktası seçilmeli.' };
+    const raw = Array.isArray(b.stops) ? b.stops : []; if (raw.length > MAX_STOPS) return { error: 'En fazla ' + MAX_STOPS + ' uğrak/mola noktası eklenebilir.' };
+    const stops = []; for (const x of raw) { const c = cleanPt(x, true); if (!c) return { error: 'Uğrak/mola noktalarından birinde ad ya da konum eksik.' }; stops.push(c); }
+    return { ev: { title, at, start, dest, stops, note: txt(b.note, 200) } };
+  }
+  const evView = (g, e) => ({ id: e.id, title: e.title, at: e.at, start: e.start, dest: e.dest, stops: e.stops, note: e.note || '', by: nameOf(e.by), createdAt: e.createdAt });
+  const evList = g => [...(g.events || [])].sort((a, b) => (a.at == null) - (b.at == null) || (a.at || 0) - (b.at || 0) || a.createdAt - b.createdAt).map(e => evView(g, e));
+  app.get('/api/rgroups/:id/events', (req, res) => { const c = ctxOf(req, res); if (c) res.json({ events: evList(c.g), canEdit: isStaff(c.g, c.u.id) }); });
+  app.post('/api/rgroups/:id/events', (req, res) => {
+    const c = ctxOf(req, res, 'staff'); if (!c) return;
+    if (limited('rge:' + c.u.id, 20, 600000)) return fail(res, 429, 'Çok sık etkinlik değiştirildi, biraz bekle.');
+    const r = cleanEvent(req.body); if (r.error) return fail(res, 400, r.error);
+    c.g.events = c.g.events || []; if (c.g.events.length >= MAX_EVENTS) return fail(res, 409, 'En fazla ' + MAX_EVENTS + ' etkinlik olabilir; eskilerini sil.');
+    const e = { id: rid(), ...r.ev, by: c.u.id, createdAt: Date.now() }; c.g.events.push(e); save(); notify(c.g, 'events');
+    res.json({ event: evView(c.g, e), events: evList(c.g) });
+  });
+  app.put('/api/rgroups/:id/events/:eid', (req, res) => {
+    const c = ctxOf(req, res, 'staff'); if (!c) return;
+    const e = (c.g.events || []).find(x => x.id === req.params.eid); if (!e) return fail(res, 404, 'Etkinlik bulunamadı.');
+    const r = cleanEvent(req.body); if (r.error) return fail(res, 400, r.error);
+    Object.assign(e, r.ev); save(); notify(c.g, 'events'); res.json({ event: evView(c.g, e), events: evList(c.g) });
+  });
+  app.delete('/api/rgroups/:id/events/:eid', (req, res) => {
+    const c = ctxOf(req, res, 'staff'); if (!c) return;
+    const n = (c.g.events || []).length; c.g.events = (c.g.events || []).filter(x => x.id !== req.params.eid);
+    if (c.g.events.length === n) return fail(res, 404, 'Etkinlik bulunamadı.');
+    save(); notify(c.g, 'events'); res.json({ ok: true, events: evList(c.g) });
+  });
+
   // ---------- Soket ----------
   io.on('connection', socket => {
     const u = socket.data.user; if (!u) return;
@@ -522,7 +567,31 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
       if (tooFast('watch', 800)) return cb({ error: 'Çok sık deneme.' });
       socket.join('rg:' + g.id);
       socket.emit('grp:state', payload(g, computeState(g)));
+      socket.emit('grp:music', { gid: g.id, music: g.ride && g.ride.music ? musicView(g.ride.music) : null });
       cb({ ok: true, ride: !!g.ride });
+    });
+    // Müzik paylaşımı (yalnız lider, yalnız aktif sürüşte): YouTube video/liste kimliği + oynuyor/duraklat + sonraki/önceki. Ses üyelerin kendi cihazında çalar.
+    socket.on('grp:music', (p = {}, cb) => {
+      cb = ok(cb);
+      const g = memberOf(p && p.gid); if (!g) return cb({ error: 'Grup bulunamadı.' });
+      if (!g.ride) return cb({ error: 'Aktif grup sürüşü yok.' });
+      if (g.leader !== u.id) return cb({ error: 'Müziği yalnız grup lideri paylaşır.' });
+      if (tooFast('music', 300)) return cb({ error: 'Çok sık deneme.' });
+      const old = g.ride.music;
+      if (p.src === null) { if (old) { g.ride.music = null; io.to('rg:' + g.id).emit('grp:music', { gid: g.id, music: null }); } return cb({ ok: true, shared: false }); }
+      if (p.src && typeof p.src === 'object') {
+        const video = YT_ID.test(String(p.src.video || '')) ? String(p.src.video) : null, list = YT_LIST.test(String(p.src.list || '')) ? String(p.src.list) : null;
+        if (!video && !list) return cb({ error: 'Geçersiz YouTube bağlantısı.' });
+        g.ride.music = { video, list, playing: p.playing !== false, seq: ((old && old.seq) || 0) + 1, by: nameOf(u.id), at: Date.now() };
+        io.to('rg:' + g.id).emit('grp:music', { gid: g.id, music: musicView(g.ride.music) });
+        return cb({ ok: true, shared: true });
+      }
+      if (!old) return cb({ error: 'Paylaşılan müzik yok.' });
+      const cmd = p.cmd === 'next' || p.cmd === 'prev' ? p.cmd : null;
+      if (typeof p.playing === 'boolean') old.playing = p.playing; else if (!cmd) return cb({ error: 'Geçersiz komut.' });
+      old.seq++; old.at = Date.now();
+      io.to('rg:' + g.id).emit('grp:music', { gid: g.id, music: musicView(old), cmd: cmd || undefined });
+      cb({ ok: true, shared: true });
     });
     socket.on('grp:unwatch', (p = {}) => { const g = memberOf(p && p.gid); if (g) socket.leave('rg:' + g.id); });
 
