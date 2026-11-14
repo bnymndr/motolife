@@ -222,6 +222,8 @@
         <div class="mm-mrow"><span>Harita Teması</span>
           <div class="mm-seg"><button type="button" data-th="dark">Koyu</button><button type="button" data-th="light">Açık</button></div></div>
         <label class="mm-mrow"><span>Sürüşte Ekranı Açık Tut</span><input type="checkbox" id="mm-wake"></label>
+        <div class="mm-mrow"><span>Sürüş Ekranı</span><div class="mm-seg mm-segs" id="mm-hudseg"><button type="button" data-hud="full">Tam</button><button type="button" data-hud="bar">Şerit</button><button type="button" data-hud="speed">Hız</button><button type="button" data-hud="card">Kart</button></div></div>
+        <div class="mm-mrow"><span>Grup Bilgi Boyutu</span><div class="mm-seg mm-segs" id="mm-gszseg"><button type="button" data-gsz="s">Küçük</button><button type="button" data-gsz="l">Büyük</button></div></div>
         <div id="mm-live" hidden>
           <p class="mm-sec">Diğer Sürücüler</p>
           <label class="mm-mrow"><span>Haritada Göster</span><input type="checkbox" id="mm-vshow"></label>
@@ -350,13 +352,13 @@
     function setTheme(t) {
       S.theme = t === 'light' ? 'light' : 'dark'; el.root.dataset.theme = S.theme; store.set('mm_theme', S.theme);
       if (S.tiles && S.cfg) {                                                // hazır koyu karo tanımlıysa onu kullan (CSS filtresi gerekmez)
-        const nd = S.theme === 'dark' && !!S.cfg.tileUrlDark, url = nd ? S.cfg.tileUrlDark : S.cfg.tileUrl;
+        const nd = !S.fbUrl && S.theme === 'dark' && !!S.cfg.tileUrlDark, url = S.fbUrl || (nd ? S.cfg.tileUrlDark : S.cfg.tileUrl);
         if (S.tiles._url !== url) S.tiles.setUrl(url);
         if (nd) el.root.dataset.nd = '1'; else delete el.root.dataset.nd;
       }
       el.menu.querySelectorAll('[data-th]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.th === S.theme)));
     }
-    function measureHead() { const h = el.head.getBoundingClientRect(), r = el.root.getBoundingClientRect(); if (r.height) el.root.style.setProperty('--head', Math.round(h.bottom - r.top) + 'px'); }
+    function measureHead() { const nb = el.navbar.parentNode !== el.head && !el.navbar.hidden ? Math.round(el.navbar.getBoundingClientRect().height) : 0; el.root.style.setProperty('--navh', nb + 'px'); const h = el.head.getBoundingClientRect(), r = el.root.getBoundingClientRect(); if (r.height) el.root.style.setProperty('--head', Math.round(h.bottom - r.top) + 'px'); }
 
     /* ---------- Harita ---------- */
     function initMap(cfg) {
@@ -364,6 +366,12 @@
       const L = window.L;
       S.map = L.map(el.map, { zoomControl: false, attributionControl: false, worldCopyJump: true, maxZoom: cfg.tileMax || 19, preferCanvas: true, zoomSnap: 0.5, zoomDelta: 1, wheelPxPerZoomLevel: 90, tapTolerance: 18, bounceAtZoomLimits: false }).setView([39, 35], 5);   // karşılama görünümü (Türkiye); konum işareti değil
       S.tiles = L.tileLayer(cfg.tileUrl, { subdomains: cfg.tileSub || 'abc', maxZoom: cfg.tileMax || 19, maxNativeZoom: cfg.tileMax || 19, updateWhenIdle: true, updateWhenZooming: false, keepBuffer: 1, detectRetina: /@2x|\{r\}/.test(cfg.tileUrl) ? false : (window.devicePixelRatio || 1) > 1.5 && !!cfg.tileRetina }).addTo(S.map);
+      /* Karolar hiç yüklenmezse (engel, kota, ağ) ücretsiz yedek sağlayıcılara sırayla geç */
+      { const FB = [['https://tile.openstreetmap.org/{z}/{x}/{y}.png', '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'],
+          ['https://tile-a.openstreetmap.fr/hot/{z}/{x}/{y}.png', '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &middot; HOT']];
+        let good = 0, bad = 0, i = 0;
+        S.tiles.on('tileload', () => { good++; if (S.tileMsg) { S.tileMsg = 0; el.load.hidden = true; } });
+        S.tiles.on('tileerror', () => { if (good || ++bad < 4) return; if (i >= FB.length) { if (!S.tileMsg) { S.tileMsg = 1; el.load.hidden = false; el.load.textContent = 'Harita karoları yüklenemedi. Reklam engelleyici/VPN veya internet bağlantısını kontrol et.'; } return; } bad = 0; S.fbUrl = FB[i][0]; el.attr.innerHTML = FB[i][1]; i++; delete el.root.dataset.nd; S.tiles.setUrl(S.fbUrl); }); }
       el.attr.innerHTML = (cfg.tileAttr || '') + (cfg.route && cfg.route.attr ? ' · ' + cfg.route.attr : '');
       S.riders = L.layerGroup().addTo(S.map);
       S.map.on('dragstart', () => { S.follow = false; paintLocate(); paintRot(); });
@@ -371,7 +379,7 @@
       el.load.hidden = true;
       S.ready = true;
       paintLocate(); setTheme(S.theme);
-      if ('ResizeObserver' in window) new ResizeObserver(() => { if (S.boxOn) rotBox(true); else S.map && S.map.invalidateSize(); measureHead(); }).observe(el.root);
+      if ('ResizeObserver' in window) new ResizeObserver(() => { if (S.boxOn) rotBox(true); else S.map && S.map.invalidateSize(); measureHead(); }).observe(el.root); if ('ResizeObserver' in window) new ResizeObserver(() => measureHead()).observe(el.navbar);
       measureHead();
       if (S.active) startWatch();
     }
@@ -860,7 +868,8 @@
     // Navigasyonda alt panel küçülür: yalnız sol altta anlık hız (dokununca tam sürüş paneli açılır; sürüş kaydı varsa kırmızı nokta)
     function paintPill() { if (!S.nav) return; const ok = S.raw && S.raw.speed != null && Date.now() - S.fixAt < 6000; $('mm-spill-v').textContent = ok ? String(Math.round(kmh(S.raw.speed))) : '—'; }
     function paintNavMode() {
-      const on = !!S.nav; el.root.classList.toggle('navmode', on && !S.spOpen);
+      const on = !!S.nav; el.root.classList.toggle('navmode', on && !S.spOpen); el.root.classList.toggle('navon', on);
+      { const host = on ? el.root.querySelector('.mm-bottom') : el.head; if (el.navbar.parentNode !== host) { if (on) host.appendChild(el.navbar); else host.insertBefore(el.navbar, host.firstChild); } }   // yol tarifi navigasyonda ALT şeritte; üst kısım tamamen harita
       $('mm-spill').hidden = !(on && !S.spOpen); $('mm-pcol').hidden = !(on && S.spOpen);
       $('mm-spill').classList.toggle('rec', !!(S.rec && (S.rec.status === 'active' || S.rec.status === 'paused'))); paintPill(); measureHead();
     }
@@ -1205,6 +1214,11 @@
     $('mm-mclose').addEventListener('click', () => muOpen(false));
 
     el.mbtn.addEventListener('click', e => { e.stopPropagation(); const o = el.menu.hidden; el.menu.hidden = !o; el.mbtn.setAttribute('aria-expanded', String(o)); });
+    /* Sürüş ekranı yerleşimi (tam / ince şerit / yalnız hız / köşe kartı) ve grup bilgi boyutu: kullanıcı seçer, tarayıcıda saklanır */
+    function setHud(v) { v = ['full', 'bar', 'speed', 'card'].includes(v) ? v : 'full'; el.root.dataset.hud = v; store.set('mm_hud', v); el.menu.querySelectorAll('[data-hud]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.hud === v))); }
+    function setGsz(v) { v = v === 'l' ? 'l' : 's'; el.root.dataset.gsz = v; store.set('mm_gsz', v); el.menu.querySelectorAll('[data-gsz]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.gsz === v))); }
+    el.menu.addEventListener('click', e => { const h = e.target.closest('[data-hud]'), g = e.target.closest('[data-gsz]'); if (h) setHud(h.dataset.hud); if (g) setGsz(g.dataset.gsz); });
+    setHud(store.get('mm_hud', 'full')); setGsz(store.get('mm_gsz', 's'));
     el.menu.addEventListener('click', e => { e.stopPropagation(); const t = e.target.closest('[data-th]'); if (t) setTheme(t.dataset.th); const a = e.target.closest('[data-aud]'); if (a && sock) onAudience(a.dataset.aud); });
     $('mm-wake').checked = S.keepAwake;
     $('mm-wake').addEventListener('change', e => { S.keepAwake = e.target.checked; store.set('mm_wake', S.keepAwake ? '1' : '0'); if (rideActive()) (S.keepAwake ? acquireWake() : releaseWake()); });

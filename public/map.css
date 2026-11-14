@@ -341,3 +341,46 @@
 .mm-ctr[hidden]{display:none}
 .mm.rotated .mm-rider{transform:var(--unrot,none)}
 .mm-me.up i{top:-12px;margin-left:-9px;border-width:9px;border-bottom-width:15px;border-top:0}
+
+
+/* ---- Sürüş ekranı yerleşimleri (Ayarlar › Sürüş Ekranı) ---- */
+.mm[data-hud=bar] .mm-ride{grid-template-columns:auto 1fr auto;gap:6px}
+.mm[data-hud=bar] .mm-spd{min-width:56px}.mm[data-hud=bar] .mm-spd b{font-size:34px}.mm[data-hud=bar] .mm-spd small{font-size:10px}
+.mm[data-hud=bar] .mm-stats{grid-template-columns:1fr 1fr}.mm[data-hud=bar] .mm-stats>div:nth-child(2),.mm[data-hud=bar] .mm-stats>div:nth-child(4),.mm[data-hud=bar] .mm-lean,.mm[data-hud=bar] .mm-tel{display:none}
+.mm[data-hud=bar] .mm-stats b{font-size:16px}
+.mm[data-hud=bar] .mm-rbtns{flex-direction:row}.mm[data-hud=bar] .mm-rb{width:64px;height:44px;font-size:14px}
+.mm[data-hud=bar] .mm-panel,.mm[data-hud=speed] .mm-panel{padding:6px 8px}
+.mm[data-hud=speed] .mm-stats,.mm[data-hud=speed] .mm-lean,.mm[data-hud=speed] .mm-tel{display:none}
+.mm[data-hud=speed] .mm-ride{grid-template-columns:1fr auto}
+.mm[data-hud=speed] .mm-spd{flex-direction:row;align-items:baseline;gap:8px;justify-content:flex-start}.mm[data-hud=speed] .mm-spd b{font-size:48px}
+.mm[data-hud=speed] .mm-rbtns{flex-direction:row}.mm[data-hud=speed] .mm-rb{width:64px;height:44px;font-size:14px}
+.mm[data-hud=card] .mm-bottom{align-items:flex-start}.mm[data-hud=card] .mm-panel{width:max-content;max-width:62%;padding:6px 10px;border-radius:16px}
+.mm[data-hud=card] .mm-ride{grid-template-columns:auto auto;gap:4px 10px}
+.mm[data-hud=card] .mm-spd{min-width:0}.mm[data-hud=card] .mm-spd b{font-size:36px}
+.mm[data-hud=card] .mm-stats{grid-template-columns:1fr}.mm[data-hud=card] .mm-stats>div:nth-child(2),.mm[data-hud=card] .mm-stats>div:nth-child(4),.mm[data-hud=card] .mm-lean,.mm[data-hud=card] .mm-tel{display:none}
+.mm[data-hud=card] .mm-rbtns{grid-column:1/-1;flex-direction:row}.mm[data-hud=card] .mm-rb{flex:1;width:auto;height:40px;font-size:13px}
+.mm[data-hud=card] .mm-start{height:52px;font-size:18px}
+.mm[data-hud=card] .mm-start,.mm[data-hud=card] .mm-pcol{width:auto;padding:0 18px}
+
+/* ---- Grup bilgi boyutu ---- */
+.mm[data-gsz=s] .mm-chip{font-size:11px;padding:5px 8px}
+.mm[data-gsz=s] .mm-rider{width:26px;height:26px;border-width:2px;font-size:12px}
+.mm[data-gsz=l] .mm-chip{font-size:16px;padding:10px 14px}
+.mm[data-gsz=l] .mm-rider{width:44px;height:44px;font-size:20px}
+.mm[data-gsz=l] .mm-gname,.mm[data-gsz=l] .mm-gspd{font-size:18px}.mm[data-gsz=l] .mm-gspd{font-size:32px}
+.mm[data-gsz=s] .mm-gsheet{max-height:48%}
+
+/* ---- Navigasyon: yol tarifi ALTTA ince şerit (en çok 2-3 satır); üst kısım tamamen harita ---- */
+.mm-bottom>.mm-navbar{flex-wrap:wrap;gap:6px 8px;padding:6px 8px;border-radius:14px}
+.mm-bottom>.mm-navbar .mm-turn{flex:1 1 100%;min-height:44px;padding:4px 8px;gap:8px;border-radius:10px}
+.mm-bottom>.mm-navbar .mm-ti{width:32px;height:32px}.mm-bottom>.mm-navbar .mm-ti svg{width:30px;height:30px}
+.mm-bottom>.mm-navbar .mm-tt{flex-direction:row;align-items:baseline;gap:8px;flex-wrap:wrap}
+.mm-bottom>.mm-navbar .mm-tt b{font-size:22px}
+.mm-bottom>.mm-navbar .mm-tt span{font-size:14px;-webkit-line-clamp:2}
+.mm-bottom>.mm-navbar .mm-navinfo{flex:1 1 0;display:flex;align-items:baseline;gap:8px;min-width:0}
+.mm-bottom>.mm-navbar .mm-navto,.mm-bottom>.mm-navbar .mm-navnote{display:none}
+.mm-bottom>.mm-navbar .mm-navnums b{font-size:20px}.mm-bottom>.mm-navbar .mm-navnums span{font-size:13px}
+.mm-bottom>.mm-navbar .mm-nbtns{flex-direction:row;gap:6px}.mm-bottom>.mm-navbar .mm-nb{width:auto;min-width:72px;padding:0 10px;height:40px;font-size:13px}
+.mm-bottom>.mm-navbar .mm-nb.stop{font-size:14px}
+.mm.navon .mm-spill{bottom:calc(var(--pad) + var(--navh,0px) + 8px + env(safe-area-inset-bottom,0px))}
+.mm.navon .mm-ctr{bottom:calc(var(--pad) + var(--navh,0px) + 14px + env(safe-area-inset-bottom,0px))}
