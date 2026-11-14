@@ -34,6 +34,7 @@ const valBody = { trip: { summary: { length: 1.5, time: 200, has_toll: false, ha
   let h = load({}, async (u, o) => { seen = { u, o }; return J(valBody); });
   let c = await call(h, '/api/maps/config', {});
   ok(c.body.routing === true && c.body.route.provider === 'valhalla' && c.body.route.profile === 'motorcycle', 'anahtarsız yapılandırma: valhalla açık');
+  ok(/cartocdn.*voyager.*\{r\}/.test(c.body.tileUrl) && /dark_all/.test(c.body.tileUrlDark) && c.body.tileSub === 'abcd' && c.body.tileRetina === true && /CARTO/.test(c.body.tileAttr) && /OpenStreetMap/.test(c.body.tileAttr), 'varsayılan karo: CARTO Voyager + koyu Dark Matter, alt alan abcd, retina, atıf');
   let r = await call(h, '/api/route', { ...Q, avoid: 'highways,tolls' });
   ok(r.code === 200 && r.body.provider === 'valhalla' && r.body.steps.length === 3 && r.body.steps[1].mod === 'right' && r.body.steps[0].mod === 'depart' && r.body.steps[2].mod === 'arrive', 'valhalla adımları');
   ok(Math.abs(r.body.distance - 1500) < 1 && r.body.duration === 200 && r.body.coords.length >= 2, 'valhalla mesafe/süre');

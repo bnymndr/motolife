@@ -49,7 +49,7 @@ const FAKE = () => {
   const layer = () => ({ addTo(m) { return this; }, remove() { this.gone = true; }, addLayer() {}, clearLayers() {} });
   window.L = {
     map(el) { const m = { _z: 5, _c: [39, 35], setView(c, z) { m._c = c; if (z) m._z = z; C.push(['setView', c, z]); return m; }, panTo(c) { m._c = c; C.push(['panTo', c]); }, fitBounds(b, o) { C.push(['fit', b, o]); }, getZoom: () => m._z, getSize: () => ({ x: 390, y: 844 }),
-      latLngToContainerPoint: ll => ({ x: 195 + (ll[1] - m._c[1]) * 1e5, y: 422 - (ll[0] - m._c[0]) * 1e5 }), on() {}, invalidateSize() {}, zoomIn() {}, zoomOut() {} }; window.__map = m; return m; },
+      latLngToContainerPoint: ll => ({ x: 195 + (ll[1] - m._c[1]) * 1e5, y: 422 - (ll[0] - m._c[0]) * 1e5 }), _h: {}, on(e, fn) { (m._h[e] = m._h[e] || []).push(fn); }, invalidateSize() {}, zoomIn() {}, zoomOut() {} }; window.__map = m; window.__fire = e => (m._h[e] || []).forEach(fn => fn({})); return m; },
     tileLayer(u) { return { _url: u, options: {}, addTo() { return this; }, setUrl(x) { this._url = x; } }; }, divIcon: o => o,
     marker(ll, o) { const e = document.createElement('div'); e.innerHTML = o.icon && o.icon.html || ''; document.body.appendChild(e); const k = { ll, el: e, addTo() { return this; }, setLatLng(x) { k.ll = x; C.push(['marker', x]); }, getElement: () => k.el, remove() { e.remove(); }, bindTooltip() {} }; window.__me = window.__me || k; return k; },
     circle(ll, o) { const k = { ll, r: o.radius, addTo() { return this; }, setLatLng(x) { k.ll = x; }, setRadius(r) { k.r = r; }, remove() { k.gone = true; } }; window.__circle = k; return k; },
@@ -117,6 +117,9 @@ srv.listen(0, async () => {
   ok(fit && fit[2].paddingTopLeft[1] >= rtb && fit[2].paddingTopLeft[1] <= rtb + 40, 'rota, rota sayfasının kapatmadığı alt alana sığdırılır (üst boşluk ' + (fit && fit[2].paddingTopLeft[1]) + ' px, sayfa alt kenarı ' + rtb + ')');
   await pg.click('#mm-stoggle'); ok(await pg.isHidden('#mm-steps') && await pg.getAttribute('#mm-stoggle', 'aria-expanded') === 'false', 'yol tarifi katlanır'); await pg.click('#mm-stoggle'); ok(await pg.isVisible('#mm-steps'), 'yol tarifi tekrar açılır');
   await pg.screenshot({ path: '/tmp/map-route.png' });
+  { await pg.focus('#mm-q'); const fc = await pg.evaluate(() => { const i = document.getElementById('mm-q'), w = i.closest('.mm-search'); return { sh: getComputedStyle(w).boxShadow, ol: getComputedStyle(i).outlineStyle, ow: getComputedStyle(i).outlineWidth, caret: getComputedStyle(i).caretColor }; });
+    ok(!/234, ?134, ?33|rgb\(234/.test(fc.sh) && (fc.ol === 'none' || fc.ow === '0px'), 'arama kutusunda odakta sarı/turuncu çerçeve YOK (' + fc.sh.slice(0, 50) + ')');
+    ok(fc.caret && fc.caret !== 'auto' && fc.caret !== 'transparent', 'yazım imleci görünür renkte (' + fc.caret + ')'); await pg.screenshot({ path: '/tmp/map-search-focus.png' }); }
   ok(await pg.evaluate(() => { const r = document.getElementById('mm-rt').getBoundingClientRect(); return !document.getElementById('mm-rt').hidden && r.bottom < innerHeight * 0.6 && !!document.querySelector('#mm-rt .mm-step'); }), 'rota sayfası: yol tarifi adımları üstte, harita altta');
 
   // --- Navigasyon
@@ -127,6 +130,23 @@ srv.listen(0, async () => {
   ok(await pg.isVisible('#mm-spill') && await pg.isHidden('#mm-panel'), 'navigasyonda alt sürüş paneli gizlenir, sol altta küçük hız göstergesi görünür');
   await pg.evaluate(() => window.__fix(41.0, 29.0003, 6, 14, 90)); await pg.waitForTimeout(100);
   ok(await pg.textContent('#mm-spill-v') === '50', 'hız göstergesi anlık hızı verir (14 m/sn = 50 km/sa)');
+  // --- Yön-yukarı harita + Ortala
+  { const rt = await pg.evaluate(() => { const m = document.getElementById('mm-map'); return { t: m.style.transform, w: parseInt(m.style.width), cls: document.getElementById('mm').classList.contains('rotated'), ctr: document.getElementById('mm-ctr').hidden, up: !!document.querySelector('.mm-me.up') }; });
+    ok(/rotate\((-90|270)deg\)/.test(rt.t) || /rotate\(-90/.test(rt.t), 'navigasyonda harita yöne göre döner (doğuya gidiyor → rotate(-90deg): ' + rt.t + ')');
+    ok(rt.w > 844 && rt.cls, 'dönen harita kabı ekran köşegeninden büyük (köşeler boş kalmaz): ' + rt.w + ' px');
+    ok(rt.ctr && rt.up, 'takip açıkken «Ortala» gizli, işaret ileri bakan büyük ok');
+    await pg.evaluate(() => window.__fire('dragstart'));
+    const dr = await pg.evaluate(() => ({ t: document.getElementById('mm-map').style.transform, ctr: !document.getElementById('mm-ctr').hidden }));
+    ok(dr.ctr && /rotate\(0deg\)/.test(dr.t), 'haritaya bakılınca takip bırakılır: düz görünüm + «Ortala» düğmesi görünür');
+    const cb = await pg.$eval('#mm-ctr', e => { const r = e.getBoundingClientRect(); return { h: r.height, b: r.bottom }; });
+    ok(cb.h >= 44 && cb.b <= 844, 'Ortala düğmesi ≥44 px, ekran içinde');
+    await pg.click('#mm-ctr'); await pg.waitForTimeout(100);
+    const rc = await pg.evaluate(() => ({ t: document.getElementById('mm-map').style.transform, ctr: document.getElementById('mm-ctr').hidden, c: window.__calls.filter(c => c[0] === 'setView').pop() }));
+    ok(rc.ctr && /rotate\((-90|270)/.test(rc.t) && rc.c, '«Ortala»: takip geri gelir, harita yeniden yöne döner, konuma gidilir');
+    await pg.evaluate(() => { const m = document.getElementById('mm-map'); m.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); });
+    ok(/rotate\(0deg\)/.test(await pg.$eval('#mm-map', e => e.style.transform)), 'dokunuş başlayınca geçici düz görünüm (sürükleme doğruluğu)');
+    await pg.evaluate(() => document.dispatchEvent(new PointerEvent('pointerup'))); await pg.waitForTimeout(150);
+    ok(/rotate\((-90|270)/.test(await pg.$eval('#mm-map', e => e.style.transform)), 'dokunuş bırakılınca takip sürüyorsa tekrar yöne döner'); }
   const sp = await pg.evaluate(() => { const r = document.getElementById('mm-spill').getBoundingClientRect(); return { l: r.left, b: r.bottom, h: r.height }; });
   ok(sp.l < 20 && sp.b > 800 && sp.h >= 44 && sp.h < 70, 'gösterge sol altta, ≥44 px dokunma alanı (' + Math.round(sp.l) + ',' + Math.round(sp.b) + ')');
   await pg.click('#mm-spill'); ok(await pg.isVisible('#mm-panel') && await pg.isVisible('#mm-pcol') && await pg.isHidden('#mm-spill'), 'göstergeye dokununca tam sürüş paneli açılır');

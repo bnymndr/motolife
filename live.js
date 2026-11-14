@@ -3,7 +3,7 @@
 // Konumlar yalnızca bellekte tutulur, diske yazılmaz. Paylaşım soketle ilişkilidir: bağlantı kopunca/sekme kapanınca konum silinir.
 // Olaylar: istemci → sunucu: loc:share, loc:update, loc:watch.  sunucu → istemci: loc:riders (yalnız izleyenlere, değişince).
 // server.js içinden: require('./live')({ io, uname, isFriend })
-module.exports = function mountLive({ io, uname, isFriend }) {
+module.exports = function mountLive({ io, uname, isFriend, isBlocked }) {
   const LIVE_MS = 90 * 1000;        // bundan eski konum canlı sayılmaz (istemci en geç 45 sn'de bir gönderir)
   const DROP_MS = 10 * 60 * 1000;   // bu kadar eski kayıt bellekten de silinir
   const MIN_GAP = 4000;             // aynı kullanıcıdan en sık konum güncellemesi
@@ -31,7 +31,7 @@ module.exports = function mountLive({ io, uname, isFriend }) {
     const w = sock.data.watch; if (!w) return { list: [], key: '' };
     const me = sock.data.user.id, now = Date.now(), rows = [];
     for (const [uid, e] of live) {
-      if (uid === me || e.lat == null || now - e.at > LIVE_MS) continue;
+      if (uid === me || e.lat == null || now - e.at > LIVE_MS || (isBlocked && isBlocked(me, uid))) continue;   // engelli kullanıcılar birbirini görmez
       const fr = isFriend(me, uid);
       if (e.aud === 'friends' && !fr) continue;                       // yalnız arkadaşlarına açmış
       if (w.fo && !fr) continue;                                      // izleyici yalnız arkadaşları istiyor

@@ -7,13 +7,9 @@ const root = path.join(__dirname, '..'), tmp = fs.mkdtempSync(path.join(os.tmpdi
 const dist = path.join(tmp, 'dist');
 execFileSync('node', ['build-php.js', dist], { cwd: root, stdio: 'ignore' });
 const RC = require('../public/ride-core.js'), TC = require('../public/telemetry-core.js');
-const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
-const jwk = { ...publicKey.export({ format: 'jwk' }), kid: 'k1', alg: 'RS256', use: 'sig' };
-const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
-const tok = (claims, key = privateKey) => { const h = b64({ alg: 'RS256', kid: 'k1' }), b = b64(claims), s = crypto.sign('RSA-SHA256', Buffer.from(h + '.' + b), key).toString('base64url'); return h + '.' + b + '.' + s; };
 const PORT = 8100 + Math.floor(Math.random() * 400), base = 'http://127.0.0.1:' + PORT;
 const srv = spawn('php', ['-S', '127.0.0.1:' + PORT, '-t', dist, path.join(root, 'php/dev-router.php')], {
-  env: { ...process.env, REG_LIMIT: '1000', PHP_CLI_SERVER_WORKERS: '4', DB_DRIVER: 'sqlite', DB_FILE: path.join(tmp, 't.sqlite'), SESSION_SECRET: 'x'.repeat(32), GOOGLE_CLIENT_ID: 'gid.apps', TEST_JWKS_GOOGLE: JSON.stringify({ keys: [jwk] }), DEBUG: '1' }, stdio: 'ignore' });
+  env: { ...process.env, REG_LIMIT: '1000', PHP_CLI_SERVER_WORKERS: '4', DB_DRIVER: 'sqlite', DB_FILE: path.join(tmp, 't.sqlite'), SESSION_SECRET: 'x'.repeat(32), DEBUG: '1' }, stdio: 'ignore' });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const capSolve = q => { const m = String(q).match(/(\d+)\s*([+−×])\s*(\d+)/); const a = +m[1], b = +m[3]; return m[2] === '+' ? a + b : m[2] === '−' ? a - b : a * b; };
@@ -39,7 +35,7 @@ class C {
   evs(n) { return this.ev.filter(e => e.ev === n); }
   clear() { this.ev = []; }
 }
-const base0 = { username: 'ali_k', firstName: 'Ali', lastName: 'Kaya', gender: 'erkek', bikeBrand: 'Yamaha', bikeModel: 'MT-07', email: 'ali@gmail.com', password: 'sifre123', phone: '0532 123 45 67' };
+const base0 = { username: 'ali_k', firstName: 'Ali', lastName: 'Kaya', gender: 'erkek', bikeBrand: 'Yamaha', bikeModel: 'MT-07', email: 'ali@gmail.com', password: 'Kx9.Mq2!Zw4', phone: '0532 123 45 67' };
 const reg = async (c, o) => c.post('/api/register', { ...base0, ...o });
 const mk = async (name, n) => { const c = new C(name); const r = await reg(c, { username: name, email: name + '@gmail.com', phone: '05350000' + String(100 + n), firstName: name }); if (r.s !== 200) throw new Error('kayıt: ' + JSON.stringify(r.j)); return c; };
 const T0 = Date.now() - 3600e3;
@@ -86,39 +82,34 @@ const T0 = Date.now() - 3600e3;
   r = await A0.post('/api/account', { ...meU, bikeModel: 'MT-09', bikeYear: 2023 }); ok(r.s === 200 && r.j.user.bikeModel === 'MT-09' && r.j.user.bikeYear === 2023, 'hesap: motosiklet bilgisi güncellenir');
   { let bad = []; for (const t of ['supersport','sporttouring','naked','adventure','touring','cruiser','cafe','retro','motocross','scooter','sport','classic','enduro']) { const q = await A0.post('/api/account', { ...meU, bikeType: t }); if (!(q.s === 200 && q.j.user.bikeType === t)) bad.push(t); } ok(bad.length === 0, 'hesap: 10 My Moto tipi + 3 eski tip kaydedilir' + (bad.length ? ' (reddedilen: ' + bad + ')' : '')); }
   r = await A0.post('/api/account', { ...meU, email: 'yeni@gmail.com' }); ok(r.s === 401, 'hesap: e-posta değişimi mevcut şifre ister');
-  r = await A0.post('/api/account', { ...meU, email: 'yeni@gmail.com', currentPassword: 'sifre123' }); ok(r.s === 200 && r.j.user.email === 'yeni@gmail.com', 'hesap: şifreyle e-posta değişir');
+  r = await A0.post('/api/account', { ...meU, email: 'yeni@gmail.com', currentPassword: 'Kx9.Mq2!Zw4' }); ok(r.s === 200 && r.j.user.email === 'yeni@gmail.com', 'hesap: şifreyle e-posta değişir');
   const old = A0.ck;
-  r = await A0.post('/api/account', { ...meU, email: 'yeni@gmail.com', currentPassword: 'sifre123', newPassword: 'yenisifre1' }); ok(r.s === 200 && A0.ck !== old, 'hesap: şifre değişince yeni çerez');
+  r = await A0.post('/api/account', { ...meU, email: 'yeni@gmail.com', currentPassword: 'Kx9.Mq2!Zw4', newPassword: 'Yn7,Tr5#Pv8' }); ok(r.s === 200 && A0.ck !== old, 'hesap: şifre değişince yeni çerez');
   const oc = new C(); oc.ck = old; r = await oc.get('/api/me'); ok(r.s === 401, 'şifre değişince eski oturum düşer');
   r = await A0.post('/api/avatar', { image: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==' }); ok(r.s === 200 && r.j.user.avatar.startsWith('data:image/jpeg'), 'avatar kaydedilir');
   r = await A0.post('/api/avatar', { image: 'data:text/html;base64,AAAA' }); ok(r.s === 400, 'avatar: yalnız jpeg');
   // giriş
   const L = async (login, password) => new C().post('/api/login', { login, password });
-  r = await new C().post('/api/login', { login: 'ali_k', password: 'yenisifre1' }); ok(r.s === 200, 'giriş: güvenlik sorusu olmadan da girer');
-  r = await L('ali_k', 'yenisifre1'); ok(r.s === 200, 'giriş: kullanıcı adıyla'); r = await L('YENI@gmail.com', 'yenisifre1'); ok(r.s === 200, 'giriş: e-postayla (büyük/küçük harf fark etmez)');
-  r = await L('0532 123 45 67', 'yenisifre1'); ok(r.s === 200, 'giriş: telefonla');
+  r = await new C().post('/api/login', { login: 'ali_k', password: 'Yn7,Tr5#Pv8' }); ok(r.s === 200, 'giriş: güvenlik sorusu olmadan da girer');
+  r = await L('ali_k', 'Yn7,Tr5#Pv8'); ok(r.s === 200, 'giriş: kullanıcı adıyla'); r = await L('YENI@gmail.com', 'Yn7,Tr5#Pv8'); ok(r.s === 200, 'giriş: e-postayla (büyük/küçük harf fark etmez)');
+  r = await L('0532 123 45 67', 'Yn7,Tr5#Pv8'); ok(r.s === 200, 'giriş: telefonla');
   // şifre sıfırlama (e-posta gönderilemez: token'ı veritabanından okuyoruz)
   const sq = (sql) => execFileSync('php', ['-r', `$d=new PDO('sqlite:${path.join(tmp, 't.sqlite')}');$s=$d->query(${JSON.stringify(sql)});echo json_encode($s?$s->fetchAll(PDO::FETCH_ASSOC):[]);`]).toString();
   r = await new C().post('/api/forgot', { email: 'kayitsiz@gmail.com' }); ok(r.s === 200 && r.j.ok, 'forgot: kayıtsız e-postada da aynı yanıt');
   r = await new C().post('/api/reset', { token: 'x'.repeat(40), password: 'abcdef1' }); ok(r.s === 400, 'reset: geçersiz jeton');
-  // ---------- Google ----------
-  const claims = o => ({ iss: 'https://accounts.google.com', aud: 'gid.apps', sub: 'g-123', email: 'gkullanici@gmail.com', email_verified: true, given_name: 'Gül', family_name: 'Yılmaz', exp: Math.floor(Date.now() / 1000) + 600, ...o });
-  r = await new C().get('/api/auth/config'); ok(r.j.google === 'gid.apps' && r.j.apple === null, 'auth/config: yalnız tanımlı sağlayıcı');
-  r = await new C().post('/api/auth/apple', { credential: 'x' }); ok(r.s === 503, 'apple: tanımsızsa 503');
-  r = await new C().post('/api/auth/google', { credential: tok(claims({ aud: 'baska' })) }); ok(r.s === 401, 'google: yanlış aud reddedilir');
-  r = await new C().post('/api/auth/google', { credential: tok(claims({ email_verified: false })) }); ok(r.s === 401 && /doğrulanmam/.test(r.j.error), 'google: doğrulanmamış e-posta reddedilir');
-  r = await new C().post('/api/auth/google', { credential: tok(claims({ exp: 1 })) }); ok(r.s === 401, 'google: süresi dolmuş token reddedilir');
-  r = await new C().post('/api/auth/google', { credential: tok(claims(), crypto.generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey) }); ok(r.s === 401, 'google: sahte imza reddedilir');
-  const G = new C(); r = await G.post('/api/auth/google', { credential: tok(claims()) });
-  ok(r.s === 200 && r.j.needProfile && r.j.email === 'gkullanici@gmail.com' && r.j.firstName === 'Gül', 'google: yeni kullanıcı profil tamamlamaya yönlenir');
-  const ticket = r.j.ticket;
-  r = await G.post('/api/auth/complete', { ticket: 'bozuk', username: 'gul_y' }); ok(r.s === 400, 'complete: bozuk bilet');
-  r = await G.post('/api/auth/complete', { ticket, username: 'gul_y', firstName: 'Gül', lastName: 'Yılmaz', gender: 'kadin', bikeBrand: 'Honda', bikeModel: 'CB', phone: '' }); ok(r.s === 400 && /telefon/i.test(r.j.error), 'complete: telefon zorunlu');
-  r = await G.post('/api/auth/complete', { ticket, username: 'gul_y', firstName: 'Gül', lastName: 'Yılmaz', gender: 'kadin', bikeBrand: 'Honda', bikeModel: 'CB', phone: '0536 111 22 33', email: 'baska@x.com' });
-  ok(r.s === 200 && r.j.user.email === 'gkullanici@gmail.com' && r.j.user.hasPassword === false && r.j.user.providers.includes('google'), 'complete: hesap oluşur, e-posta bilette gelen (istemci değiştiremez)');
-  r = await new C().post('/api/auth/google', { credential: tok(claims()) }); ok(r.s === 200 && r.j.user && r.j.user.username === 'gul_y', 'google: mevcut hesap doğrudan girer');
-  r = await G.post('/api/account/delete', { confirm: 'yanlis' }); ok(r.s === 400, 'hesap silme: kullanıcı adı onayı şart');
-  r = await G.post('/api/account/delete', { confirm: 'GUL_Y' }); ok(r.s === 200, 'hesap silme: şifresiz (Google) hesap silinir'); r = await G.get('/api/me'); ok(r.s === 401, 'silinen hesabın oturumu geçersiz');
+  // ---------- Sosyal giriş kaldırıldı + şifre kuralları ----------
+  r = await new C().get('/api/auth/config'); ok(r.s === 404, 'Google/Apple: auth/config yok');
+  r = await new C().post('/api/auth/google', { credential: 'x' }); ok(r.s === 404, 'Google/Apple: auth/google yok');
+  for (const [pw, m] of [['Kisa1.a', 'kısa'], ['kx9.mq2!zw4', 'büyük harf yok'], ['KX9.MQ2!ZW4', 'küçük harf yok'], ['Kxx.Mqq!Zww', 'rakam yok'], ['Kx9Mq2Zw4Ab', 'özel karakter yok'], ['Password.123', 'yaygın şifre'], ['Abcd.12345x', 'ardışık dizi'], ['Kxxx.9Mq2!Z', 'üçlü tekrar'], ['Zeynep.7x!Qm', 'kullanıcı adı içerir']]) {
+    r = await reg(new C(), { username: pw === 'Zeynep.7x!Qm' ? 'zeynep' : 'zayif' + m.length + pw.length, email: 'z' + pw.length + m.length + '@x.com', phone: '05' + String(300000000 + pw.length * 1000 + m.length), firstName: 'Z', password: pw }); ok(r.s === 400 && r.j.code === 'weakpw', 'kayıt: zayıf şifre reddedilir (' + m + ') ' + r.s + JSON.stringify(r.j));
+  }
+  { const Z = new C(); r = await reg(Z, { username: 'guclu', email: 'guclu@x.com', phone: '0537 000 11 22', firstName: 'G', password: 'Tz8,Qm3#Vk6' }); ok(r.s === 200, 'kayıt: güçlü şifre kabul edilir');
+    const mz = (await Z.get('/api/me')).j.user;
+    r = await Z.post('/api/account', { ...mz, currentPassword: 'Tz8,Qm3#Vk6', newPassword: 'zayif123' }); ok(r.s === 400 && r.j.code === 'weakpw', 'hesap: zayıf yeni şifre reddedilir ' + r.s + JSON.stringify(r.j));
+    r = await Z.post('/api/account', { ...mz, currentPassword: 'Tz8,Qm3#Vk6', newPassword: 'Nv7,Tr4#Lp8' }); ok(r.s === 200, 'hesap: güçlü yeni şifre kabul edilir');
+    r = await new C().post('/api/forgot', { email: 'guclu@x.com' }); ok(r.s === 200 && r.j.ok, 'forgot: kayıtlı e-posta');
+    const tk = JSON.parse(sq("select reset_hash from ml_users where username='guclu'"))[0]; ok(!!(tk && tk.reset_hash), 'forgot: sıfırlama jetonu kayıtlı hesaba yazılır');
+    r = await new C().post('/api/reset', { token: 'x'.repeat(43), password: 'Wd5.Hs9!Bn2' }); ok(r.s === 400, 'reset: bilinmeyen jeton'); }
 
   // ---------- Sosyal ----------
   const A = await mk('ayse', 1), B = await mk('burak', 2), D = await mk('deniz', 3);
@@ -311,7 +302,7 @@ const T0 = Date.now() - 3600e3;
   // ---------- Hava durumu / harita (ağ yok: yalnızca doğrulamalar) ----------
   r = await new C().get('/api/weather?lat=41&lon=29'); ok(r.s === 401, 'hava durumu oturum ister'); r = await A.get('/api/weather?lat=abc&lon=29'); ok(r.s === 400, 'hava durumu: geçersiz konum');
   r = await A.get('/api/weather?lat=95&lon=29'); ok(r.s === 400, 'hava durumu: aralık dışı');
-  r = await A.get('/api/maps/config'); ok(r.s === 200 && /openstreetmap/.test(r.j.tileUrl) && r.j.routing === true && r.j.route.provider === 'valhalla' && r.j.route.avoid.includes('highways') && !JSON.stringify(r.j).includes('apiKey'), 'maps/config: varsayılan karo + anahtarsız Valhalla, anahtar sızmaz');
+  r = await A.get('/api/maps/config'); ok(r.s === 200 && /cartocdn.*voyager/.test(r.j.tileUrl) && /dark_all/.test(r.j.tileUrlDark) && r.j.tileSub === 'abcd' && r.j.routing === true && r.j.route.provider === 'valhalla' && r.j.route.avoid.includes('highways') && !JSON.stringify(r.j).includes('apiKey'), 'maps/config: varsayılan karo + anahtarsız Valhalla, anahtar sızmaz');
   r = await A.get('/api/geocode?q=ab'); ok(r.s === 400, 'geocode: kısa sorgu'); r = await new C().get('/api/geocode?q=istanbul'); ok(r.s === 401, 'geocode oturum ister');
   r = await A.get('/api/route?from=41,29&to=abc'); ok(r.s === 400, 'route: geçersiz koordinat'); r = await A.get('/api/route?from=41,29&to=95,29'); ok(r.s === 400, 'route: aralık dışı');
 
@@ -327,7 +318,7 @@ const T0 = Date.now() - 3600e3;
   execFileSync('php', ['-r', `$d=new PDO('sqlite:${path.join(tmp, 't.sqlite')}');$d->exec("UPDATE ml_rts SET last=last-120000 WHERE sid='${stale.sid}'");`]);
   await B.rt(); await sleep(50); r = await stale.rt(); ok(r.j.fresh === true, 'rt: yoklamayan oturum süpürülür, istemci yeniden bağlanır');
   r = await B.post('/api/account/delete', { confirm: 'burak', password: 'yanlis' }); ok(r.s === 401, 'hesap silme: yanlış şifre');
-  r = await B.post('/api/account/delete', { confirm: 'burak', password: 'sifre123' }); ok(r.s === 200, 'hesap silinir'); r = await A.get('/api/social/users/burak'); ok(r.s === 404, 'silinen kullanıcı bulunamaz');
+  r = await B.post('/api/account/delete', { confirm: 'burak', password: 'Kx9.Mq2!Zw4' }); ok(r.s === 200, 'hesap silinir'); r = await A.get('/api/social/users/burak'); ok(r.s === 404, 'silinen kullanıcı bulunamaz');
   ok(+JSON.parse(sq("SELECT COUNT(*) c FROM ml_friends"))[0].c === 0 && +JSON.parse(sq("SELECT COUNT(*) c FROM ml_msgs"))[0].c === 0 && +JSON.parse(sq("SELECT COUNT(*) c FROM ml_rts WHERE uid NOT IN (SELECT id FROM ml_users)"))[0].c === 0, 'silinen hesabın arkadaşlık/mesaj/oturum verisi temizlenir');
   // ---- Roller + grup fotoğrafı/kapağı + profil kapağı ----
   { const JP = Buffer.concat([Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]), Buffer.alloc(1500, 7)]);
@@ -362,6 +353,32 @@ const T0 = Date.now() - 3600e3;
   r = await new C().get('/api/yok'); ok(r.s === 404, 'bilinmeyen uç nokta 404');
   r = await new C().req('GET', '/'); ok(r.s === 200 && /rt\.js/.test(r.text.toString()) && !/socket\.io\.js/.test(r.text.toString()), 'index.html: socket.io yerine rt.js yüklenir');
   r = await new C().req('GET', '/rt.js'); ok(r.s === 200 && /window\.io/.test(r.text.toString()), 'rt.js sunulur'); r = await new C().req('GET', '/icons/icon-192.png'); ok(r.s === 200, '/icons/ eşlemesi çalışır (dev-router)');
-  for (let i = 0; i < 5; i++) r = await L('ali_k', 'yanlis'); r = await L('ali_k', 'yenisifre1'); ok(r.s === 429, 'giriş: 5 yanlıştan sonra kilitlenir');
+  for (let i = 0; i < 5; i++) r = await L('ali_k', 'yanlis'); r = await L('ali_k', 'Yn7,Tr5#Pv8'); ok(r.s === 429, 'giriş: 5 yanlıştan sonra kilitlenir');
+  // ---- Engellenen kullanıcılar + çevrimdışı harita listesi ----
+  { const E = await mk('ebru', 31), G = await mk('gokay', 32);
+    r = await E.post('/api/social/requests', { username: 'gokay' }); const rq = r.j.requestId; r = await G.post(`/api/social/requests/${rq}/accept`); ok(r.s === 200, 'PHP engel: arkadaş olurlar');
+    r = await G.post('/api/social/messages/ebru', { text: 'selam' }); ok(r.s === 200, 'PHP engel: arkadaşken mesaj gider');
+    r = await E.post('/api/social/blocks', { username: 'gokay' }); ok(r.s === 200 && r.j.rel === 'blocked', 'PHP engel: engellenir');
+    r = await E.get('/api/social/friends'); ok(JSON.stringify(r.j).indexOf('gokay') < 0, 'PHP engel: arkadaşlık silinir');
+    r = await E.get('/api/social/messages/gokay'); ok(r.s === 403, 'PHP engel: mesajlaşma kapanır');
+    r = await G.post('/api/social/requests', { username: 'ebru' }); ok(r.s === 404, 'PHP engel: engellenen istek gönderemez (404)');
+    r = await E.post('/api/social/requests', { username: 'gokay' }); ok(r.s === 403, 'PHP engel: engelleyen de önce kaldırmalı (403)');
+    r = await E.get('/api/social/search?q=gokay'); ok(r.s === 200 && r.j.users.length === 0, 'PHP engel: aramada çıkmaz'); r = await G.get('/api/social/search?q=ebru'); ok(r.j.users.length === 0, 'PHP engel: karşı yönde de çıkmaz');
+    r = await G.get('/api/social/users/ebru'); ok(r.s === 404, 'PHP engel: engellenen profili göremez'); r = await E.get('/api/social/users/gokay'); ok(r.s === 200 && r.j.rel === 'blocked' && r.j.locked === true, 'PHP engel: engelleyen profili görür (blocked, kilitli)');
+    r = await E.get('/api/social/blocks'); ok(r.s === 200 && r.j.blocks.length === 1 && r.j.blocks[0].username === 'gokay', 'PHP engel: liste'); r = await G.get('/api/social/blocks'); ok(r.j.blocks.length === 0, 'PHP engel: liste kişiye özel');
+    r = await E.post('/api/social/blocks', { username: 'ebru' }); ok(r.s === 400, 'PHP engel: kendini engelleyemez'); await E.post('/api/social/blocks', { username: 'gokay' }); r = await E.get('/api/social/blocks'); ok(r.j.blocks.length === 1, 'PHP engel: tekrar engelleme çoğaltmaz');
+    r = await E.req('DELETE', '/api/social/blocks/gokay'); ok(r.s === 200 && r.j.rel === 'none', 'PHP engel: kaldırılır'); r = await E.req('DELETE', '/api/social/blocks/gokay'); ok(r.s === 404, 'PHP engel: ikinci kaldırma 404');
+    r = await E.get('/api/social/search?q=gokay'); ok(r.j.users.length === 1 && r.j.users[0].rel === 'none', 'PHP engel: kaldırınca aramada çıkar'); r = await E.post('/api/social/requests', { username: 'gokay' }); ok(r.s === 200, 'PHP engel: kaldırınca istek atılabilir');
+    // canlı konum: engelli çift birbirini görmez (herkese açık paylaşım)
+    await E.emit('loc:share', { on: true, aud: 'all', consent: true }); await E.emit('loc:update', { lat: 41.0, lon: 29.0, acc: 10, riding: false });
+    const seen = async () => { G.clear(); await G.emit('loc:watch', { lat: 41.0, lon: 29.0, km: 50, fo: false }); await G.rt(); await G.rt(); return G.evs('loc:riders').some(e => JSON.stringify(e.data).indexOf('ebru') >= 0); };
+    ok(await seen(), 'PHP engel: kontrol — engel yokken canlı konum görünür');
+    await E.post('/api/social/blocks', { username: 'gokay' });
+    ok(!(await seen()), 'PHP engel: engelliyken canlı konumda birbirini görmez');
+    // çevrimdışı harita listesi
+    fs.mkdirSync(path.join(dist, 'offline'), { recursive: true }); fs.writeFileSync(path.join(dist, 'offline', '34.pmtiles'), Buffer.alloc(5000, 1)); fs.writeFileSync(path.join(dist, 'offline', 'x.txt'), 'a');
+    r = await new C().get('/api/offline/manifest'); ok(r.s === 401, 'PHP harita listesi giriş ister');
+    r = await E.get('/api/offline/manifest'); ok(r.s === 200 && r.j.packs.length === 1 && r.j.packs[0].id === '34' && r.j.packs[0].bytes === 5000 && r.j.packs[0].url === '/offline/34.pmtiles' && /^5000-\d+$/.test(r.j.packs[0].ver), 'PHP harita listesi: yalnız geçerli paketler');
+  }
   console.log(`\n${p} geçti, ${f} kaldı`);
 })().catch(e => { console.error('TEST HATASI', e); f++; }).finally(() => { srv.kill(); fs.rmSync(tmp, { recursive: true, force: true }); process.exit(f ? 1 : 0); });

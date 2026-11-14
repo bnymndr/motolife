@@ -1,32 +1,33 @@
 'use strict';
-// Kayıt/giriş formları (telefon, acil kişi, Google/Apple düğmeleri, kaydı tamamla) ve Motosiklet Bilgileri + 3B görünüm: gerçek index.html, SAHTE /api. node test/auth-ui.js
+// Kayıt/giriş formları (telefon, acil kişi, şifre kuralları) ve Motosiklet Bilgileri + 3B görünüm: gerçek index.html, SAHTE /api. node test/auth-ui.js
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || '/opt/npm-tools/node_modules/playwright'); const http = require('http'), fs = require('fs'), path = require('path');
+let BL = [{ username: 'kemal', name: 'Kemal Y' }, { username: 'zeynep', name: 'Zeynep A' }];
 let p = 0, f = 0; const ok = (c, m) => { c ? p++ : f++; console.log((c ? 'ok: ' : 'FAIL: ') + m); };
 const root = path.join(__dirname, '../public'), mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json' };
 const calls = []; let cfg = { google: 'gid', apple: 'aid' }, USER = null;
 const srv = http.createServer((q, r) => { const u = new URL(q.url, 'http://x'), J = (o, s = 200) => { r.writeHead(s, { 'content-type': 'application/json' }); r.end(JSON.stringify(o)); };
   if (u.pathname === '/api/captcha') return J({ token: 'n.1.m', q: '7 + 5 kaç eder?' });
-  if (u.pathname === '/api/auth/config') return J(cfg);
+  if (u.pathname === '/api/auth/config') return J({}, 404);
   if (u.pathname === '/api/me') return USER ? J({ user: USER }) : J({ error: 'x' }, 401);
   if (q.method === 'POST' && u.pathname.startsWith('/api/')) { let b = ''; q.on('data', c => (b += c)); q.on('end', () => { const body = JSON.parse(b || '{}'); calls.push([u.pathname, body]);
     if (u.pathname === '/api/auth/apple') return J({ needProfile: true, ticket: 'TK', email: 'x@icloud.com', firstName: 'Mert', lastName: 'Demir' });
     if (u.pathname === '/api/account') return J({ user: { ...USER, bikeBrand: body.bikeBrand, bikeModel: body.bikeModel, bikeYear: body.bikeYear, bikeType: body.bikeType, bikeCc: body.bikeCc } });
     USER = { username: 'ben', firstName: 'Ben', lastName: 'X', gender: 'erkek', email: 'a@b.c', hasPassword: true, phone: '+905321234567', bikeBrand: 'Yamaha', bikeModel: 'MT-07' }; J({ user: USER }); }); return; }
+  if (u.pathname === '/api/social/blocks' && q.method === 'GET') return J({ blocks: BL });
+  if (q.method === 'DELETE' && u.pathname.startsWith('/api/social/blocks/')) { const n = decodeURIComponent(u.pathname.split('/').pop()); BL = BL.filter(x => x.username !== n); return J({ rel: 'none' }); }
+  if (u.pathname === '/api/offline/manifest') return J({ packs: [{ id: '34', bytes: 3000000, ver: '1', url: '/offline/34.pmtiles' }] });
   if (u.pathname.startsWith('/api/')) return J({}, 404);
   const pa = path.join(root, u.pathname === '/' ? 'index.html' : u.pathname); if (!fs.existsSync(pa)) { r.writeHead(404); return r.end(); } r.writeHead(200, { 'content-type': mime[path.extname(pa)] || 'application/octet-stream' }); r.end(fs.readFileSync(pa)); });
 srv.listen(0, async () => {
   const base = 'http://127.0.0.1:' + srv.address().port, b = await chromium.launch(), errs = [];
   const open = async () => { const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true }), pg = await ctx.newPage();
     pg.on('pageerror', e => errs.push(e.message)); await pg.route(/^https?:\/\/(?!127\.0\.0\.1)/, r => r.fulfill({ status: 200, contentType: 'text/javascript', body: '{}' }));
-    await pg.addInitScript(() => { window.tailwind = { config: {} }; window.io = () => ({ on() {}, off() {}, emit() {}, connect() {}, connected: false, id: 'x' });
-      window.AppleID = { auth: { init() {}, signIn: async () => ({ authorization: { id_token: 'IDT' }, user: { name: { firstName: 'Mert', lastName: 'Demir' } } }) } }; });
+    await pg.addInitScript(() => { window.tailwind = { config: {} }; window.io = () => ({ on() {}, off() {}, emit() {}, connect() {}, connected: false, id: 'x' }); });
     await pg.addStyleTag({ content: '.hidden{display:none!important}' }).catch(() => {}); return pg; };
   const css = '.hidden{display:none!important}';
   // 1) sağlayıcı tanımsız → sosyal düğmeler yok
   cfg = null; USER = null; let pg = await open(); await pg.goto(base + '/'); await pg.addStyleTag({ content: css }); await pg.waitForSelector('#loginForm', { timeout: 8000 }); await pg.waitForTimeout(400);
-  ok(await pg.isVisible('#socialAuth') && await pg.isVisible('#gBtn button') && await pg.isVisible('#aBtn'), 'sağlayıcı tanımlı değilken de Google ve Apple (iCloud) düğmeleri görünür');
-  await pg.click('#gBtn button'); ok(/GOOGLE_CLIENT_ID/.test(await pg.textContent('#authMsg')), 'Google yapılandırılmamışsa tıklayınca açıklayıcı uyarı çıkar');
-  await pg.click('#aBtn'); ok(/APPLE_CLIENT_ID/.test(await pg.textContent('#authMsg')), 'Apple yapılandırılmamışsa tıklayınca açıklayıcı uyarı çıkar');
+  ok(!(await pg.$('#socialAuth')) && !(await pg.$('#gBtn')) && !(await pg.$('#aBtn')) && !(await pg.$('#socialForm')), 'Google/Apple (iCloud) girişi kaldırıldı: düğme ve form yok');
   ok(await pg.$$eval('.cap', a => a.length) === 4 && /7 \+ 5 kaç eder\?/.test(await pg.textContent('#loginFormCap .capq')), 'giriş, hızlı giriş, kayıt ve şifre sıfırlama formlarında güvenlik sorusu var');
   ok(await pg.$eval('#loginFormCap .capa', e => e.required && e.getBoundingClientRect().height >= 44) && await pg.$eval('#loginFormCap .capr', e => e.getBoundingClientRect().height >= 44), 'güvenlik sorusu cevap kutusu zorunlu ve ≥44 px; yenile düğmesi ≥44 px');
   ok(await pg.$eval('#loginFormCap .hp', e => e.getBoundingClientRect().left < -1000 && e.tabIndex === -1), 'bal küpü alanı ekran dışında ve odaklanamaz');
@@ -34,28 +35,24 @@ srv.listen(0, async () => {
   await pg.click('#tabRegister');
   ok(await pg.$eval('#rPhone', e => e.required && e.type === 'tel') && await pg.$eval('#rEmName', e => !e.required) && await pg.$eval('#rEmPhone', e => !e.required), 'kayıt: telefon zorunlu, acil kişi adı/numarası zorunlu değil');
   ok(/isteğe bağlı/.test(await pg.textContent('#registerForm fieldset legend')), 'acil kişi bölümü «isteğe bağlı» etiketli');
-  ok(await pg.getAttribute('#rEmail', 'placeholder').then(x => /Gmail/.test(x) && /iCloud/.test(x)), 'e-posta alanı Gmail/iCloud örneği gösterir');
-  ok(await pg.evaluate(() => document.querySelector('#socialAuth').getBoundingClientRect().top > document.querySelector('#registerForm').getBoundingClientRect().bottom - 2), 'kayıt: Google/iCloud düğmeleri formun en altında');
+  ok(await pg.getAttribute('#rEmail', 'placeholder').then(x => /sıfırlama bağlantısı/.test(x)), 'e-posta alanı sıfırlama bağlantısının buraya geleceğini söyler');
   ok(await pg.$eval('#rBrand', e => !e.required) && await pg.$eval('#rModel', e => !e.required), 'kayıt: motor marka/model zorunlu değil');
   await pg.click('#tabLogin');
-  ok(await pg.evaluate(() => document.querySelector('#socialAuth').getBoundingClientRect().top > document.querySelector('#loginForm').getBoundingClientRect().bottom - 2), 'giriş: Google/iCloud düğmeleri formun en altında');
   await pg.click('#tabRegister');
   ok(/\d+ \+ \d+/.test('7 + 5 kaç eder?'), 'güvenlik sorusu toplama biçiminde');
   const fill = async o => { for (const [k, v] of Object.entries(o)) await pg.fill('#' + k, v); };
-  await fill({ rUser: 'ali_k', rFirst: 'Ali', rLast: 'Kaya', rBrand: 'Yamaha', rModel: 'MT-07', rEmail: 'ali@icloud.com', rPhone: '0532 123 45 67', rEmName: 'Can', rEmPhone: '0544 000 11 22', rPw: 'sifre123' }); await pg.fill('#registerFormCap .capa', '12');
+  await fill({ rUser: 'ali_k', rFirst: 'Ali', rLast: 'Kaya', rBrand: 'Yamaha', rModel: 'MT-07', rEmail: 'ali@icloud.com', rPhone: '0532 123 45 67', rEmName: 'Can', rEmPhone: '0544 000 11 22', rPw: 'Kx9.Mq2!Zw4' }); await pg.fill('#registerFormCap .capa', '12');
   await pg.click('#registerForm button[type=submit]'); await pg.waitForTimeout(400);
   const rc = calls.find(c => c[0] === '/api/register'); ok(rc && rc[1].cToken === 'n.1.m' && rc[1].cAns === '12' && rc[1].website === '', 'kayıt isteği güvenlik sorusu cevabını ve jetonunu gönderir'); ok(rc && rc[1].phone === '0532 123 45 67' && rc[1].emergencyName === 'Can' && rc[1].emergencyPhone === '0544 000 11 22' && rc[1].email === 'ali@icloud.com', 'kayıt isteği telefon ve acil kişiyi gönderir');
   await pg.context().close();
-  // 2) sağlayıcılar tanımlı → düğmeler, Apple akışı, kaydı tamamla
-  cfg = { google: 'gid', apple: 'aid' }; USER = null; calls.length = 0; pg = await open(); await pg.goto(base + '/'); await pg.addStyleTag({ content: css }); await pg.waitForSelector('#loginForm'); await pg.waitForTimeout(600);
-  ok(await pg.isVisible('#socialAuth') && await pg.isVisible('#aBtn'), 'sağlayıcı tanımlıyken Google/Apple bölümü görünür');
-  await pg.click('#tabRegister'); ok(await pg.isVisible('#socialAuth'), 'sosyal düğmeler kayıt sekmesinde de var');
-  await pg.click('#aBtn'); await pg.waitForTimeout(400);
-  const ac = calls.find(c => c[0] === '/api/auth/apple'); ok(ac && ac[1].credential === 'IDT' && ac[1].firstName === 'Mert', 'Apple jetonu sunucuya gönderilir');
-  ok(await pg.isVisible('#socialForm') && !(await pg.isVisible('#registerForm')) && await pg.inputValue('#oFirst') === 'Mert' && /x@icloud\.com/.test(await pg.textContent('#sInfo')), 'yeni kullanıcıya «Kaydı Tamamla» formu açılır, ad ve e-posta bilgisi gelir');
-  ok(await pg.$eval('#oPhone', e => e.required) && await pg.$eval('#oEmName', e => !e.required), 'tamamlama: telefon zorunlu, acil kişi isteğe bağlı');
-  await fill({ oUser: 'mert', oBrand: 'Honda', oModel: 'CB650R', oPhone: '0538 000 00 00' }); await pg.click('#socialForm button[type=submit]'); await pg.waitForTimeout(400);
-  const cc = calls.find(c => c[0] === '/api/auth/complete'); ok(cc && cc[1].ticket === 'TK' && cc[1].username === 'mert' && cc[1].phone === '0538 000 00 00' && cc[1].emergencyName === '', 'tamamlama isteği bilet + alanlarla gider');
+  // 2) şifre kuralları: canlı kontrol listesi
+  cfg = null; USER = null; calls.length = 0; pg = await open(); await pg.goto(base + '/'); await pg.addStyleTag({ content: css }); await pg.waitForSelector('#loginForm'); await pg.click('#tabRegister');
+  ok(!(await pg.isVisible('#rPw + ul.pw-rules')), 'kural listesi boş alanda gizli'); await pg.fill('#rPw', 'abc');
+  ok(await pg.isVisible('#rPw + ul.pw-rules') && await pg.$$eval('#rPw + ul.pw-rules li', a => a.length) >= 5, 'kayıt: şifre altında kural listesi görünür');
+  await pg.fill('#rPw', 'abc'); ok(await pg.$$eval('#rPw + ul.pw-rules li[data-ok="1"]', a => a.length) <= 3 && await pg.$$eval('#rPw + ul.pw-rules li[data-ok="0"]', a => a.length) >= 3, 'zayıf şifrede kurallar karşılanmış görünmez');
+  await pg.fill('#rPw', 'Kx9.Mq2!Zw4'); ok(await pg.$$eval('#rPw + ul.pw-rules li:not([data-ok="1"])', a => a.length) === 0, 'güçlü şifrede tüm kurallar ✓');
+  await fill({ rUser: 'zeynep', rFirst: 'Z', rLast: 'K', rEmail: 'z@x.com', rPhone: '0532 123 45 67', rPw: 'zayif123' }); await pg.fill('#registerFormCap .capa', '12'); await pg.click('#registerForm button[type=submit]'); await pg.waitForTimeout(300);
+  ok(!calls.find(c => c[0] === '/api/register') && /güçlü değil/.test(await pg.textContent('#authMsg')), 'zayıf şifreyle kayıt isteği sunucuya gitmez, uyarı çıkar');
   await pg.context().close();
   // 3) oturum açık: Motosiklet Bilgileri + 3B
   cfg = null; USER = { username: 'ben', firstName: 'Ben', lastName: 'X', gender: 'erkek', email: 'a@b.c', hasPassword: true, phone: '+905321234567', bikeBrand: 'Ducati', bikeModel: 'Monster', bikeType: 'naked', bikeYear: 2020, bikeCc: 937 };
@@ -157,6 +154,20 @@ srv.listen(0, async () => {
   await pg.evaluate(() => document.querySelector('[data-nav="settings"]').click()); await pg.waitForTimeout(150); await pg.click('#settings [data-go="profile"]').catch(() => {}); await pg.waitForTimeout(150);
   await pg.click('#sAvBtn'); ok(await pg.isVisible('#photoMenu') && /Profil/.test(await pg.textContent('#phTitle')), 'Ayarlar › Profil: Profil Fotoğrafı düğmesi aynı menüyü açar');
   await pg.keyboard.press('Escape'); await pg.click('#sCvBtn'); ok(/Kapak/.test(await pg.textContent('#phTitle')), 'Ayarlar › Profil: Kapak Fotoğrafı düğmesi var');
+  // --- Konum ve Gizlilik: Engellenen Kullanıcılar + Çevrimdışı Haritalar
+  await pg.keyboard.press('Escape'); await pg.evaluate(() => { document.querySelector('[data-nav="settings"]').click(); }); await pg.waitForTimeout(200);
+  await pg.evaluate(() => document.querySelector('#settings [data-go="home"]') && document.querySelector('#settings [data-go="home"]').click()); await pg.waitForTimeout(150);
+  await pg.click('#settings [data-go="privacy"]'); await pg.waitForTimeout(200);
+  const prv = await pg.$$eval('#settings [data-go]', e => e.map(x => x.dataset.go)); ok(prv.includes('blocks') && prv.includes('offmaps'), 'Konum ve Gizlilik: «Engellenen Kullanıcılar» ve «Çevrimdışı Haritalar» satırları var');
+  await pg.click('#settings [data-go="blocks"]'); await pg.waitForSelector('#settings [data-act="unblock"]'); ok(/Engellenen Kullanıcılar/.test(await pg.textContent('#settings h1')) && (await pg.$$('#settings [data-act="unblock"]')).length === 2, 'Engellenen Kullanıcılar: 2 kişi listelenir');
+  ok(/Kemal Y/.test(await pg.textContent('#settings')) && /@zeynep/.test(await pg.textContent('#settings')), 'ad ve kullanıcı adı görünür');
+  ok(await pg.$$eval('#settings [data-act="unblock"]', e => e.every(x => x.getBoundingClientRect().height >= 44)), 'Engeli Kaldır düğmeleri ≥44 px');
+  await pg.click('#settings [data-act="unblock"][data-u="kemal"]'); await pg.waitForFunction(() => document.querySelectorAll('#settings [data-act="unblock"]').length === 1); ok(!/Kemal/.test(await pg.textContent('#settings [data-slot="blocks"]')) && /Engel kaldırıldı/.test(await pg.textContent('#settings')), 'Engeli Kaldır: kişi listeden düşer, bilgi mesajı çıkar');
+  await pg.click('#settings [data-act="unblock"]'); await pg.waitForSelector('#settings [data-slot="blocks"]:has-text("Engellenen kullanıcı yok")'); ok(true, 'liste boşalınca «Engellenen kullanıcı yok»');
+  await pg.click('#settings [data-go="privacy"]'); await pg.waitForTimeout(150); ok(/Konum ve Gizlilik/.test(await pg.textContent('#settings h1')), 'geri düğmesi Konum ve Gizlilik\'e döner');
+  await pg.click('#settings [data-go="offmaps"]'); await pg.waitForSelector('#settings [data-om-sel]'); ok(/Çevrimdışı Haritalar/.test(await pg.textContent('#settings h1')) && (await pg.$$('#settings [data-om-sel]')).length === 82, 'Çevrimdışı Haritalar: 82 bölge listelenir (Türkiye + 81 il)');
+  ok(await pg.$$eval('#settings [data-om-sel]', e => e.filter(x => !x.disabled).length) === 1, 'yalnız sunucuda paketi olan bölge seçilebilir');
+  await pg.screenshot({ path: '/tmp/settings-offmaps.png' });
   ok(errs.length === 0, 'sayfa hatası yok ' + errs.join('|'));
   await b.close(); srv.close(); console.log(`\n${p} geçti, ${f} kaldı`); process.exit(f ? 1 : 0);
 });

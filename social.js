@@ -9,7 +9,7 @@ const express = require('express');
 module.exports = function mountSocial({ app, io, users, userFromCookie, uname, dataDir }) {
   // ---------- Depo (data/social.json, gecikmeli ve atomik yazım) ----------
   const FILE = path.join(dataDir, 'social.json');
-  const db = { posts: [], friends: {}, requests: [], messages: {}, profiles: {}, images: {} };
+  const db = { posts: [], friends: {}, requests: [], messages: {}, profiles: {}, images: {}, blocks: {} };
   const IMG_DIR = path.join(dataDir, 'social-img');
   fs.mkdirSync(IMG_DIR, { recursive: true });
   try { Object.assign(db, JSON.parse(fs.readFileSync(FILE, 'utf8'))); } catch {}
@@ -36,6 +36,8 @@ module.exports = function mountSocial({ app, io, users, userFromCookie, uname, d
   const byName = n => [...users.values()].find(u => lower(uname(u)) === lower(n));
   const pairKey = (a, b) => (a < b ? a + '_' + b : b + '_' + a);
   const isFriend = (a, b) => (db.friends[a] || []).includes(b);
+  const blockedBy = (a, b) => ((db.blocks || {})[a] || []).includes(b);          // a, b'yi engellemiş mi
+  const isBlocked = (a, b) => blockedBy(a, b) || blockedBy(b, a);                 // iki yönden biri
   const online = uid => ((io.sockets.adapter.rooms.get('u:' + uid) || { size: 0 }).size) > 0;
   const avatarVer = u => {
     if (!u.avatar) return '';
@@ -76,6 +78,7 @@ module.exports = function mountSocial({ app, io, users, userFromCookie, uname, d
     return { ...card(u), cv: p.cover ? coverVer(p.cover) : '', bio: p.bio || '', status: p.status || '', mood: p.mood || '', statusAt: p.statusAt || 0, since: u.createdAt || 0, stats: stats(u.id) };
   };
   const relation = (meId, other) => {
+    if (blockedBy(meId, other.id)) return { rel: 'blocked' };
     if (isFriend(meId, other.id)) return { rel: 'friend' };
     const out = db.requests.find(r => r.from === meId && r.to === other.id);
     if (out) return { rel: 'outgoing', requestId: out.id };
@@ -169,7 +172,7 @@ module.exports = function mountSocial({ app, io, users, userFromCookie, uname, d
   });
   r.get('/users/:username', (req, res) => {
     const o = byName(req.params.username);
-    if (!o) return fail(res, 404, 'Kullanıcı bulunamadı.');
+    if (!o || blockedBy(o.id, req.u.id)) return fail(res, 404, 'Kullanıcı bulunamadı.');
     const self = o.id === req.u.id;
     res.json({ profile: profile(o), ...(self ? { rel: 'self' } : relation(req.u.id, o)), locked: !visibleTo(req.u.id, o.id) });
   });
@@ -255,7 +258,7 @@ module.exports = function mountSocial({ app, io, users, userFromCookie, uname, d
     const q = lower(txt(req.query.q, 40));
     if (q.length < 2) return res.json({ users: [] });
     const rows = [...users.values()].filter(u => u.id !== req.u.id &&
-      (lower(uname(u)).includes(q) || lower((u.firstName || '') + ' ' + (u.lastName || '')).includes(q))).slice(0, 10);
+      !isBlocked(req.u.id, u.id) && (lower(uname(u)).includes(q) || lower((u.firstName || '') + ' ' + (u.lastName || '')).includes(q))).slice(0, 10);
     res.json({ users: rows.map(u => ({ ...card(u), ...relation(req.u.id, u) })) });
   });
   r.get('/friends', (req, res) => {
@@ -277,6 +280,8 @@ module.exports = function mountSocial({ app, io, users, userFromCookie, uname, d
     const o = byName((req.body || {}).username);
     if (!o) return fail(res, 404, 'Kullanıcı bulunamadı.');
     if (o.id === req.u.id) return fail(res, 400, 'Kendine istek gönderemezsin.');
+    if (blockedBy(req.u.id, o.id)) return fail(res, 403, 'Engellediğin kullanıcıya istek gönderemezsin. Önce engeli kaldır.');
+    if (blockedBy(o.id, req.u.id)) return fail(res, 404, 'Kullanıcı bulunamadı.');
     if (limited('rq:' + req.u.id, 20, 60000)) return fail(res, 429, 'Çok fazla istek gönderdin, biraz bekle.');
     const rel = relation(req.u.id, o);
     if (rel.rel === 'friend') return fail(res, 409, 'Zaten arkadaşsınız.');
@@ -303,6 +308,32 @@ module.exports = function mountSocial({ app, io, users, userFromCookie, uname, d
     if (!q) return fail(res, 404, 'İstek bulunamadı.');
     db.requests = db.requests.filter(x => x !== q); save();
     toUser(q.from, 'social:friends', {}); toUser(q.to, 'social:friends', {});
+    res.json({ rel: 'none' });
+  });
+  // Engelleme: iki yönlü görünmezlik; arkadaşlık, istekler ve mesajlar silinir; engellenen istek/mesaj gönderemez, aramada çıkmaz
+  r.get('/blocks', (req, res) => {
+    const list = ((db.blocks || {})[req.u.id] || []).map(id => users.get(id)).filter(Boolean).map(u => card(u));
+    res.json({ blocks: list });
+  });
+  r.post('/blocks', (req, res) => {
+    const o = byName((req.body || {}).username);
+    if (!o) return fail(res, 404, 'Kullanıcı bulunamadı.');
+    if (o.id === req.u.id) return fail(res, 400, 'Kendini engelleyemezsin.');
+    if (!blockedBy(req.u.id, o.id)) {
+      if (((db.blocks || {})[req.u.id] || []).length >= 200) return fail(res, 400, 'En çok 200 kullanıcı engellenebilir.');
+      db.blocks = db.blocks || {}; db.blocks[req.u.id] = [...(db.blocks[req.u.id] || []), o.id];
+    }
+    db.friends[req.u.id] = (db.friends[req.u.id] || []).filter(x => x !== o.id);
+    db.friends[o.id] = (db.friends[o.id] || []).filter(x => x !== req.u.id);
+    db.requests = db.requests.filter(q => !((q.from === req.u.id && q.to === o.id) || (q.from === o.id && q.to === req.u.id)));
+    delete db.messages[pairKey(req.u.id, o.id)]; save();
+    toUser(o.id, 'social:friends', {}); toUser(req.u.id, 'social:friends', {});
+    res.json({ rel: 'blocked' });
+  });
+  r.delete('/blocks/:username', (req, res) => {
+    const o = byName(req.params.username);
+    if (!o || !blockedBy(req.u.id, o.id)) return fail(res, 404, 'Engellenen kullanıcı bulunamadı.');
+    db.blocks[req.u.id] = db.blocks[req.u.id].filter(x => x !== o.id); save();
     res.json({ rel: 'none' });
   });
   r.delete('/friends/:username', (req, res) => {
@@ -363,7 +394,8 @@ module.exports = function mountSocial({ app, io, users, userFromCookie, uname, d
     for (const p of db.posts) { p.likes = p.likes.filter(x => x !== uid); p.comments = p.comments.filter(c => c.uid !== uid); }
     db.posts = db.posts.filter(p => { if (p.uid !== uid) return true; dropImage(p.image); return false; });
     for (const [id, rec] of Object.entries(db.images)) if (rec && rec.uid === uid) dropImage(id);
-    delete db.friends[uid];
+    delete db.friends[uid]; delete (db.blocks || {})[uid];
+    for (const k of Object.keys(db.blocks || {})) db.blocks[k] = db.blocks[k].filter(x => x !== uid);
     for (const k of Object.keys(db.friends)) db.friends[k] = db.friends[k].filter(x => x !== uid);
     db.requests = db.requests.filter(q => q.from !== uid && q.to !== uid);
     for (const k of Object.keys(db.messages)) if (k.split('_').includes(uid)) delete db.messages[k];
@@ -375,5 +407,5 @@ module.exports = function mountSocial({ app, io, users, userFromCookie, uname, d
     if (!rec || rec.uid !== uid || rec.post) return false;
     rec.post = 'g:' + ref; save(); return true;
   };
-  return { isFriend, removeUser, cardOf, claimImage, dropImage: id => { dropImage(id); save(); }, setImageGate: fn => { imageGate = fn; }, limited, txt, mood, rid };   // canlı konum modülü (live.js) arkadaşlık yetkisini buradan sorar
+  return { isFriend, isBlocked, removeUser, cardOf, claimImage, dropImage: id => { dropImage(id); save(); }, setImageGate: fn => { imageGate = fn; }, mood };   // canlı konum modülü (live.js) arkadaşlık yetkisini buradan sorar
 };

@@ -7,7 +7,7 @@ const card = (u, n) => ({ username: u, name: n, av: '', bike: 'Honda CB' });
 const ME = card('ben', 'Ben Test');
 const G = { id: 'a'.repeat(16), name: 'Hafta Sonu', desc: 'Pazar sürüşleri', leader: 'ben', role: 'leader', code: 'ABCD2345', createdAt: Date.now() - 86400000, gap: 1000, ride: null, route: null,
   members: [{ ...card('ben', 'Ben Test'), role: 'leader', sharing: false, joinedAt: 1 }, { ...card('veli', 'Veli Yılmaz'), role: 'member', sharing: true, joinedAt: 2 }, { ...card('kaan', 'Kaan Demir'), role: 'admin', sharing: false, joinedAt: 3 }] };
-let posts = [], seq = 0; const calls = [];
+let BLK = false, UNB = false, posts = [], seq = 0; const calls = [];
 const view = p => ({ ...p, mine: p.author.username === 'ben', canDelete: true });
 const srv = http.createServer((q, r) => {
   const u = new URL(q.url, 'http://x'), J = (o, s = 200) => { r.writeHead(s, { 'content-type': 'application/json' }); r.end(JSON.stringify(o)); };
@@ -17,7 +17,11 @@ const srv = http.createServer((q, r) => {
   let body = ''; q.on('data', d => body += d); q.on('end', () => {
     let b = {}; try { b = body ? JSON.parse(body) : {}; } catch {} const m = q.method, p = u.pathname; calls.push(m + ' ' + p);
     if (p === '/api/social/me') return J({ me: { ...ME, bio: '', status: '', stats: { posts: 0, friends: 0, likes: 0 } } });
-    if (p === '/api/social/friends') return J({ friends: [], incoming: [], outgoing: [], unreadTotal: 0 });
+    if (p === '/api/social/friends') return J({ friends: BLK ? [] : [{ ...card('veli', 'Veli Yılmaz'), status: '', online: false }], incoming: [], outgoing: [], unreadTotal: 0 });
+    if (p === '/api/social/users/veli') return J({ profile: { ...card('veli', 'Veli Yılmaz'), cv: '', bio: '', status: '', mood: '', statusAt: 0, stats: { posts: 0, friends: 0, likes: 0 } }, rel: BLK ? 'blocked' : UNB ? 'none' : 'friend', locked: BLK });
+    if (p === '/api/social/users/veli/posts') return J({ posts: [], more: false, locked: BLK });
+    if (m === 'POST' && p === '/api/social/blocks') { BLK = true; return J({ rel: 'blocked' }); }
+    if (m === 'DELETE' && p === '/api/social/blocks/veli') { BLK = false; UNB = true; return J({ rel: 'none' }); }
     if (p === '/api/social/users/ben') return J({ profile: { ...ME, bio: '', status: '', mood: '', statusAt: 0, bike: 'Honda CB', stats: { posts: 0, friends: 0, likes: 0 } }, rel: 'self', locked: false });
     if (p === '/api/social/users/ben/posts') return J({ posts: [], more: false });
     if (p === '/api/social/profile' && m === 'PUT') { calls.push('MOOD=' + b.mood); return J({ ok: true }); }
@@ -49,6 +53,12 @@ srv.listen(0, async () => {
   T(tabs.length === 4 && tabs[0].startsWith('Akış') && tabs[1].startsWith('Profil') && tabs[2] === 'Gruplarım' && tabs[3].startsWith('Mesajlar') && !tabs.some(x => x.startsWith('Arkadaşlar') || x.startsWith('Sohbet')), 'üst sekmeler: Akış, Profil, Gruplarım, Mesajlar (Mesajlar en sağda; Arkadaşlar/Sohbet yok) ' + tabs.join(', '));
   await pg.click('nav[aria-label="Sosyal Sekmeler"] >> text=Profil'); await pg.click('[role=tab]:has-text("Arkadaşlar")'); await pg.waitForSelector('text=Arkadaşlarım');
   T((await pg.textContent('body')).includes('Arkadaşlarım'), 'Profil › Arkadaşlar bölümü açılır (arkadaş listesi/arama profil içinde)');
+  { await pg.click('text=Veli Yılmaz'); await pg.waitForSelector('button:has-text("Engelle")');
+    T(await pg.isVisible('button:has-text("Mesaj Gönder")') && await pg.isVisible('button:has-text("Engelle")'), 'başkasının profilinde «Engelle» düğmesi var (arkadaşken Mesaj Gönder yanında)');
+    await pg.click('button:has-text("Engelle")'); T(/Engellensin Mi\?/.test(await pg.textContent('body')) && !calls.includes('POST /api/social/blocks'), 'Engelle ilk dokunuşta onay ister (istek atmaz)');
+    await pg.click('button:has-text("Engellensin Mi?")'); await pg.waitForSelector('button:has-text("Engeli Kaldır")'); T(calls.includes('POST /api/social/blocks') && !(await pg.$('button:has-text("Mesaj Gönder")')), 'onaylayınca engellenir: profilde «Engeli Kaldır», mesaj/arkadaş düğmeleri yok');
+    await pg.click('button:has-text("Engeli Kaldır")'); await pg.waitForSelector('button:has-text("Arkadaş Ekle")'); T(calls.includes('DELETE /api/social/blocks/veli') && await pg.isVisible('button:has-text("Engelle")'), 'Engeli Kaldır: engel kalkar, «Arkadaş Ekle» + «Engelle» döner');
+    BLK = false; UNB = false; await pg.click('button:has-text("Profilim")'); }
   await pg.click('[role=tab]:has-text("Profilim")'); await pg.click('nav[aria-label="Sosyal Sekmeler"] >> text=Akış');
   T(await pg.evaluate(() => { const n = document.querySelector('nav[aria-label="Sosyal Sekmeler"]'); return n.scrollWidth <= n.clientWidth + 1 && document.documentElement.scrollWidth <= innerWidth; }), '390 px: yatay taşma yok');
   await pg.click('text=Gruplarım'); await pg.waitForSelector('text=Hafta Sonu');

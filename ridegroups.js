@@ -139,7 +139,7 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
   const picUrl = (g, k) => (g[k] ? '/api/rgroups/' + g.id + '/pic/' + k + '?v=' + picVer(g, k) : '');
   const MAX_GPOSTS = 300, MAX_DESC = 200;
   const memberView = (g, m) => {
-    const u = users.get(m.uid), c = social ? social.cardOf(m.uid) : {};
+    const c = social ? social.cardOf(m.uid) : {};
     return { username: nameOf(m.uid), name: fullOf(m.uid), role: roleOf(g, m.uid), sharing: sharingNow(g.id, m.uid), av: c.av || '', bike: c.bike || '', joinedAt: m.at };
   };
   const gpostView = (g, p, viewer) => ({

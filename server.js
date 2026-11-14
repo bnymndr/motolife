@@ -2,6 +2,7 @@
 const path = require('path');
 const http = require('http');
 const crypto = require('crypto');
+const Password = require('./public/password.js');   // şifre gücü kuralları (istemci ile ortak)
 const express = require('express');
 const { Server } = require('socket.io');
 
@@ -86,7 +87,7 @@ const pub = u => ({
   gender: u.gender || 'belirtmek-istemiyorum', bikeBrand: u.bikeBrand || '', bikeModel: u.bikeModel || '',
   bikeYear: u.bikeYear || '', bikeType: u.bikeType || '', bikeCc: u.bikeCc || '',
   phone: u.phone || '', emergencyName: u.emergencyName || '', emergencyPhone: u.emergencyPhone || '',
-  email: u.email || '', hasPassword: !!u.hash, providers: [u.googleSub && 'google', u.appleSub && 'apple'].filter(Boolean),
+  email: u.email || '', hasPassword: !!u.hash,
   avatar: u.avatar || ''
 });
 const findByEmail = e => e && [...users.values()].find(u => u.email === e);
@@ -208,7 +209,8 @@ app.post('/api/register', (req, res) => {
   const b = req.body || {}, { f, error } = readProfile(b, { needPhone: true }), pw = String(b.password || '');
   if (regLimited(req.ip)) return res.status(429).json({ error: 'Çok fazla kayıt denemesi. Bir saat sonra tekrar dene.' });
   if (error) return res.status(400).json({ error });
-  if (pw.length < 6 || pw.length > 64) return res.status(400).json({ error: 'Şifre 6-64 karakter olmalı.' });
+  const pwc = Password.check(pw, { username: f.username, email: f.email });
+  if (!pwc.ok) return res.status(400).json({ error: Password.message(pwc), code: 'weakpw' });
   if (findByUsername(f.username)) return res.status(409).json({ error: 'Bu kullanıcı adı alınmış.' });
   if (findByEmail(f.email)) return res.status(409).json({ error: 'Bu e-posta ile zaten bir hesap var.' });
   if (findByPhone(f.phone)) return res.status(409).json({ error: 'Bu telefon numarası başka bir hesapta kayıtlı.' });
@@ -240,7 +242,8 @@ app.post('/api/account', (req, res) => {
   const byPhone = findByPhone(f.phone);
   if (byPhone && byPhone.id !== u.id) return res.status(409).json({ error: 'Bu telefon numarası başka bir hesapta kayıtlı.' });
   const newPw = b.newPassword === undefined ? '' : String(b.newPassword);
-  if (newPw && (newPw.length < 6 || newPw.length > 64)) return res.status(400).json({ error: 'Yeni şifre 6-64 karakter olmalı.' });
+  const npc = newPw ? Password.check(newPw, { username: uname(u), email: f.email }) : null;
+  if (npc && !npc.ok) return res.status(400).json({ error: Password.message(npc), code: 'weakpw' });
   if (u.hash && (f.email !== u.email || newPw)) {          // hassas değişiklikte mevcut şifre şart
     if (isLocked(req.ip)) return res.status(429).json({ error: 'Çok fazla yanlış deneme. 1 dakika bekle.' });
     if (!checkPassword(u, b.currentPassword)) { addFail(req.ip); return res.status(401).json({ error: 'Mevcut şifre hatalı.' }); }
@@ -273,18 +276,17 @@ app.post('/api/forgot', (req, res) => {
 });
 app.post('/api/reset', (req, res) => {
   const b = req.body || {}, pw = String(b.password || '');
-  if (pw.length < 6 || pw.length > 64) return res.status(400).json({ error: 'Şifre 6-64 karakter olmalı.' });
   const h = sha(String(b.token || ''));
   const u = [...users.values()].find(x => x.reset && x.reset.hash === h && x.reset.exp > Date.now());
   if (!u) return res.status(400).json({ error: 'Bağlantı geçersiz ya da süresi dolmuş. Yeni bir bağlantı iste.' });
+  const pwc = Password.check(pw, { username: uname(u), email: u.email });
+  if (!pwc.ok) return res.status(400).json({ error: Password.message(pwc), code: 'weakpw' });
   setPassword(u, pw);
   delete u.reset;
   u.sv = (u.sv || 0) + 1;   // eski oturumları kapat
   saveUsers();
   res.json({ ok: true });
 });
-
-require('./social-auth')({ app, users, saveUsers, crypto, sign, clean, readProfile, normPhone, findByEmail, findByUsername, findByPhone, startSession, pub, uname, APP_URL });
 
 app.post('/api/logout', (req, res) => {
   res.setHeader('Set-Cookie', 'sid=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
@@ -303,7 +305,7 @@ io.use((socket, next) => {
 const social = require('./social')({ app, io, users, userFromCookie, uname, dataDir: DATA_DIR });
 
 // Canlı sürücü konumu: açık rızalı paylaşım, yalnızca bellekte (Socket.IO)
-require('./live')({ io, uname, isFriend: social.isFriend });
+require('./live')({ io, uname, isFriend: social.isFriend, isBlocked: social.isBlocked });
 
 // Grup sürüşü: kalıcı gruplar, davet kodu, lider, canlı üye konumu ve sürüş kaydı (interkom gruplarından bağımsız)
 const rgApi = require('./ridegroups')({ app, express, io, users, userFromCookie, uname, dataDir: DATA_DIR, social });
@@ -317,6 +319,7 @@ require('./weather')({ app, userFromCookie });
 
 // Harita servisleri: istemci yapılandırması, hedef arama, rota
 require('./maps')({ app, userFromCookie });
+require('./offline')({ app, express, userFromCookie });
 
 // Sürüş kayıtları: yükleme (doğrulama + yeniden hesap), listeleme, okuma
 require('./rides')({ app, express, userFromCookie, dataDir: DATA_DIR });
