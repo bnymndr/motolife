@@ -380,5 +380,16 @@ Paralel: TURN ve bağlantı toparlanması, grup sürüşünden (7) önce.
 - Etkinlik oluşturma/düzenleme YALNIZ Sosyal › Gruplarım › grup › «Etkinlik» sekmesinde (`src/SocialProfile.jsx`: `GroupEvents`, `EventForm`, `PointPicker`). Harita'daki Grup (arkadaşlar) sheet'inde etkinlik arayüzü YOK.
 - «Navigasyonla Başla» → `window.openEventNav(ev)` (index.html) → haritada `mapH.startEvent(ev)` (`public/map.js`). Kuş uçumu çizgi yok: noktalar (başlangıç → mola/uğrak → varış) sırayla, her bacak NORMAL navigasyonla (`/api/route`, `startNav`/`updateNav`) rota alır; varışta sıradaki bacak otomatik başlar (`S.evq`, `S.evAdv`).
 - social.bundle.js: esbuild'i `nodePaths:['/opt/npm-tools/node_modules']` ile inline derle (build-social.js değişmedi).
-- `public/group-events.js` artık KULLANILMIYOR (silme onay bekliyor); `.mm-ev*` CSS'i de.
+- `public/group-events.js` ve `.mm-ev*` CSS'i silindi (kullanıcı onayıyla).
 - Testler: map-ui 110, groups-ui 44, events-ui 20, events-node 29.
+
+## Etkinlik: yalnız «Mola» + sürükle-sırala
+- «Uğrak» türü kaldırıldı: tüm ara noktalar «Mola» (sunucu `kind` daima 'mola'; eski kayıtlardaki 'ugrak' da mola olarak okunur). Form: «+ Mola Noktası Ekle».
+- Mola sırası: 2+ molada tutamak (☰) basılı tutulup (350 ms) sürüklenir (`EventForm.gripDown`, pointer events, `data-stop`/`data-grip`); etiketler sıraya göre yeniden numaralanır. Kaydedilen sıra = navigasyon sırası (başlangıç → mola 1..n → varış, `map.js startEvent`).
+- Testler: groups-ui 49.
+
+## Etkinlik: başta tüm rota ön izleme + onay
+- `startEvent(ev)` artık önce `evOverview(ev)`: başlangıç → molalar → varış için HER ayağın yolu `/api/route` ile çizilir (numaralı pinler, tüm rota ekrana sığdırılır), alt panelde (`#mm-evov`, `.mm-gsheet`) tüm program + ayak mesafe/süre + toplam gösterilir. «Onayla ve Başla» → `beginEvent` (sıralı normal navigasyon, ayak ayak); «Vazgeç» → panel/çizim temizlenir. Çizilemeyen ayak «Yol çizilemedi» yazar (kuş uçumu çizgi yok).
+- Not: önizleme n-1 ayak isteği yapar (/api/route sınırı 12/dk, en çok 8 mola → 9 istek).
+- Test: map-ui 114.
+- Onay panelinin sağında sabit 132×178 px mini GERÇEK harita (`#mm-ovmini`, ikinci Leaflet örneği: etkileşimsiz, aynı karo URL'i, numaralı küçük pinler + aynı rota çizgileri, «© OpenStreetMap» etiketi). Panel yüksekliği artmaz. Mini harita/çizimler `evOvClear` ile kaldırılır. Test: map-ui 116 (sahte Leaflet; gerçek karo/çizim TEST EDİLMEDİ).

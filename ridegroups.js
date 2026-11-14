@@ -517,7 +517,7 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
     if (!p || typeof p !== 'object') return null;
     const la = num(p.lat), lo = num(p.lon), name = txt(p.name, 60);
     if (la == null || lo == null || Math.abs(la) > 90 || Math.abs(lo) > 180 || !name) return null;
-    const o = { name, lat: r5(la), lon: r5(lo) }; if (withKind) o.kind = p.kind === 'ugrak' ? 'ugrak' : 'mola'; return o;
+    const o = { name, lat: r5(la), lon: r5(lo) }; if (withKind) o.kind = 'mola'; return o;
   };
   function cleanEvent(b) {
     b = b || {};
@@ -525,8 +525,8 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
     let at = null; if (b.at != null && b.at !== '') { at = num(b.at); const now = Date.now(); if (at == null || at < now - 86400000 || at > now + 3 * 365 * 86400000) return { error: 'Etkinlik tarihi geçersiz.' }; }
     const start = cleanPt(b.start), dest = cleanPt(b.dest);
     if (!start) return { error: 'Başlangıç yeri seçilmeli.' }; if (!dest) return { error: 'Varış noktası seçilmeli.' };
-    const raw = Array.isArray(b.stops) ? b.stops : []; if (raw.length > MAX_STOPS) return { error: 'En fazla ' + MAX_STOPS + ' uğrak/mola noktası eklenebilir.' };
-    const stops = []; for (const x of raw) { const c = cleanPt(x, true); if (!c) return { error: 'Uğrak/mola noktalarından birinde ad ya da konum eksik.' }; stops.push(c); }
+    const raw = Array.isArray(b.stops) ? b.stops : []; if (raw.length > MAX_STOPS) return { error: 'En fazla ' + MAX_STOPS + ' mola noktası eklenebilir.' };
+    const stops = []; for (const x of raw) { const c = cleanPt(x, true); if (!c) return { error: 'Mola noktalarından birinde ad ya da konum eksik.' }; stops.push(c); }
     return { ev: { title, at, start, dest, stops, note: txt(b.note, 200) } };
   }
   const evView = (g, e) => ({ id: e.id, title: e.title, at: e.at, start: e.start, dest: e.dest, stops: e.stops, note: e.note || '', by: nameOf(e.by), createdAt: e.createdAt });
