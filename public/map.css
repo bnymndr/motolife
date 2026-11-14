@@ -384,3 +384,4 @@
 .mm-bottom>.mm-navbar .mm-nb.stop{font-size:14px}
 .mm.navon .mm-spill{bottom:calc(var(--pad) + var(--navh,0px) + 8px + env(safe-area-inset-bottom,0px))}
 .mm.navon .mm-ctr{bottom:calc(var(--pad) + var(--navh,0px) + 14px + env(safe-area-inset-bottom,0px))}
+.mm[data-vec] .leaflet-tile-pane,.mm[data-vec] .leaflet-overlay-pane{filter:none!important}

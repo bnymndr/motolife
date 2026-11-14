@@ -351,7 +351,8 @@
     function chip(text, state) { el.gps.textContent = text; el.gps.dataset.s = state; }
     function setTheme(t) {
       S.theme = t === 'light' ? 'light' : 'dark'; el.root.dataset.theme = S.theme; store.set('mm_theme', S.theme);
-      if (S.tiles && S.cfg) {                                                // hazır koyu karo tanımlıysa onu kullan (CSS filtresi gerekmez)
+      if (S.gl) { try { S.gl.getMaplibreMap().setStyle(S.theme === 'dark' ? S.cfg.vecDark : S.cfg.vecLight); } catch {} delete el.root.dataset.nd; el.root.dataset.vec = '1'; }
+      else if (S.tiles && S.cfg) {                                           // hazır koyu karo tanımlıysa onu kullan (CSS filtresi gerekmez)
         const nd = !S.fbUrl && S.theme === 'dark' && !!S.cfg.tileUrlDark, url = S.fbUrl || (nd ? S.cfg.tileUrlDark : S.cfg.tileUrl);
         if (S.tiles._url !== url) S.tiles.setUrl(url);
         if (nd) el.root.dataset.nd = '1'; else delete el.root.dataset.nd;
@@ -360,6 +361,25 @@
     }
     function measureHead() { const nb = el.navbar.parentNode !== el.head && !el.navbar.hidden ? Math.round(el.navbar.getBoundingClientRect().height) : 0; el.root.style.setProperty('--navh', nb + 'px'); const h = el.head.getBoundingClientRect(), r = el.root.getBoundingClientRect(); if (r.height) el.root.style.setProperty('--head', Math.round(h.bottom - r.top) + 'px'); }
 
+    /* Vektör harita (OpenFreeMap: anahtarsız, ücretsiz): MapLibre GL, Leaflet içinde. Kütüphane/WebGL/stil yüklenemezse raster OSM kalır. */
+    const MLGL = 'https://cdn.jsdelivr.net/npm/maplibre-gl@4/dist/maplibre-gl.', MLPL = 'https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.0/leaflet-maplibre-gl.js';
+    function loadTag(tag, url) { return new Promise((res, rej) => { const e = document.createElement(tag); if (tag === 'link') { e.rel = 'stylesheet'; e.href = url; } else e.src = url; e.crossOrigin = 'anonymous'; e.onload = res; e.onerror = () => rej(new Error('yüklenemedi')); document.head.appendChild(e); }); }
+    function glOk() { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; } }
+    async function tryVector(cfg) {
+      if (!cfg.vecLight || !glOk()) return;
+      try {
+        if (!window.maplibregl) { loadTag('link', MLGL + 'css').catch(() => {}); await loadTag('script', MLGL + 'js'); }
+        if (!window.L.maplibreGL) await loadTag('script', MLPL);
+        if (!window.maplibregl || !window.L.maplibreGL || !S.map) return;
+        const gl = window.L.maplibreGL({ style: S.theme === 'dark' ? cfg.vecDark : cfg.vecLight, attributionControl: false });
+        gl.addTo(S.map); const m = gl.getMaplibreMap();
+        let done = false, bad = 0;
+        m.on('load', () => { if (done) return; done = true; S.gl = gl; if (S.tiles) S.map.removeLayer(S.tiles); el.root.dataset.vec = '1'; delete el.root.dataset.nd; el.attr.innerHTML = '&copy; <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> &copy; <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' + (cfg.route && cfg.route.attr ? ' · ' + cfg.route.attr : ''); });
+        m.on('error', () => { if (done || ++bad < 3) return; S.map.removeLayer(gl); });   // stil yüklenemedi: raster kalır
+        setTimeout(() => { if (!done) { try { S.map.removeLayer(gl); } catch {} } }, 15000);
+      } catch { /* raster OSM kalır */ }
+    }
+
     /* ---------- Harita ---------- */
     function initMap(cfg) {
       S.cfg = cfg;
@@ -367,11 +387,12 @@
       S.map = L.map(el.map, { zoomControl: false, attributionControl: false, worldCopyJump: true, maxZoom: cfg.tileMax || 19, preferCanvas: true, zoomSnap: 0.5, zoomDelta: 1, wheelPxPerZoomLevel: 90, tapTolerance: 18, bounceAtZoomLimits: false }).setView([39, 35], 5);   // karşılama görünümü (Türkiye); konum işareti değil
       S.tiles = L.tileLayer(cfg.tileUrl, { subdomains: cfg.tileSub || 'abc', maxZoom: cfg.tileMax || 19, maxNativeZoom: cfg.tileMax || 19, updateWhenIdle: true, updateWhenZooming: false, keepBuffer: 1, detectRetina: /@2x|\{r\}/.test(cfg.tileUrl) ? false : (window.devicePixelRatio || 1) > 1.5 && !!cfg.tileRetina }).addTo(S.map);
       /* Karolar hiç yüklenmezse (engel, kota, ağ) ücretsiz yedek sağlayıcılara sırayla geç */
-      { const FB = [['https://tile.openstreetmap.org/{z}/{x}/{y}.png', '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'],
-          ['https://tile-a.openstreetmap.fr/hot/{z}/{x}/{y}.png', '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &middot; HOT']];
+      { const FB = [['https://tile-a.openstreetmap.fr/hot/{z}/{x}/{y}.png', '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &middot; HOT'],
+          ['https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png', '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &middot; CyclOSM']];
         let good = 0, bad = 0, i = 0;
         S.tiles.on('tileload', () => { good++; if (S.tileMsg) { S.tileMsg = 0; el.load.hidden = true; } });
         S.tiles.on('tileerror', () => { if (good || ++bad < 4) return; if (i >= FB.length) { if (!S.tileMsg) { S.tileMsg = 1; el.load.hidden = false; el.load.textContent = 'Harita karoları yüklenemedi. Reklam engelleyici/VPN veya internet bağlantısını kontrol et.'; } return; } bad = 0; S.fbUrl = FB[i][0]; el.attr.innerHTML = FB[i][1]; i++; delete el.root.dataset.nd; S.tiles.setUrl(S.fbUrl); }); }
+      tryVector(cfg);
       el.attr.innerHTML = (cfg.tileAttr || '') + (cfg.route && cfg.route.attr ? ' · ' + cfg.route.attr : '');
       S.riders = L.layerGroup().addTo(S.map);
       S.map.on('dragstart', () => { S.follow = false; paintLocate(); paintRot(); });

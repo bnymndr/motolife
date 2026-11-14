@@ -3,9 +3,8 @@
 // Anahtarlar yalnızca sunucuda (config.php) durur; istemciye hiç gönderilmez.
 declare(strict_types=1);
 
-const MP_OSM_TILES = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-const MP_DARK_TILES = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png';
-const MP_OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>';
+const MP_OSM_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const MP_OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
 const MP_PROVIDERS = [
     'geoapify' => ['profile' => 'motorcycle', 'label' => 'Motosiklet rotası', 'avoid' => ['ferries'], 'daily' => 2500, 'attr' => 'Rota: <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Powered by Geoapify</a>'],
     'ors' => ['profile' => 'driving-car', 'label' => 'Araç rotası · motosiklet için optimize değil', 'avoid' => ['highways', 'tolls', 'ferries'], 'daily' => 1500, 'attr' => 'Rota: <a href="https://openrouteservice.org/" target="_blank" rel="noopener">openrouteservice.org</a> (HeiGIT)'],
@@ -86,7 +85,8 @@ function mp_state(): array {
 }
 function h_maps_config(): never {
     need_user(); $s = mp_state(); $P = $s['P']; $tile = (string)cfg('MAP_TILE_URL', MP_OSM_TILES);
-    out(['tileUrl' => $tile, 'tileUrlDark' => (string)cfg('MAP_TILE_URL_DARK', cfg('MAP_TILE_URL', '') ? '' : MP_DARK_TILES), 'tileSub' => preg_match('/cartocdn/', $tile) ? 'abcd' : 'abc', 'tileAttr' => (string)cfg('MAP_TILE_ATTRIBUTION', MP_OSM_ATTR), 'tileMax' => 19,
+    $vec = cfg('MAP_TILE_URL', '') === '' && strtolower((string)cfg('MAP_VECTOR', 'on')) !== 'off';
+    out(['tileUrl' => $tile, 'vecLight' => $vec ? (string)cfg('MAP_VECTOR_STYLE', 'https://tiles.openfreemap.org/styles/liberty') : '', 'vecDark' => $vec ? (string)cfg('MAP_VECTOR_STYLE_DARK', 'https://tiles.openfreemap.org/styles/dark') : '', 'tileUrlDark' => (string)cfg('MAP_TILE_URL_DARK', ''), 'tileSub' => preg_match('/cartocdn/', $tile) ? 'abcd' : 'abc', 'tileAttr' => (string)cfg('MAP_TILE_ATTRIBUTION', MP_OSM_ATTR), 'tileMax' => 19,
         'tileRetina' => (bool)preg_match('/@2x|\{r\}/', $tile), 'routing' => (bool)$P,
         'route' => $P ? ['provider' => $s['provider'], 'profile' => $P['profile'], 'label' => $P['label'], 'avoid' => $P['avoid'], 'attr' => $P['attr']] : null]);
 }
