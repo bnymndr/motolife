@@ -38,6 +38,7 @@ try{var _fs=+localStorage.getItem("ml_fs");if(_fs>=88&&_fs<=125&&_fs!==100)docum
   .bike-sheet{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-end;justify-content:center}
   .bike-sheet[hidden]{display:none}
   .bike-sheet-bg{position:absolute;inset:0;background:rgb(0 0 0 / .6)}
+  .bike-bar{position:sticky;bottom:calc(-1rem - env(safe-area-inset-bottom));z-index:3;display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin:1rem -1rem calc(-1rem - env(safe-area-inset-bottom));padding:.75rem 1rem calc(.75rem + env(safe-area-inset-bottom));border-top:1px solid rgba(255,255,255,.12);background:rgb(var(--ink-rgb))}.bike-bar[hidden]{display:none}
   .bike-sheet-panel{position:relative;width:100%;max-width:28rem;max-height:86dvh;overflow:auto;padding:1rem 1rem calc(1rem + env(safe-area-inset-bottom));border-radius:1.25rem 1.25rem 0 0;background:linear-gradient(180deg,rgb(var(--ink-rgb)),rgb(var(--panel)));box-shadow:0 -10px 30px rgb(0 0 0 / .5),inset 0 1px 0 rgb(var(--a4) / .3)}
   .bike-sheet-x{width:2.75rem;height:2.75rem;border-radius:9999px;border:0;color:rgb(var(--z2));background:rgb(255 255 255 / .08);font-size:1.1rem}
   .bike-row-btn{display:flex;align-items:center;justify-content:space-between;gap:.75rem;width:100%;min-height:3.25rem;padding:.5rem .9rem;border:0;border-radius:1rem;color:#fff;text-align:left;font-size:1rem;background:rgb(255 255 255 / .06);box-shadow:inset 0 0 0 1px rgb(255 255 255 / .1)}
@@ -326,6 +327,7 @@ try{var _fs=+localStorage.getItem("ml_fs");if(_fs>=88&&_fs<=125&&_fs!==100)docum
       </div>
       <p id="bikeColorHint" class="mt-2 text-xs text-zinc-400" hidden>Renk seçmek için önce bir motosiklet tipi seç.</p>
       <p id="bikeLookMsg" class="mt-2 text-sm text-rose-300" role="status" hidden></p>
+      <div id="bikeBar" class="bike-bar" hidden><button type="button" class="btn-sec min-h-[48px]" data-bk="cancel">Vazgeç</button><button type="button" class="btn-sec btn-accent min-h-[48px]" data-bk="save">Kaydet ve Çık</button></div>
     </div>
   </div>
   <section class="card flex flex-col gap-1.5">
@@ -760,13 +762,26 @@ function paintBikeTypes() {
   $('bikeTypeVal').textContent = sel ? T[sel] : 'Seçilmedi';
   $('bikeTypes').innerHTML = [['', 'Seçilmedi']].concat(Object.keys(T).map(k => [k, T[k]])).map(([k, n]) => `<li role="presentation"><button type="button" role="option" aria-selected="${k === sel}" data-t="${k}"><span>${n}</span>${k === sel ? '<b aria-hidden="true">✓</b>' : ''}</button></li>`).join('');
 }
+var bikeSnap = null;
+function bikeBar() { const b = $('bikeBar'); if (b) b.hidden = !(bikeSnap && me && ((me.bikeType || '') !== bikeSnap.t || bikeColorGet() !== bikeSnap.c)); }
 function bikeSheet(open) {
   const sh = $('bikeSheet'); sh.hidden = !open;
-  if (open) { $('bikeLookMsg').hidden = true; listOpen('bikeTypes', false); listOpen('bikeColors', false); paintBikeTypes(); paintBike(); $('bikeTypeRow').focus(); }
+  if (open) { bikeSnap = { t: (me && me.bikeType) || '', c: bikeColorGet() }; bikeBar(); $('bikeLookMsg').hidden = true; listOpen('bikeTypes', false); listOpen('bikeColors', false); paintBikeTypes(); paintBike(); $('bikeTypeRow').focus(); }
   else $('motoLook').focus();
 }
 $('motoLook').onclick = () => bikeSheet(true);
-$('bikeSheet').addEventListener('click', e => { if (e.target.closest('[data-close]')) bikeSheet(false); });
+$('bikeSheet').addEventListener('click', e => {
+  if (e.target.closest('[data-close]')) return bikeSheet(false);
+  const k = e.target.closest('[data-bk]'); if (!k) return;
+  if (k.dataset.bk === 'save') return bikeSheet(false);
+  const sn = bikeSnap; if (sn && me) {                      // Vazgeç: tip ve rengi açılıştaki haline döndür
+    try { localStorage.setItem('ml_bikecolor:' + me.username, sn.c); } catch {}
+    const prev = me.bikeType || ''; me.bikeType = sn.t; paintBikeTypes(); paintBike();
+    if (prev !== sn.t) bikeSave(me.bikeBrand || '', me.bikeModel || '', { year: me.bikeYear == null ? '' : me.bikeYear, type: sn.t, cc: me.bikeCc == null ? '' : me.bikeCc }).catch(() => {});
+  }
+  bikeSheet(false);
+});
+$('bikeSheet').addEventListener('click', () => setTimeout(bikeBar, 30));
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('bikeSheet').hidden) bikeSheet(false); });
 $('bikeTypes').onclick = async e => {
   const b = e.target.closest('button[data-t]'); if (!b || !me) return; const t = b.dataset.t, prev = me.bikeType || '', msg = $('bikeLookMsg'); if (t === prev) return;

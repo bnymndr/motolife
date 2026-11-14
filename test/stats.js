@@ -67,7 +67,7 @@ srv.listen(0, async () => {
   ok(await pg.evaluate(() => !!document.querySelector('#settings [data-go="moto"]') && !document.getElementById('sBrand') && !document.getElementById('sModel')), 'Ayarlar listesinde «Motosiklet Bilgileri» ayrı satır; profil formunda marka/model yok');
   await pg.click('#settings [data-go="moto"]'); await pg.waitForTimeout(200); await pg.fill('#settings [data-moto=name]', 'Honda CB650R'); await pg.click('#settings [data-act="motosave"]'); await pg.waitForTimeout(300);
   ok(global.__acc && global.__acc.bikeBrand === 'Honda' && global.__acc.bikeModel === 'CB650R' && global.__acc.username === 'ben' && global.__acc.firstName === 'Ben' && global.__acc.email === 'a@b.c' , 'motosiklet kaydı: profil alanları mevcut değerleriyle, yalnız motosiklet alanları değişerek gider');
-  await pg.click('#settings [data-go="home"]'); await pg.evaluate(() => document.querySelector('[data-nav="motor"]').click()); await pg.waitForTimeout(300);
+  await pg.evaluate(() => document.querySelector('[data-nav="motor"]').click()); await pg.waitForTimeout(300);
   ok(await pg.evaluate(() => !!document.querySelector('#motor #bikeImg') && document.getElementById('bikeImg').getBoundingClientRect().width > 150), 'My Moto: tip görseli');
   await pg.click('#motoEdit'); await pg.waitForTimeout(200); ok(await pg.isVisible('#settings [data-moto=name]'), '🛠️ düğmesi motosiklet ayarları sayfasını açar (profil değil)');
   await pg.click('#settings [data-go="home"]');

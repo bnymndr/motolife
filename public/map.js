@@ -276,8 +276,17 @@
     <div class="mm-toast" id="mm-toast" hidden></div>
     <button type="button" class="mm-spill" id="mm-spill" hidden aria-label="Sürüş Panelini Aç"><b id="mm-spill-v">—</b><small>km/sa</small></button>
 
+    <div class="mm-attr" id="mm-attr"></div>
     <div class="mm-bottom">
-      <div class="mm-attr" id="mm-attr"></div>
+      <div class="mm-now" id="mm-now" hidden aria-live="off"><span id="mm-now-t"></span></div>
+      <div class="mm-mctl" id="mm-mctl" hidden role="group" aria-label="Müzik Kontrolleri">
+        <button type="button" class="mm-mk" id="mm-kprev" aria-label="Önceki Parça">⏮</button>
+        <button type="button" class="mm-mk mm-kp" id="mm-kplay" aria-label="Duraklat">⏸</button>
+        <button type="button" class="mm-mk" id="mm-knext" aria-label="Sonraki Parça">⏭</button>
+        <i class="mm-ksep"></i>
+        <button type="button" class="mm-mk mm-kv" id="mm-kvm" aria-label="Sesi Kıs">−</button>
+        <button type="button" class="mm-mk mm-kv" id="mm-kvp" aria-label="Sesi Aç">+</button>
+      </div>
       <div class="mm-panel" id="mm-panel">
         <button type="button" class="mm-pcol" id="mm-pcol" hidden aria-label="Paneli Küçült">${ICON.chev}<span>Küçült</span></button>
         <button type="button" class="mm-start" id="mm-start">${ICON.play}<span>Sürüşü Başlat</span></button>
@@ -359,7 +368,7 @@
       }
       el.menu.querySelectorAll('[data-th]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.th === S.theme)));
     }
-    function measureHead() { const nb = el.navbar.parentNode !== el.head && !el.navbar.hidden ? Math.round(el.navbar.getBoundingClientRect().height) : 0; el.root.style.setProperty('--navh', nb + 'px'); const h = el.head.getBoundingClientRect(), r = el.root.getBoundingClientRect(); if (r.height) el.root.style.setProperty('--head', Math.round(h.bottom - r.top) + 'px'); }
+    function measureHead() { const nb = el.navbar.parentNode !== el.head && !el.navbar.hidden ? Math.round(el.navbar.getBoundingClientRect().height) : 0; el.root.style.setProperty('--navh', nb + 'px'); { const bt = el.root.querySelector('.mm-bottom'); if (bt) el.root.style.setProperty('--both', Math.round(bt.getBoundingClientRect().height) + 'px'); } const h = el.head.getBoundingClientRect(), r = el.root.getBoundingClientRect(); if (r.height) el.root.style.setProperty('--head', Math.round(h.bottom - r.top) + 'px'); }
 
     /* Vektör harita (OpenFreeMap: anahtarsız, ücretsiz): MapLibre GL, Leaflet içinde. Kütüphane/WebGL/stil yüklenemezse raster OSM kalır. */
     const MLGL = 'https://cdn.jsdelivr.net/npm/maplibre-gl@4/dist/maplibre-gl.', MLPL = 'https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.0/leaflet-maplibre-gl.js';
@@ -400,7 +409,7 @@
       el.load.hidden = true;
       S.ready = true;
       paintLocate(); setTheme(S.theme);
-      if ('ResizeObserver' in window) new ResizeObserver(() => { if (S.boxOn) rotBox(true); else S.map && S.map.invalidateSize(); measureHead(); }).observe(el.root); if ('ResizeObserver' in window) new ResizeObserver(() => measureHead()).observe(el.navbar);
+      if ('ResizeObserver' in window) new ResizeObserver(() => { if (S.boxOn) rotBox(true); else S.map && S.map.invalidateSize(); measureHead(); }).observe(el.root); if ('ResizeObserver' in window) { const ro = new ResizeObserver(() => measureHead()); ro.observe(el.navbar); ro.observe(el.root.querySelector('.mm-bottom')); }
       measureHead();
       if (S.active) startWatch();
     }
@@ -1100,15 +1109,16 @@
       if (sm.rejectedAcc || sm.rejectedJump) notes.push(`Elenen konum: ${sm.rejectedAcc} zayıf doğruluk, ${sm.rejectedJump} GPS sıçraması.`);
       if (sm.gaps || sm.reanchors) notes.push(`Konum alınamayan ${sm.gaps + sm.reanchors} kesinti oldu; o aralıklardaki mesafe ölçülmedi.`);
       if (sm.limitReached) notes.push('Kayıt sınırına ulaşıldı; sonrası kaydedilmedi.');
-      modal('<h3>Sürüş Özeti</h3><div class="mm-sum">' +
-        row('Mesafe', fmtDist(sm.distM)) + row('Aktif Süre', dur(sm.durationS)) + row('Hareket Süresi', dur(sm.movingS)) + row('Duruş Süresi', dur(sm.stoppedS)) +
-        row('Ort. Hız (hareket)', kh(sm.avgMovingKmh)) + row('Ort. Hız (toplam)', kh(sm.avgTotalKmh)) + row('Maks. Hız', kh(sm.maxKmh)) +
-        row('Duraklatma', sm.pausedS >= 1 ? sm.pauseCount + ' × ' + dur(sm.pausedS) : '—') + row('Rota noktası', sm.points) + '</div>' +
-        '<div id="mm-telsum"></div>' +
+      const can = opts && opts.onAnalyze && mode === 'saved';
+      modal('<h3>Sürüş Özeti</h3><div class="mm-sum mm-sum3">' +
+        row('Mesafe', fmtDist(sm.distM)) + row('Süre', dur(sm.durationS)) + row('Ort. Hız', kh(sm.avgMovingKmh)) + '</div>' +
         notes.map(n => `<p class="warn">${esc(n)}</p>`).join('') +
-        '<p>Mesafe ve hızlar telefonun GPS ölçümlerinden hesaplanır. Aktif süre duraklatmaları içermez; ortalama hız ikisine göre de verilir.</p>' +
+        '<details class="mm-more"><summary>Daha fazla</summary><div class="mm-sum">' +
+        row('Hareket', dur(sm.movingS)) + row('Duruş', dur(sm.stoppedS)) + row('Ort. Hız (toplam)', kh(sm.avgTotalKmh)) + row('Maks. Hız', kh(sm.maxKmh)) +
+        row('Duraklatma', sm.pausedS >= 1 ? sm.pauseCount + ' × ' + dur(sm.pausedS) : '—') + row('Rota noktası', sm.points) + '</div><div id="mm-telsum"></div></details>' +
         `<p class="mm-sync" id="mm-syncst" data-s="local">${savedLine()}</p>` +
-        '<div class="mm-mbtns">' + (opts && opts.onAnalyze && mode === 'saved' ? '<button type="button" class="mm-mb" data-act="analyze">Ayrıntılı Analiz</button>' : '') + '<button type="button" class="mm-mb primary" data-act="close" data-focus>Tamam</button></div>');
+        (can ? '<p class="mm-hint">Rota, hız grafiği ve sensör ayrıntıları Sürüş Analizi\'nde.</p>' : '') +
+        '<div class="mm-mbtns">' + (can ? '<button type="button" class="mm-mb" data-act="analyze">Sürüş Analizi</button>' : '') + '<button type="button" class="mm-mb primary" data-act="close" data-focus>Tamam</button></div>');
       S.sumRide = id;
     }
     function endRide(at) {
@@ -1178,15 +1188,37 @@
     window.addEventListener('ml:music-volume', e => { MV.v = Math.max(0, Math.min(100, Number(e.detail && e.detail.v) || 0)); muVol(); });
     window.addEventListener('ml:voice-activity', e => { MV.duck = !!(e.detail && e.detail.active); muVol(); });
     aud.addEventListener('play', muVol);
-    function muPaint() { const b = $('mm-musbtn'); b.classList.toggle('on', muBusy() && mu.classList.contains('off')); b.setAttribute('aria-expanded', String(!mu.classList.contains('off'))); }
+    function muPaint() { muStrip(); const b = $('mm-musbtn'); b.classList.toggle('on', muBusy() && mu.classList.contains('off')); b.setAttribute('aria-expanded', String(!mu.classList.contains('off'))); }
     function muOpen(o) { mu.classList.toggle('off', !o); muPaint(); if (o) { el.menu.hidden = true; showResults(''); } }
     function muTab(t) {
       MU.tab = t; mu.querySelectorAll('[data-mt]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mt === t)));
       mu.querySelectorAll('[data-pane]').forEach(p => { p.hidden = p.dataset.pane !== t; });
     }
-    function ytStop() { $('mm-ytbox').innerHTML = ''; $('mm-ytstop').hidden = true; muPaint(); }
-    function ytPlay(str) {
-      const id = Core.parseYouTube(str), note = $('mm-ytnote');
+    /* Sürüş ekranı müzik şeridi: parça adı (akan yazı) + önceki / durdur-devam / sonraki / ses −+ */
+    const MS = { ytPlaying: true, ytTitle: '', last: '' };
+    const ytCmd = (fn, args) => { const f = $('mm-ytbox').firstChild; if (f && f.contentWindow) { try { f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: fn, args: args || [] }), '*'); } catch {} } };
+    function muTitle() { if ($('mm-ytbox').firstChild) return MS.ytTitle || 'YouTube'; const t = MU.tracks[MU.i]; return t ? t.name : ''; }
+    function muStrip() {
+      const on = !!$('mm-ytbox').firstChild || MU.tracks.length > 0, now = $('mm-now'), ctl = $('mm-mctl');
+      now.hidden = ctl.hidden = !on; if (!on) { MS.last = ''; return; }
+      const playing = $('mm-ytbox').firstChild ? MS.ytPlaying : !aud.paused && !aud.ended, k = $('mm-kplay');
+      k.textContent = playing ? '⏸' : '▶'; k.setAttribute('aria-label', playing ? 'Duraklat' : 'Devam Et');
+      const t = muTitle(); if (t === MS.last) return; MS.last = t;
+      const sp = $('mm-now-t'); sp.className = ''; sp.textContent = '♫ ' + t;
+      requestAnimationFrame(() => { if (sp.scrollWidth > now.clientWidth - 24) { sp.textContent = '♫ ' + t + '   •   ♫ ' + t + '   •   '; sp.className = 'run'; sp.style.setProperty('--dur', Math.max(8, Math.round(t.length * 0.45)) + 's'); } });
+    }
+    $('mm-kplay').addEventListener('click', () => { if ($('mm-ytbox').firstChild) { MS.ytPlaying = !MS.ytPlaying; ytCmd(MS.ytPlaying ? 'playVideo' : 'pauseVideo'); muStrip(); gHook({ t: 'toggle', playing: MS.ytPlaying }); } else if (aud.paused) aud.play().catch(() => {}); else aud.pause(); });
+    $('mm-kprev').addEventListener('click', () => { if ($('mm-ytbox').firstChild) { ytCmd('previousVideo'); gHook({ t: 'cmd', cmd: 'prev' }); } else muPlay(MU.i - 1); });
+    $('mm-knext').addEventListener('click', () => { if ($('mm-ytbox').firstChild) { ytCmd('nextVideo'); gHook({ t: 'cmd', cmd: 'next' }); } else muPlay(MU.i + 1); });
+    const kvol = d => { MV.v = Math.max(0, Math.min(100, Math.round(MV.v / 10) * 10 + d)); store.set('ml_vol_music', String(MV.v)); muVol(); toast('Müzik sesi %' + MV.v, 900); };
+    $('mm-kvm').addEventListener('click', () => kvol(-10)); $('mm-kvp').addEventListener('click', () => kvol(10));
+    window.addEventListener('message', e => { const f = $('mm-ytbox').firstChild; if (!f || e.source !== f.contentWindow) return; let d; try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch { return; } const i = d && d.info; if (!i) return;
+      if (i.videoData && i.videoData.title && i.videoData.title !== MS.ytTitle) { MS.ytTitle = i.videoData.title; MS.last = ''; }
+      if (typeof i.playerState === 'number') MS.ytPlaying = i.playerState === 1 || i.playerState === 3; muStrip(); });
+    const gHook = o => { try { if (S.g && S.g.musicLocal) S.g.musicLocal(o); } catch {} };       // grup lideri müzik paylaşımı (group-ride.js)
+    function ytStop(remote) { const was = !!$('mm-ytbox').firstChild; MS.ytTitle = ''; MS.ytPlaying = true; $('mm-ytbox').innerHTML = ''; $('mm-ytstop').hidden = true; muPaint(); if (remote !== true && was) gHook({ t: 'stop' }); }
+    function ytPlay(str, remote) {
+      const id = typeof str === 'string' ? Core.parseYouTube(str) : str, note = $('mm-ytnote');
       if (!id) { note.textContent = 'Bu bağlantıyı tanıyamadım. Bir YouTube video ya da liste bağlantısı yapıştır.'; note.classList.add('warn'); return; }
       note.classList.remove('warn');
       aud.pause();
@@ -1194,18 +1226,19 @@
         : 'https://www.youtube-nocookie.com/embed/videoseries?autoplay=1&playsinline=1&rel=0&enablejsapi=1&list=' + id.list;
       const f = document.createElement('iframe');
       f.src = src; f.title = 'YouTube Oynatıcı'; f.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture'); f.setAttribute('allowfullscreen', ''); f.referrerPolicy = 'strict-origin-when-cross-origin';
-      f.addEventListener('load', () => { ytVol(); setTimeout(ytVol, 1500); });                 // oynatıcı hazır olunca kayıtlı müzik sesi uygulanır
-      $('mm-ytbox').innerHTML = ''; $('mm-ytbox').appendChild(f); $('mm-ytstop').hidden = false;
+      f.addEventListener('load', () => { ytVol(); setTimeout(ytVol, 1500); try { f.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1 }), '*'); } catch {} });                 // oynatıcı hazır olunca kayıtlı müzik sesi uygulanır
+      MS.ytTitle = ''; MS.ytPlaying = true; $('mm-ytbox').innerHTML = ''; $('mm-ytbox').appendChild(f); $('mm-ytstop').hidden = false;
       note.textContent = 'Oynatılıyor. Durdurmak için aşağıdaki düğmeyi ya da videonun kendi düğmesini kullan.';
-      store.set('mm_yt', String(str).trim().slice(0, 300)); muPaint();
+      if (typeof str === 'string') store.set('mm_yt', String(str).trim().slice(0, 300)); muPaint();
+      if (remote !== true) gHook({ t: 'play', id: { video: id.video || null, list: id.list || null } });
     }
     muVol();
     $('mm-ytform').addEventListener('submit', e => { e.preventDefault(); ytPlay($('mm-yturl').value); });
-    $('mm-ytstop').addEventListener('click', ytStop);
+    $('mm-ytstop').addEventListener('click', () => ytStop());
     $('mm-yturl').value = store.get('mm_yt', '');
     function muNow() {
       const t = MU.tracks[MU.i]; $('mm-munow').textContent = t ? (MU.i + 1) + ' / ' + MU.tracks.length + ' · ' + t.name : '';
-      $('mm-mulist').querySelectorAll('li').forEach((li, i) => li.classList.toggle('cur', i === MU.i));
+      $('mm-mulist').querySelectorAll('li').forEach((li, i) => li.classList.toggle('cur', i === MU.i)); muStrip();
       if ('mediaSession' in navigator && t) { try { navigator.mediaSession.metadata = new MediaMetadata({ title: t.name, artist: 'Moto Life' }); } catch {} }
     }
     function muPlay(i) {
@@ -1255,7 +1288,9 @@
       if (!sock || S.g) return;
       const start = () => {
         S.g = window.GroupRide.mount({
-          sock, user: S.user, $, esc, toast, modal, closeModal, store, haversine, modalEl: el.modal, openAnalysis: gid => { if (opts && opts.onAnalyzeGroup) opts.onAnalyzeGroup(gid); },
+          sock, user: S.user, $, esc, toast, modal, closeModal, store, haversine, modalEl: el.modal,
+          yt: { play: (id, playing) => { ytPlay(id, true); if (playing === false) setTimeout(() => { ytCmd('pauseVideo'); MS.ytPlaying = false; muStrip(); }, 2000); }, stop: () => ytStop(true), cmd: c => { if (c === 'next') ytCmd('nextVideo'); else if (c === 'prev') ytCmd('previousVideo'); },
+            playing: p => { ytCmd(p ? 'playVideo' : 'pauseVideo'); MS.ytPlaying = !!p; muStrip(); }, active: () => !!$('mm-ytbox').firstChild }, openAnalysis: gid => { if (opts && opts.onAnalyzeGroup) opts.onAnalyzeGroup(gid); },
           map: () => S.map, L: () => window.L, me: () => S.me, isActive: () => S.active,
           currentRoute: () => (S.route && Array.isArray(S.route.coords) && S.route.coords.length > 1 ? { coords: S.route.coords, label: S.route.label } : null),
           refresh: renderRiders, startGps: startWatch,

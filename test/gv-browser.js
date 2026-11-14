@@ -40,7 +40,18 @@ srv.listen(0, async () => {
   await setR(A, 'gvGate', 80); ok(await A.evaluate(() => window.__ctl.cfg.gate === 80 && localStorage.getItem('ml_gv_gate') === '80'), 'mikrofon hassasiyeti ayarlanır ve saklanır');
   await A.click('#gvBar .vt [data-v=ns]'); ok(await A.evaluate(() => window.__ctl.cfg.ns === false && document.querySelector('#gvBar [data-v=ns]').dataset.st === 'Kapalı'), 'gürültü filtresi kapatılıp açılabilir'); await A.click('#gvBar .vt [data-v=ns]');
   await sleep(300); const lv = await A.evaluate(() => window.__ctl.level()); ok(lv && isFinite(lv.db) && lv.thr < 0, 'mikrofon filtre zinciri (alçak geçiren + sıkıştırıcı + gürültü kapısı) çalışıyor; seviye okunuyor');
-  await A.click('#gvBar .vs');
+  // Vazgeç / Kaydet ve Çık: panelin en altında
+  await A.click('#gvBar .vb [data-vb=save]'); await A.click('#gvBar .vs');   // yeniden aç: anlık görüntü gate=80 ile alınır
+  await A.evaluate(() => { const r = document.getElementById('gvGate'); r.value = 20; r.dispatchEvent(new Event('input', { bubbles: true })); });
+  ok(await A.evaluate(() => { const vb = document.querySelector('#gvBar .vp .vb'), vp = document.querySelector('#gvBar .vp').getBoundingClientRect(), r = vb.getBoundingClientRect(); const bar = document.getElementById('gvBar').getBoundingClientRect(); return r.bottom <= bar.bottom + 1 && r.bottom > bar.bottom - 40 && r.top >= bar.top && r.bottom <= innerHeight && [...vb.querySelectorAll('button')].every(x => x.getBoundingClientRect().height >= 44); }), 'ses ayarları panelinin en altında, kaydırmadan görünen Vazgeç / Kaydet ve Çık düğmeleri var (≥44 px)');
+  await A.click('#gvBar .vb [data-vb=cancel]');
+  ok(await A.evaluate(() => document.querySelector('#gvBar .vp').hidden && window.__ctl.cfg.gate === 80 && localStorage.getItem('ml_gv_gate') === '80' && document.querySelector('#gvBar .vs').getAttribute('aria-expanded') === 'false'), 'Vazgeç: panel kapanır, panel açılırken kayıtlı ayarlar geri yüklenir');
+  await A.click('#gvBar .vs'); await A.evaluate(() => { const r = document.getElementById('gvGate'); r.value = 35; r.dispatchEvent(new Event('input', { bubbles: true })); });
+  await A.click('#gvBar .vb [data-vb=save]');
+  ok(await A.evaluate(() => document.querySelector('#gvBar .vp').hidden && window.__ctl.cfg.gate === 35 && localStorage.getItem('ml_gv_gate') === '35'), 'Kaydet ve Çık: değişiklik saklanır, panel kapanır');
+  await A.click('#gvBar .vs'); await A.evaluate(() => { const r = document.getElementById('gvGate'); r.value = 80; r.dispatchEvent(new Event('input', { bubbles: true })); }); await A.click('#gvBar .vs');
+  ok(await A.evaluate(() => document.querySelector('#gvBar .vp').hidden && window.__ctl.cfg.gate === 80), 'üstteki ayar simgesiyle kapatınca değişiklikler korunur');
+  await A.click('#gvBar .vs'); await A.click('#gvBar .vb [data-vb=save]');
   // PTT: Ali bas
   const press = pg => pg.evaluate(() => document.querySelector('#gvBar .main').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, pointerType: 'touch' }))), rel = pg => pg.evaluate(() => document.querySelector('#gvBar .main').dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1, pointerType: 'touch' })));
   await press(A); await waitS(A, () => window.__ctl.state().ptt === 'talking'); ok(await A.evaluate(() => window.__ctl.track().enabled), 'BASILI TUT: söz hakkı alındı ve mikrofon gerçekten açıldı'); ba = await bar(A); ok(/^Konuşuyorsun/.test(ba.main) && /Sen/.test(ba.spk), 'Ali\'de «Konuşuyorsun», konuşanlarda «Sen»');

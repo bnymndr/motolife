@@ -1,0 +1,56 @@
+'use strict';
+// Grup etkinlikleri (REST) + liderin müzik paylaşımı (soket): GERÇEK ridegroups.js, SAHTE express/io/kullanıcılar. node test/events-node.js
+const fs = require('fs'), os = require('os'), path = require('path');
+let p = 0, f = 0; const ok = (c, m) => { c ? p++ : f++; console.log((c ? 'ok: ' : 'FAIL: ') + m); };
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'evn-')), GID = 'aaaaaaaaaaaaaaaa';
+const now = Date.now();
+fs.writeFileSync(path.join(dir, 'ridegroups.json'), JSON.stringify({ groups: { [GID]: { id: GID, name: 'Tur', desc: '', posts: [], code: 'ABCD2345', leader: 'u1', createdAt: now, gap: 1000,
+  members: [{ uid: 'u1', at: now }, { uid: 'u2', at: now, role: 'admin' }, { uid: 'u3', at: now }], route: null, rides: [], ride: { id: 'bbbbbbbbbbbbbbbb', startedAt: now, by: 'u1', idleSince: now } } } }));
+const users = new Map([['u1', { id: 'u1', username: 'lider' }], ['u2', { id: 'u2', username: 'yonetici' }], ['u3', { id: 'u3', username: 'uye' }], ['u4', { id: 'u4', username: 'yabanci' }]]);
+const routes = {}; const reg = m => (u, ...h) => { routes[m + ' ' + u] = h[h.length - 1]; };
+const app = { get: reg('GET'), post: reg('POST'), put: reg('PUT'), patch: reg('PATCH'), delete: reg('DELETE') };
+const log = []; let conn = null;
+const io = { on: (e, fn) => { if (e === 'connection') conn = fn; }, to: room => ({ emit: (ev, pl) => log.push([room, ev, pl]) }), in: () => ({ socketsLeave() {} }), sockets: { sockets: new Map() } };
+require('../ridegroups')({ app, express: { raw: () => (q, s, n) => n && n() }, io, users, userFromCookie: ck => users.get(String(ck || '')) || null, uname: u => u.username, dataDir: dir, social: null });
+const call = async (key, uid, params, body) => { const out = { s: 200, j: null }; const res = { status(c) { out.s = c; return res; }, json(j) { out.j = j; return res; }, set() { return res; } };
+  await routes[key]({ headers: { cookie: uid }, params, body, query: {}, ip: '1.1.1.1' }, res); return out; };
+const sock = uid => { const h = {}, s = { id: 's' + uid, data: { user: users.get(uid) }, on: (e, fn) => { h[e] = fn; }, join() {}, leave() {}, emit: (e, pl) => log.push([s.id, e, pl]), timeout: () => s }; conn(s); s.fire = (e, pl) => new Promise(r => h[e](pl, r)); return s; };
+const EV = { title: 'Pazar Turu', at: now + 86400000, start: { name: 'Kadıköy', lat: 40.99, lon: 29.03 }, dest: { name: 'Şile', lat: 41.17, lon: 29.61 }, stops: [{ name: 'Ömerli', lat: 41.08, lon: 29.35, kind: 'mola' }, { name: 'Ağva', lat: 41.14, lon: 29.84, kind: 'ugrak' }], note: 'Kask şart' };
+(async () => {
+  const P = { id: GID };
+  let r = await call('POST /api/rgroups/:id/events', 'u3', P, EV); ok(r.s === 403, 'üye etkinlik oluşturamaz');
+  r = await call('GET /api/rgroups/:id/events', 'u4', P); ok(r.s === 404, 'üye olmayan etkinlikleri göremez');
+  r = await call('POST /api/rgroups/:id/events', 'u1', P, { ...EV, dest: null }); ok(r.s === 400 && /Varış/.test(r.j.error), 'varış noktası şart');
+  r = await call('POST /api/rgroups/:id/events', 'u1', P, { ...EV, start: { name: 'x', lat: 999, lon: 1 } }); ok(r.s === 400 && /Başlangıç/.test(r.j.error), 'geçersiz koordinat reddedilir');
+  r = await call('POST /api/rgroups/:id/events', 'u1', P, { ...EV, stops: Array.from({ length: 9 }, (_, i) => ({ name: 'M' + i, lat: 41, lon: 29 })) }); ok(r.s === 400, 'en fazla 8 uğrak/mola');
+  r = await call('POST /api/rgroups/:id/events', 'u1', P, { ...EV, at: 5 }); ok(r.s === 400, 'geçmiş tarih reddedilir');
+  r = await call('POST /api/rgroups/:id/events', 'u1', P, { ...EV, title: '<b>x</b>'.repeat(30) }); ok(r.s === 200 && r.j.event.title.length === 60, 'ad 60 karaktere kısaltılır');
+  r = await call('POST /api/rgroups/:id/events', 'u2', P, EV); ok(r.s === 200 && r.j.event.stops.length === 2 && r.j.event.stops[1].kind === 'ugrak' && r.j.event.by === 'yonetici', 'yönetici etkinlik oluşturur (başlangıç, varış, mola, uğrak)');
+  const eid = r.j.event.id;
+  ok(log.some(l => l[1] === 'grp:changed' && l[2].kind === 'events'), 'üyelere grp:changed events gider');
+  r = await call('GET /api/rgroups/:id/events', 'u3', P); ok(r.j.events.length === 2 && r.j.canEdit === false && r.j.events[0].at <= r.j.events[1].at, 'üye listeyi görür (tarihe göre), düzenleyemez');
+  r = await call('PUT /api/rgroups/:id/events/:eid', 'u1', { id: GID, eid }, { ...EV, title: 'Cumartesi', stops: [] }); ok(r.s === 200 && r.j.event.title === 'Cumartesi' && r.j.event.stops.length === 0, 'etkinlik güncellenir');
+  r = await call('DELETE /api/rgroups/:id/events/:eid', 'u3', { id: GID, eid }); ok(r.s === 403, 'üye silemez');
+  r = await call('DELETE /api/rgroups/:id/events/:eid', 'u1', { id: GID, eid }); ok(r.s === 200 && r.j.events.length === 1, 'etkinlik silinir');
+  r = await call('DELETE /api/rgroups/:id/events/:eid', 'u1', { id: GID, eid }); ok(r.s === 404, 'olmayan etkinlik 404');
+  for (let i = 0; i < 18; i++) await call('POST /api/rgroups/:id/events', 'u1', P, EV);
+  r = await call('POST /api/rgroups/:id/events', 'u1', P, EV); ok([409, 429].includes(r.s), 'etkinlik sayısı/hızı sınırlıdır (' + r.s + ')');
+  // ---- müzik
+  const L = sock('u1'), M = sock('u3'), Y = sock('u4'); const wait = ms => new Promise(r => setTimeout(r, ms));
+  let a = await M.fire('grp:music', { gid: GID, src: { video: 'dQw4w9WgXcQ' } }); ok(a.error && /lider/i.test(a.error), 'müzik: üye paylaşamaz');
+  a = await sock('u2').fire('grp:music', { gid: GID, src: { video: 'dQw4w9WgXcQ' } }); ok(a.error && /lider/i.test(a.error), 'müzik: yönetici de paylaşamaz (yalnız lider)');
+  a = await Y.fire('grp:music', { gid: GID, src: { video: 'dQw4w9WgXcQ' } }); ok(a.error, 'müzik: üye olmayan reddedilir');
+  a = await L.fire('grp:music', { gid: GID, src: { video: 'a b' } }); ok(a.error && /Geçersiz/.test(a.error), 'müzik: geçersiz kimlik');
+  await wait(320); log.length = 0; a = await L.fire('grp:music', { gid: GID, src: { video: 'dQw4w9WgXcQ', list: 'PLabcdefghij1234' }, playing: true }); ok(a.ok && a.shared, 'lider müziği paylaşır');
+  let mu = log.find(l => l[0] === 'rg:' + GID && l[1] === 'grp:music'); ok(mu && mu[2].music.video === 'dQw4w9WgXcQ' && mu[2].music.list === 'PLabcdefghij1234' && mu[2].music.by === 'lider' && mu[2].music.seq === 1, 'odaya grp:music gider (video, liste, paylaşan, sıra 1)');
+  await wait(320); log.length = 0; await L.fire('grp:music', { gid: GID, cmd: 'next' }); mu = log.find(l => l[1] === 'grp:music'); ok(mu && mu[2].cmd === 'next' && mu[2].music.seq === 2, 'sonraki komutu');
+  await wait(320); log.length = 0; await L.fire('grp:music', { gid: GID, playing: false }); mu = log.find(l => l[1] === 'grp:music'); ok(mu && mu[2].music.playing === false && !mu[2].cmd, 'duraklat');
+  await wait(320); a = await L.fire('grp:music', { gid: GID, cmd: 'jump' }); ok(a.error, 'bilinmeyen komut reddedilir');
+  log.length = 0; const W = sock('u3'); await W.fire('grp:watch', { gid: GID }); mu = log.find(l => l[0] === W.id && l[1] === 'grp:music'); ok(mu && mu[2].music && mu[2].music.video === 'dQw4w9WgXcQ', 'izlemeye giren üye mevcut müziği alır');
+  await wait(320); log.length = 0; await L.fire('grp:music', { gid: GID, src: null }); mu = log.find(l => l[1] === 'grp:music'); ok(mu && mu[2].music === null, 'paylaşım bırakılınca null');
+  await wait(320); a = await L.fire('grp:music', { gid: GID, cmd: 'next' }); ok(a.error, 'paylaşım yokken komut reddedilir');
+  await wait(320); await L.fire('grp:music', { gid: GID, src: { video: 'dQw4w9WgXcQ' } }); log.length = 0; await call('POST /api/rgroups/:id/end', 'u1', P);
+  mu = log.find(l => l[1] === 'grp:music'); ok(mu && mu[2].music === null, 'sürüş bitince müzik temizlenir');
+  a = await L.fire('grp:music', { gid: GID, src: { video: 'dQw4w9WgXcQ' } }); ok(a.error && /Aktif/.test(a.error), 'sürüş yokken müzik paylaşılamaz');
+  console.log(`\n${p} geçti, ${f} kaldı`); fs.rmSync(dir, { recursive: true, force: true }); process.exit(f ? 1 : 0);
+})().catch(e => { console.error(e); process.exit(1); });

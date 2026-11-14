@@ -76,9 +76,10 @@
 /* Alt alan */
 .mm-bottom{position:absolute;z-index:20;left:var(--pad);right:var(--pad);bottom:var(--pad);display:flex;flex-direction:column;gap:8px;pointer-events:none}
 .mm-bottom>*{pointer-events:auto}
-.mm-attr{align-self:flex-end;max-width:100%;padding:2px 7px;border-radius:6px;background:rgba(3,20,32,.72);font-size:10px;line-height:1.5;color:#C9D0D6}
+.mm-attr{position:absolute;z-index:22;top:calc(env(safe-area-inset-top,0px) + 1px);left:0;right:0;text-align:center;font-size:8px;line-height:1.2;color:rgba(40,40,40,.55);text-shadow:0 0 2px rgba(255,255,255,.6);pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mm[data-theme=dark] .mm-attr{color:rgba(230,230,230,.5);text-shadow:0 0 2px rgba(0,0,0,.7)}
 .mm-attr:empty{display:none}
-.mm-attr a{color:var(--accent-2);text-decoration:none}
+.mm-attr a{color:inherit;text-decoration:none;pointer-events:auto}
 .mm-card{padding:12px 14px;border-radius:22px;background:var(--bg);box-shadow:0 8px 26px rgba(0,0,0,.45),inset 0 0 0 1px var(--line);display:flex;flex-direction:column;gap:6px}
 .mm-dtop{display:flex;align-items:flex-start;gap:8px}
 .mm-dtxt{flex:1;min-width:0}
@@ -382,6 +383,34 @@
 .mm-bottom>.mm-navbar .mm-navnums b{font-size:20px}.mm-bottom>.mm-navbar .mm-navnums span{font-size:13px}
 .mm-bottom>.mm-navbar .mm-nbtns{flex-direction:row;gap:6px}.mm-bottom>.mm-navbar .mm-nb{width:auto;min-width:72px;padding:0 10px;height:40px;font-size:13px}
 .mm-bottom>.mm-navbar .mm-nb.stop{font-size:14px}
-.mm.navon .mm-spill{bottom:calc(var(--pad) + var(--navh,0px) + 8px + env(safe-area-inset-bottom,0px))}
-.mm.navon .mm-ctr{bottom:calc(var(--pad) + var(--navh,0px) + 14px + env(safe-area-inset-bottom,0px))}
+.mm.navon .mm-spill{bottom:calc(var(--pad) + var(--both,0px) + 8px + env(safe-area-inset-bottom,0px))}
+.mm-ctr{bottom:calc(var(--pad) + var(--both,0px) + 14px + env(safe-area-inset-bottom,0px))}
 .mm[data-vec] .leaflet-tile-pane,.mm[data-vec] .leaflet-overlay-pane{filter:none!important}
+
+/* Alt bilgi paneli (Tam görünüm dahil) sağdaki düğmelerin üstüne binmesin: düğmeler panelin üstünde kalan alana sığar, sığmazsa yanına ikinci sütun açılır */
+.mm-side{max-height:calc(100% - var(--head,0px) - 48px - var(--both,0px) - var(--pad,16px) - 12px);flex-flow:column wrap;align-content:flex-end}
+
+/* Müzik şeridi: akan parça adı (tam genişlik, yarı saydam) + büyük denetim düğmeleri */
+.mm-now{align-self:stretch;height:24px;display:flex;align-items:center;padding:0 10px;border-radius:12px;background:rgba(3,20,32,.55);color:#F4EFE6;font:600 12px/1 var(--font,system-ui,sans-serif);overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 12px,#000 calc(100% - 14px),transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 12px,#000 calc(100% - 14px),transparent 100%)}
+.mm-now[hidden],.mm-mctl[hidden]{display:none}
+.mm-now span{white-space:nowrap;display:block}
+.mm-now span.run{animation:mm-marq var(--dur,12s) linear infinite}
+@keyframes mm-marq{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@media (prefers-reduced-motion:reduce){.mm-now span.run{animation:none}}
+.mm-mctl{align-self:stretch;display:flex;align-items:center;gap:6px;padding:6px;border-radius:20px;background:rgba(3,20,32,.62);box-shadow:inset 0 0 0 1px var(--line)}
+.mm-mk{flex:1;height:52px;border-radius:14px;background:rgba(255,255,255,.12);color:#fff;font-size:22px;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.mm-mk.mm-kp{flex:1.5;background:var(--accent);color:var(--ink);font-size:26px;box-shadow:none}
+.mm-mk.mm-kv{font-size:28px;font-weight:700}
+.mm-ksep{flex:none;width:1px;height:34px;background:var(--line)}
+.mm.rtopen .mm-attr{display:none}
+
+.mm-sum3{grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0}.mm-sum3 b{font-size:19px}.mm-mcard .mm-sum3~p.warn{font-size:12px}.mm-more{margin:6px 0;font-size:13px;color:#C9D0D6}.mm-more summary{cursor:pointer;min-height:36px;display:flex;align-items:center;color:#93A4B2}.mm-more .mm-sum{margin:4px 0 8px}.mm-more .mm-sum b{font-size:16px}.mm-hint{font-size:12px!important;color:#93A4B2!important;margin:4px 0!important}
+
+/* Grup etkinlikleri (group-events.js) */
+.mm-evc{margin-top:10px;padding:12px;border-radius:14px;background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px var(--line)}
+.mm-evc>b{display:block;font:700 17px/1.2 var(--font,system-ui,sans-serif);color:#F4EFE6}.mm-evc>small{display:block;margin-top:2px;font-size:12px;color:#93A4B2}
+.mm-evs{margin:6px 0 0;padding:0;list-style:none;font-size:13px;color:#C9D0D6}.mm-evs li{padding:3px 0}.mm-evs i{font-style:normal;font-size:11px;font-weight:700;color:var(--accent2);margin-right:6px}
+.mm-evpt{margin-top:12px;padding:10px;border-radius:12px;background:rgba(255,255,255,.04);box-shadow:inset 0 0 0 1px var(--line)}
+.mm-evl{display:flex;justify-content:space-between;gap:10px;align-items:baseline}.mm-evl span{font-size:12px;color:#93A4B2}.mm-evl b{font-size:15px;color:#F4EFE6;text-align:right;overflow:hidden;text-overflow:ellipsis}.mm-evl i{font-style:normal;color:#93A4B2;font-weight:400}
+.mm-evsr{margin-top:8px}.mm-evsr .mm-ritem{border-radius:8px}
+.mm-evpin b{display:flex;width:26px;height:26px;border-radius:50%;align-items:center;justify-content:center;font:700 12px/1 system-ui,sans-serif;color:#fff;box-shadow:0 0 0 2px #fff,0 2px 6px rgba(0,0,0,.5)}

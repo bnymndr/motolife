@@ -248,6 +248,7 @@
 #gvBar .vp input[type=range]{width:100%;min-height:32px;accent-color:#EA8621}#gvBar .vp small{display:block;color:#9fb3c0;font-size:12px;line-height:1.4}
 #gvBar .vp .mt{position:relative;height:8px;border-radius:4px;background:rgba(255,255,255,.1);overflow:hidden;margin:2px 0 6px}#gvBar .vp .mt i{position:absolute;left:0;top:0;bottom:0;width:0;background:#5CC48E}#gvBar .vp .mt i.cl{background:#6b7c88}#gvBar .vp .mt b{position:absolute;top:0;bottom:0;width:2px;background:#EA8621}
 #gvBar .vp .vt{display:grid;gap:8px}#gvBar .vp .vt button{display:flex;align-items:center;justify-content:space-between;min-height:48px;font-size:13.5px;text-align:left}#gvBar .vp .vt button::after{content:attr(data-st);font-weight:700;color:#9fb3c0}#gvBar .vp .vt button[aria-pressed=true]::after{color:#5CC48E}
+#gvBar .vp .vb{position:sticky;bottom:-14px;z-index:2;display:flex;gap:8px;margin:14px -12px -12px;padding:10px 12px 12px;border-top:1px solid rgba(255,255,255,.12);background:#0b2b3d;border-radius:0 0 18px 18px}#gvBar .vp .vb button{flex:1;min-height:48px;border-radius:12px;font-weight:700;font-size:15px;background:rgba(255,255,255,.1);color:#F4EFE6}#gvBar .vp .vb button.sv{flex:1.4;background:#EA8621;color:#031420}
 #gvBar .warn{color:#fdba74;font-size:12.5px;margin-top:10px}
 @media (prefers-reduced-motion:reduce){#gvBar *{transition:none!important}}`;
     d.head.appendChild(st);
@@ -261,6 +262,7 @@
         <div class="vr"><label for="gvVoice">Konuşma Sesi <output class="o-voice"></output></label><input id="gvVoice" type="range" min="0" max="100" step="1"></div>
         <div class="vr"><label for="gvMusic">Müzik Sesi <output class="o-music"></output></label><input id="gvMusic" type="range" min="0" max="100" step="1"></div>
         <div class="vt"><button type="button" data-v="ns" aria-pressed="true">Gürültü Filtresi</button><button type="button" data-v="duck" aria-pressed="true">Konuşurken Müziği Kıs</button></div>
+        <div class="vb"><button type="button" class="cn" data-vb="cancel">Vazgeç</button><button type="button" class="sv" data-vb="save">Kaydet ve Çık</button></div>
       </div><div class="warn" hidden></div>`;
     d.body.appendChild(bar);
     const $ = s => bar.querySelector(s), main = $('.main'), tools = $('.tools'), warn = $('.warn'); let toastT = 0;
@@ -319,7 +321,10 @@
     const syncP = () => { const c = ctl.cfg; for (const k of ['gate', 'voice', 'music']) { rg[k].value = c[k]; $('.o-' + k).textContent = '%' + Math.round(c[k]); }
       vp.querySelectorAll('[data-v]').forEach(b => { const on = c[b.dataset.v]; b.setAttribute('aria-pressed', String(!!on)); b.textContent = b.dataset.v === 'ns' ? 'Gürültü Filtresi' : 'Konuşurken Müziği Kıs'; b.dataset.st = on ? 'Açık' : 'Kapalı'; }); };
     const tickM = () => { const l = ctl.level(), i = vp.querySelector('.mt i'), b = vp.querySelector('.mt b'); if (!l) { i.style.width = '0'; return; } i.style.width = Math.round(l.v * 100) + '%'; i.classList.toggle('cl', !l.open); b.style.left = Math.round(l.t * 100) + '%'; };
-    vs.addEventListener('click', () => { const on = vp.hidden; vp.hidden = !on; vs.setAttribute('aria-expanded', String(on)); clearInterval(meterI); if (on) { syncP(); tickM(); meterI = setInterval(tickM, 100); } });
+    let snap = null;   // panel açılırken ayarların kopyası: «Vazgeç» bunu geri yükler, «Kaydet ve Çık» mevcut değerleri korur
+    const closeP = () => { vp.hidden = true; vs.setAttribute('aria-expanded', 'false'); clearInterval(meterI); snap = null; };
+    vs.addEventListener('click', () => { const on = vp.hidden; if (!on) return closeP(); vp.hidden = false; vs.setAttribute('aria-expanded', 'true'); snap = { gate: ctl.cfg.gate, voice: ctl.cfg.voice, music: ctl.cfg.music, ns: ctl.cfg.ns, duck: ctl.cfg.duck }; clearInterval(meterI); syncP(); tickM(); meterI = setInterval(tickM, 100); });
+    vp.querySelector('.vb').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.vb === 'cancel' && snap) ctl.setCfg(snap); syncP(); closeP(); vs.focus(); });
     for (const k of Object.keys(rg)) rg[k].addEventListener('input', () => { ctl.setCfg({ [k]: Number(rg[k].value) }); $('.o-' + k).textContent = '%' + Math.round(Number(rg[k].value)); });
     vp.querySelector('.vt').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; ctl.setCfg({ [b.dataset.v]: !ctl.cfg[b.dataset.v] }); syncP(); });
     ctl.setAudioHost(bar);

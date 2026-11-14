@@ -234,6 +234,31 @@ const T0 = Date.now() - 3600e3;
   const B2 = new C('burak2'); B2.ck = B.ck; await B2.rt(); a = await B2.emit('grp:share', { gid, on: true, consent: true }); await B.rt(); ok(B.evs('grp:taken').length === 1, 'grp:taken: paylaşım diğer sekmeye geçer');
   await B2.emit('grp:share', { gid, on: false });
   r = await A.get('/api/rgroups'); ok(r.j.groups.length === 1 && r.j.groups[0].active === true && r.j.groups[0].hasRoute === true, 'grup listesi');
+  // ---------- Grup etkinlikleri ----------
+  const EV = { title: 'Pazar Turu', at: Date.now() + 86400000, start: { name: 'Kadıköy', lat: 40.99, lon: 29.03 }, dest: { name: 'Şile', lat: 41.17, lon: 29.61 }, stops: [{ name: 'Ömerli Mola', lat: 41.08, lon: 29.35, kind: 'mola' }, { name: 'Ağva', lat: 41.14, lon: 29.84, kind: 'ugrak' }], note: 'Kask şart' };
+  r = await B.post('/api/rgroups/' + gid + '/events', EV); ok(r.s === 403, 'etkinliği yalnız lider/yönetici oluşturur');
+  r = await D.get('/api/rgroups/' + gid + '/events'); ok(r.s === 404, 'etkinlikler üye olmayana kapalı');
+  r = await A.post('/api/rgroups/' + gid + '/events', { ...EV, dest: null }); ok(r.s === 400 && /Varış/.test(r.j.error), 'etkinlik: varış noktası şart');
+  r = await A.post('/api/rgroups/' + gid + '/events', { ...EV, stops: [{ name: '', lat: 1, lon: 1 }] }); ok(r.s === 400, 'etkinlik: adsız uğrak reddedilir');
+  r = await A.post('/api/rgroups/' + gid + '/events', { ...EV, stops: Array.from({ length: 9 }, (_, i) => ({ name: 'M' + i, lat: 41, lon: 29 })) }); ok(r.s === 400, 'etkinlik: en fazla 8 uğrak');
+  r = await A.post('/api/rgroups/' + gid + '/events', { ...EV, at: 5 }); ok(r.s === 400, 'etkinlik: geçmiş tarih reddedilir');
+  A.clear(); B.clear(); r = await A.post('/api/rgroups/' + gid + '/events', EV); ok(r.s === 200 && r.j.event.id && r.j.event.stops.length === 2 && r.j.event.stops[1].kind === 'ugrak' && r.j.event.by === 'ayse', 'etkinlik oluşturulur (başlangıç, varış, mola/uğrak)');
+  const evId = r.j.event.id; await B.rt(); ok(B.evs('grp:changed').some(e => e.data.kind === 'events'), 'etkinlik değişince üyelere grp:changed gider');
+  r = await B.get('/api/rgroups/' + gid + '/events'); ok(r.s === 200 && r.j.events.length === 1 && r.j.events[0].title === 'Pazar Turu' && r.j.canEdit === false && r.j.events[0].dest.name === 'Şile', 'üye etkinliği görür, düzenleyemez');
+  r = await A.req('PUT', '/api/rgroups/' + gid + '/events/' + evId, { ...EV, title: 'Cumartesi Turu', stops: [] }); ok(r.s === 200 && r.j.event.title === 'Cumartesi Turu' && r.j.event.stops.length === 0, 'etkinlik güncellenir');
+  r = await B.req('DELETE', '/api/rgroups/' + gid + '/events/' + evId); ok(r.s === 403, 'etkinliği üye silemez');
+  r = await A.req('DELETE', '/api/rgroups/' + gid + '/events/' + evId); ok(r.s === 200 && r.j.events.length === 0, 'etkinlik silinir');
+  // ---------- Liderin müzik paylaşımı ----------
+  A.clear(); B.clear(); a = await B.emit('grp:music', { gid, src: { video: 'dQw4w9WgXcQ' } }); ok(a.error && /lider/i.test(a.error), 'müzik: yalnız lider paylaşır');
+  a = await D.emit('grp:music', { gid, src: { video: 'dQw4w9WgXcQ' } }); ok(a.error, 'müzik: üye olmayan reddedilir');
+  a = await A.emit('grp:music', { gid, src: { video: '<script>' } }); ok(a.error && /Geçersiz/.test(a.error), 'müzik: geçersiz kimlik reddedilir');
+  a = await A.emit('grp:music', { gid, src: { video: 'dQw4w9WgXcQ' }, playing: true }); ok(a.ok && a.shared === true, 'lider müziği etkinlikte paylaşır');
+  await B.rt(); const mu1 = (B.evs('grp:music').pop() || {}).data; ok(mu1 && mu1.music && mu1.music.video === 'dQw4w9WgXcQ' && mu1.music.playing === true && mu1.music.by === 'ayse', 'üyeye grp:music (video, çalıyor, paylaşan) gider');
+  B.clear(); await sleep(350); a = await A.emit('grp:music', { gid, cmd: 'next' }); ok(a.ok, 'lider sonraki parçaya geçer'); await B.rt(); const mu2 = (B.evs('grp:music').pop() || {}).data; ok(mu2 && mu2.cmd === 'next' && mu2.music.seq > mu1.music.seq, 'üyeye sonraki komutu ve yeni sıra no gider');
+  B.clear(); await sleep(350); a = await A.emit('grp:music', { gid, playing: false }); await B.rt(); ok(((B.evs('grp:music').pop() || {}).data || {}).music.playing === false, 'duraklatma üyelere yansır');
+  B.clear(); a = await B.emit('grp:watch', { gid }); await B.rt(); ok(((B.evs('grp:music').pop() || {}).data || {}).music.video === 'dQw4w9WgXcQ', 'sonradan izlemeye giren üye mevcut müziği alır');
+  B.clear(); await sleep(350); a = await A.emit('grp:music', { gid, src: null }); await B.rt(); ok(((B.evs('grp:music').pop() || {}).data || {}).music === null, 'lider paylaşımı bırakınca üyelere null gider');
+  await sleep(350); a = await A.emit('grp:music', { gid, src: { list: 'PLabcdefghij1234' } }); ok(a.ok, 'liste kimliği paylaşılabilir (sürüş bitiminde temizlenecek)');
   // ---------- Grup sesi ----------
   r = await A.get('/api/gvoice/ice'); ok(r.j.iceServers[0].urls.startsWith('stun:') && r.j.turn === false && r.j.max === 6, 'gvoice/ice: STUN, TURN yoksa false');
   A.clear(); B.clear(); a = await D.emit('gv:join', { gid }); ok(a.code === 'forbidden', 'gv:join: üye olmayan reddedilir');
@@ -250,7 +275,8 @@ const T0 = Date.now() - 3600e3;
 
   // ---------- Sürüş kaydı (grup) ----------
   r = await B.post('/api/rgroups/' + gid + '/end'); ok(r.s === 403, 'sürüşü yalnız lider bitirir');
-  r = await A.post('/api/rgroups/' + gid + '/end'); ok(r.s === 200 && r.j.group.ride === null, 'sürüş biter');
+  B.clear(); r = await A.post('/api/rgroups/' + gid + '/end'); ok(r.s === 200 && r.j.group.ride === null, 'sürüş biter');
+  await B.rt(); ok(((B.evs('grp:music').pop() || {}).data || {}).music === null, 'sürüş bitince paylaşılan müzik temizlenir');
   r = await A.get('/api/rgroups/' + gid + '/rides'); ok(r.j.rides.length === 1 && r.j.rides[0].endedAt > 0 && r.j.rides[0].members.some(m => m.username === 'ayse' && m.fixes === 1), 'sürüş geçmişi: üye başına nokta sayısı'); const rideId = r.j.rides[0].id;
   r = await B.get('/api/rgroups/' + gid + '/rides/' + rideId); const lines = r.text.toString().trim().split('\n').map(JSON.parse);
   ok(r.s === 200 && /ndjson/.test(r.headers.get('content-type')) && lines[0].k === 'h' && lines[0].route.length === 3 && lines.some(l => l[0] === 'f' && l[2] === 'ayse') && lines.some(l => l[0] === 'e' && l[2] === 'end'), 'NDJSON kaydı: başlık + konumlar + olaylar');

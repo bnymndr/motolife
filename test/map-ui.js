@@ -81,6 +81,24 @@ srv.listen(0, async () => {
     await vp.click('#mm-mbtn'); await vp.click('button[data-th=light]'); await vp.click('button[data-th=dark]');
     ok(await vp.evaluate(() => /styles\/dark/.test(window.__style || '')), 'vektör: koyu temada Dark stili uygulanır');
     await ctx.close(); VEC = false; }
+  { // müzik şeridi: parça adı + denetimler; atıf yazısı en üstte ve çok küçük
+    const pg = await open();
+    ok(await pg.evaluate(() => document.getElementById('mm-now').hidden && document.getElementById('mm-mctl').hidden), 'müzik yokken şerit görünmez');
+    ok(await pg.evaluate(() => { const a = document.getElementById('mm-attr'); a.textContent = 'OpenFreeMap'; const r = a.getBoundingClientRect(); return r.top < 12 && parseFloat(getComputedStyle(a).fontSize) <= 9 && r.width > 300; }), 'harita atfı en üstte sabit ve çok küçük'); await pg.evaluate(() => { document.getElementById('mm-attr').textContent = ''; });
+    await pg.click('#mm-musbtn'); await pg.click('button[data-mt=dev]');
+    await pg.setInputFiles('#mm-files', [{ name: 'Yolların Kralı.mp3', mimeType: 'audio/mpeg', buffer: Buffer.from('ID3') }, { name: 'Gece Sürüşü.mp3', mimeType: 'audio/mpeg', buffer: Buffer.from('ID3') }]); await pg.waitForTimeout(300); await pg.click('#mm-mclose');
+    ok(await pg.evaluate(() => !document.getElementById('mm-now').hidden && !document.getElementById('mm-mctl').hidden && /Gece Sürüşü/.test(document.getElementById('mm-now-t').textContent)), 'müzik açılınca şerit çıkar, çalan parça solda yazılır');
+    ok(await pg.evaluate(() => { const n = document.getElementById('mm-now').getBoundingClientRect(), c = document.getElementById('mm-mctl').getBoundingClientRect(), b = document.querySelector('.mm-bottom').getBoundingClientRect(); return Math.abs(n.left - c.left) < 2 && Math.abs(n.right - c.right) < 2 && Math.abs(n.left - b.left) < 2 && c.height >= 52 && [...document.querySelectorAll('.mm-mk')].every(x => x.getBoundingClientRect().height >= 44); }), 'şerit tam genişlikte (iki yana yaslı), düğmeler ≥44 px');
+    await pg.click('#mm-knext'); await pg.waitForTimeout(100);
+    ok(await pg.evaluate(() => /Yolların Kralı/.test(document.getElementById('mm-now-t').textContent)), 'sonraki düğmesi parçayı değiştirir, yazı güncellenir');
+    const v0 = await pg.evaluate(() => Number(localStorage.getItem('ml_vol_music') || 100)); await pg.click('#mm-kvm'); const v1 = await pg.evaluate(() => Number(localStorage.getItem('ml_vol_music')));
+    await pg.click('#mm-kvp'); const v2 = await pg.evaluate(() => Number(localStorage.getItem('ml_vol_music')));
+    ok(v1 === Math.max(0, Math.round(v0 / 10) * 10 - 10) && v2 === Math.min(100, v1 + 10), 'ses −/+ 10\'ar adım ayarlar (' + v0 + '→' + v1 + '→' + v2 + ')');
+    await pg.evaluate(() => { const a = document.getElementById('mm-aud'); let paused = true; Object.defineProperty(a, 'paused', { get: () => paused, configurable: true }); a.play = () => { paused = false; a.dispatchEvent(new Event('play')); return Promise.resolve(); }; a.pause = () => { paused = true; a.dispatchEvent(new Event('pause')); }; });
+    await pg.click('#mm-kplay'); await pg.waitForTimeout(100); const l1 = await pg.textContent('#mm-kplay'); await pg.click('#mm-kplay'); await pg.waitForTimeout(100); const l2 = await pg.textContent('#mm-kplay');
+    ok(l1 !== l2, 'durdur/devam düğmesi simgeyi değiştirir (' + l1 + ' / ' + l2 + ')');
+    ok(await pg.evaluate(() => { const pr = document.querySelector('.mm-bottom').getBoundingClientRect(); return [...document.querySelectorAll('.mm-side > .mm-btn:not([hidden])')].every(b => { const r = b.getBoundingClientRect(); return !(r.right > pr.left && r.left < pr.right && r.bottom > pr.top && r.top < pr.bottom); }); }), 'müzik şeridi açıkken sağ düğmeler altta kalmaz');
+    await pg.evaluate(() => { document.getElementById('mm-aud').pause(); });  await pg.context().close(); }
   { await pg.click('#mm-mbtn'); const d0 = await pg.evaluate(() => document.querySelector('.mm').dataset.hud + '/' + document.querySelector('.mm').dataset.gsz);
     await pg.click('button[data-hud=bar]'); await pg.click('button[data-gsz=l]');
     const d1 = await pg.evaluate(() => [document.querySelector('.mm').dataset.hud, document.querySelector('.mm').dataset.gsz, localStorage.getItem('mm_hud'), localStorage.getItem('mm_gsz'), document.querySelector('button[data-hud=bar]').getAttribute('aria-pressed')].join());
@@ -214,13 +232,36 @@ srv.listen(0, async () => {
   ok(errs.length === 0, 'sayfa hatası yok ' + JSON.stringify(errs.slice(0, 3)));
   // sürüş paneli: Yatış satırı hız/mesafenin yanında (sensör verisi sahte ortamda yok → «—» + neden)
   { const lp = await open(); await lp.evaluate(() => window.__fix(41, 29, 5, 0)); await lp.waitForTimeout(300); await lp.click('#mm-start'); await lp.waitForSelector('#mm-ride:not([hidden])', { timeout: 5000 });
+    for (const h of ['full', 'bar', 'speed', 'card']) { for (const vh of [844, 600]) { await lp.evaluate(([v, hh]) => { document.getElementById('r').style.height = hh + 'px'; document.querySelector('.mm').dataset.hud = v; }, [h, vh]); await lp.waitForTimeout(200);
+      const ov = await lp.evaluate(() => { const pr = document.getElementById('mm-panel').getBoundingClientRect(); return [...document.querySelectorAll('.mm-side > .mm-btn:not([hidden])')].filter(b => { const r = b.getBoundingClientRect(); return r.right > pr.left && r.left < pr.right && r.bottom > pr.top && r.top < pr.bottom; }).length; });
+      ok(ov === 0, 'sürüş ekranı «' + h + '» (' + vh + ' px): sağ düğmeler bilgi panelinin altında kalmaz'); } } await lp.evaluate(() => { document.getElementById('r').style.height = ''; document.querySelector('.mm').dataset.hud = 'full'; });
     await lp.waitForTimeout(600);
     const r = await lp.evaluate(() => { const t = document.getElementById('mm-lean'), bx = t && t.getBoundingClientRect(), sd = document.getElementById('mm-sd').getBoundingClientRect(); return t ? { h: bx.height, w: bx.width, vis: bx.width > 0, v: document.getElementById('mm-lean-v').textContent, n: document.getElementById('mm-lean-n').textContent, inside: !!t.closest('.mm-stats'), below: bx.top >= sd.top } : null; });
     ok(r && r.vis && r.inside && r.below, 'sürüş paneli: Yatış satırı hız/mesafe/süre ile aynı blokta görünür');
     ok(r && r.h >= 44, 'Yatış satırı dokunma hedefi ≥44 px (' + (r && Math.round(r.h)) + ')');
     ok(r && r.v === '—' && r.n.length > 5, 'ölçülemeyen yatış 0 gösterilmez: «—» + neden (' + (r && r.n) + ')');
+    await lp.evaluate(() => { window.__fix(41.0005, 29.0005, 5, 8); }); await lp.waitForTimeout(200); await lp.evaluate(() => document.getElementById('mm-stop').click()); await lp.evaluate(() => document.querySelector('#mm-modal [data-act=end]').click()); await lp.waitForSelector('#mm-modal .mm-sum3', { timeout: 5000 });
+    const sm = await lp.evaluate(() => { const c = document.querySelector('#mm-modal .mm-sum3').closest('.mm-mcard, #mm-modal > *'), d = c.querySelector('details.mm-more'); return { n: c.querySelectorAll('.mm-sum3 b').length, h: Math.round(c.getBoundingClientRect().height), open: d.open, hid: true, ps: c.querySelectorAll('p').length, mh: Math.round(document.getElementById('mm-modal').getBoundingClientRect().height), sh: c.scrollHeight, t: c.textContent, ok: !!c.querySelector('[data-act=close]') }; });
+    ok(sm.n === 3 && /Mesafe/.test(sm.t) && /Süre/.test(sm.t) && /Ort\. Hız/.test(sm.t), 'sürüş özeti: yalnız 3 ana değer (mesafe, süre, ort. hız)');
+    ok(!sm.open && sm.hid && /Daha fazla/.test(sm.t) && !/GPS ölçümlerinden/.test(sm.t), 'ayrıntılar «Daha fazla» altında kapalı, uzun açıklama yok');
+    ok(sm.sh > 100 && sm.sh < 330 && sm.ok, 'özet kartı kompakt (' + sm.h + ' px, içerik ' + sm.sh + ', kap ' + sm.mh + ') ve Tamam düğmesi var');
+    await lp.evaluate(() => document.querySelector('#mm-modal [data-act=close]').click()); await lp.waitForTimeout(150);
     await lp.evaluate(() => { document.getElementById('mm-lean').click(); }); await lp.waitForTimeout(200);
     ok(await lp.evaluate(() => { const sh = document.getElementById('mm-tsheet'); return !!sh && !sh.hidden; }), 'Yatış satırına dokununca sensör ayrıntı sayfası açılır');
     await lp.context().close(); }
+  // ---- Lider müzik paylaşımı: map.js ↔ group-ride.js bağlantısı (group-ride.js burada SAHTE; gerçek YouTube sesi/iframe içeriği test EDİLMEDİ)
+  { const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true }), g = await ctx.newPage(); g.on('pageerror', e => errs.push(e.message)); await g.addInitScript(FAKE);
+    await g.addInitScript(() => { window.__gm = []; window.GroupRide = { mount: c => { window.__gctx = c; return { musicLocal: o => window.__gm.push(o), markers: () => [], activate() {}, deactivate() {}, onFix() {}, sharing: () => false, stop() {}, joinPrompt() {}, open() {} }; } }; });
+    await g.goto(base + '/_host'); await g.evaluate(() => { window.__mm = window.MotoMap.mount(document.getElementById('r'), { user: 'tester', socket: { on() {}, emit() {}, connected: true } }); window.__mm.activate(); }); await g.waitForFunction(() => !document.getElementById('mm-load').hidden === false, null, { timeout: 8000 });
+    await g.click('#mm-musbtn'); await g.waitForTimeout(300); await g.fill('#mm-yturl', 'https://youtu.be/dQw4w9WgXcQ'); await g.click('#mm-ytform button'); await g.waitForTimeout(200);
+    ok(await g.evaluate(() => window.__gm.some(o => o.t === 'play' && o.id.video === 'dQw4w9WgXcQ')), 'YouTube çalınca grup bağlantısına «play» bildirilir (lider seçim penceresi için)');
+    await g.evaluate(() => { document.getElementById('mm-kplay').click(); document.getElementById('mm-knext').click(); document.getElementById('mm-kprev').click(); });
+    ok(await g.evaluate(() => window.__gm.some(o => o.t === 'toggle' && o.playing === false) && window.__gm.some(o => o.t === 'cmd' && o.cmd === 'next') && window.__gm.some(o => o.t === 'cmd' && o.cmd === 'prev')), 'şerit düğmeleri: durdur/sonraki/önceki bildirilir');
+    await g.evaluate(() => { window.__gm.length = 0; window.__gctx.yt.play({ video: 'aaaaaaaaaaa', list: null }, true); });
+    ok(await g.evaluate(() => /embed\/aaaaaaaaaaa/.test(document.querySelector('#mm-ytbox iframe').src) && window.__gm.length === 0), 'uzaktan (üye) çalma: iframe değişir, yankı olarak bildirim GİTMEZ');
+    await g.evaluate(() => window.__gctx.yt.stop()); ok(await g.evaluate(() => !document.querySelector('#mm-ytbox iframe') && window.__gm.length === 0), 'uzaktan durdurma: iframe kalkar, bildirim gitmez');
+    await g.fill('#mm-yturl', 'https://youtu.be/dQw4w9WgXcQ'); await g.click('#mm-ytform button'); await g.evaluate(() => { window.__gm.length = 0; document.getElementById('mm-ytstop').click(); });
+    ok(await g.evaluate(() => window.__gm.some(o => o.t === 'stop')), 'kullanıcı durdurunca grup bağlantısına «stop» bildirilir');
+    await ctx.close(); }
   await b.close(); srv.close(); console.log(`SONUÇ: ${p} geçti, ${f} başarısız`); process.exit(f ? 1 : 0);
 });

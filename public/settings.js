@@ -50,12 +50,14 @@
 
   function mount(el, h) {
     const me = () => h.me() || {};
-    let cur = 'home', msgT = 0, motoH = null;
-    const msg = (t, bad) => { const m = el.querySelector('[data-sp-msg]'); if (!m) return; m.textContent = t; m.className = 'rounded-xl px-3 py-2 text-sm ' + (bad ? 'bg-rose-500/15 text-rose-300' : 'bg-emerald-500/15 text-emerald-300'); clearTimeout(msgT); msgT = setTimeout(() => { m.textContent = ''; m.className = 'hidden'; }, 4500); };
+    let cur = 'home', msgT = 0, motoH = null, snap = {}, acted = false, p0 = null;
+    const msg = (t, bad) => { const m = el.querySelector('[data-sp-msg]'); if (!m) return; m.textContent = t; if (t && !bad) acted = true; paintBar(); m.className = 'rounded-xl px-3 py-2 text-sm ' + (bad ? 'bg-rose-500/15 text-rose-300' : 'bg-emerald-500/15 text-emerald-300'); clearTimeout(msgT); msgT = setTimeout(() => { m.textContent = ''; m.className = 'hidden'; }, 4500); };
     const sw = (label, key, def, sub, dis) => `<label class="flex min-h-[56px] items-center justify-between gap-3 px-4 py-2"><span class="min-w-0"><span class="block">${label}</span>${sub ? `<small class="block text-xs text-zinc-400">${sub}</small>` : ''}</span><input type="checkbox" data-pref="${key}" data-def="${def}" ${LS.get(key, def) === '1' ? 'checked' : ''} ${dis ? 'disabled' : ''} class="h-6 w-6 shrink-0 accent-amber-400" aria-label="${esc(label)}"></label>`;
     const seg = (key, opts, val) => `<div class="grid gap-2 px-4 py-3" style="grid-template-columns:repeat(${opts.length},minmax(0,1fr))" role="group">${opts.map(([v, t, dis]) => `<button type="button" data-seg="${key}" data-v="${v}" ${dis ? 'disabled' : ''} aria-pressed="${String(v) === String(val)}" class="min-h-[44px] rounded-xl px-2 text-sm ${String(v) === String(val) ? 'bg-amber-400 font-semibold text-ink' : 'bg-white/[.07] text-zinc-200'} ${dis ? 'opacity-40' : ''}">${t}</button>`).join('')}</div>`;
     const box = inner => `<div class="divide-y divide-white/[.07] overflow-hidden rounded-2xl bg-white/[.055]" style="box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)">${inner}</div>`;
     const note = t => `<p class="px-1 text-xs leading-snug text-zinc-500">${t}</p>`;
+    const BARCSS = 'position:sticky;bottom:calc(var(--nav) + 8px);z-index:20;padding:10px;border-radius:16px;background:#0b2b3d;box-shadow:0 -6px 18px rgba(0,0,0,.35),inset 0 0 0 1px rgba(255,255,255,.12)';
+    const barBtns = (c, sv, ex) => `<button type="button" data-act="${c}"${ex ? ' data-exit="1"' : ''} class="btn-sec min-h-[48px]">Vazgeç</button><button type="button" data-act="${sv}"${ex ? ' data-exit="1"' : ''} class="btn-sec btn-accent min-h-[48px]">Kaydet ve Çık</button>`;
     const btn = (a, t, extra) => `<button type="button" data-act="${a}" class="btn-sec min-h-[48px] ${extra || ''}">${t}</button>`;
 
     /* ---------- Ana liste ---------- */
@@ -164,7 +166,7 @@
           + fld('km', 'Km', `<input data-moto="km" class="field mt-1" type="number" inputmode="numeric" min="0" max="999999" placeholder="24500" value="${D.km == null ? '' : D.km}">`) + `</div>`
           + `<div class="grid grid-cols-2 gap-3">` + fld('cc', 'Motor Hacmi (cc)', `<input data-moto="cc" class="field mt-1" type="number" inputmode="numeric" min="20" max="3000" placeholder="689" value="${esc(m.bikeCc || '')}">`)
           + fld('inspection', 'Muayene Tarihi', `<input data-moto="inspection" class="field mt-1" type="date" value="${esc((D.dates && D.dates.inspection) || '')}">`) + `</div>`
-          + `</div><div data-motobar style="display:none" class="grid grid-cols-2 gap-3">` + btn('motocancel', 'Değişiklikten Vazgeç') + btn('motosave', 'Kaydet', 'btn-accent') + `</div><p class="px-1 text-xs leading-snug text-zinc-500">Motor sahibi, km ve muayene tarihi yalnızca bu cihazda saklanır. Motosiklet tipi ve rengi My Moto sayfasında, resmin sağındaki görünüm düğmesinden seçilir.</p>`
+          + `</div><div data-motobar style="display:none;${BARCSS}" class="grid grid-cols-2 gap-3">` + barBtns('motocancel', 'motosave', true) + `</div><p class="px-1 text-xs leading-snug text-zinc-500">Motor sahibi, km ve muayene tarihi yalnızca bu cihazda saklanır. Motosiklet tipi ve rengi My Moto sayfasında, resmin sağındaki görünüm düğmesinden seçilir.</p>`
           + `<h2 class="road pt-2 text-xl font-semibold">Bakım ile Yakıt ve Tüketim</h2><div data-slot="mymoto"></div></div>`; },
       calib: () => `<div class="space-y-3"><div class="rounded-2xl bg-white/[.055] p-4"><p class="font-medium">Sensör Kalibrasyonu</p><p class="mt-1 text-sm text-zinc-300">Durum: <span data-cal-state>${esc(calSub())}</span></p><p class="mt-1 text-xs text-zinc-400">Yatış, ivme ve ani fren/hızlanma için telefon motosiklete sabitlendikten sonra yapılır. Yatış açısı bir tahmindir.</p></div>`
         + `<ol class="space-y-1 rounded-2xl bg-white/[.055] p-4 text-sm text-zinc-300"><li>1. Telefonu motosiklete her zamanki gibi sıkıca sabitle.</li><li>2. Motosikleti dik ve düz zeminde hareketsiz tut (motor çalışabilir).</li><li>3. Aşağıdaki düğmeye bas; 5 sn hazırlık + 4 sn ölçüm sırasında dokunma.</li></ol>`
@@ -189,13 +191,26 @@
       if (name !== cur) fontOpen = false;
       cur = name;
       for (const k of ['perm', 'cal', 'profile']) { const b = $('lg-' + k); if (b) $('setLegacy').appendChild(b); }   // eski bloklar (kimlikler korunur) saklama alanına dön
-      if (name === 'home') { el.innerHTML = `<h1 class="road mb-3 text-3xl font-bold">Ayarlar</h1><div class="space-y-4">${home()}</div>`; window.scrollTo(0, 0); return; }
+      if (name === 'home') { snap = snapTake(); acted = false; p0 = null; el.innerHTML = `<h1 class="road mb-3 text-3xl font-bold">Ayarlar</h1><div class="space-y-4">${home()}</div>`; window.scrollTo(0, 0); return; }
       const inner = name === 'profile' ? '<div data-slot="profile"></div>' : PANELS[name]();
-      el.innerHTML = `<div class="mb-3 flex items-center gap-2"><button type="button" data-go="${name === 'blocks' || name === 'offmaps' ? 'privacy' : 'home'}" aria-label="Geri" class="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-xl">‹</button><h1 class="road text-3xl font-bold">${TITLES[name]}</h1></div><div data-sp-msg class="hidden" role="status"></div><div class="space-y-3 pb-2">${inner}</div>`;
+      el.innerHTML = `<div class="mb-3 flex items-center gap-2"><button type="button" data-go="${name === 'blocks' || name === 'offmaps' ? 'privacy' : 'home'}" aria-label="Geri" class="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-xl">‹</button><h1 class="road text-3xl font-bold">${TITLES[name]}</h1></div><div data-sp-msg class="hidden" role="status"></div><div class="space-y-3 pb-2">${inner}</div>` + (name === 'moto' ? '' : `<div data-spbar style="display:none;margin-top:8px;${BARCSS}" class="grid grid-cols-2 gap-3">${barBtns('spcancel', 'spsave')}</div>`);
       for (const [slot, id] of [['perm', 'lg-perm'], ['profile', 'lg-profile']]) { const s = el.querySelector(`[data-slot="${slot}"]`); if (s && $(id)) s.appendChild($(id)); }
-      window.scrollTo(0, 0);
+      if (name === 'profile') { p0 = {}; profFields().forEach(i => { p0[i.id] = i.value; }); }
+      window.scrollTo(0, 0); paintBar();
       if (name === 'display' || name === 'data' || name === 'moto' || name === 'blocks' || name === 'offmaps') after(name);
     }
+    const SK = k => k.slice(0, 3) === 'ml_' || k.slice(0, 3) === 'mm_';
+    function snapTake() { const o = {}; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (SK(k)) o[k] = localStorage.getItem(k); } } catch {} return o; }
+    function lsChanged() { const n = snapTake(); return [...new Set([...Object.keys(n), ...Object.keys(snap)])].some(k => n[k] !== snap[k]); }
+    const profFields = () => ['sUser', 'sFirst', 'sLast', 'sGender', 'sEmail', 'sPhone', 'sEmName', 'sEmPhone', 'sCurPw', 'sNewPw'].map(id => $(id)).filter(Boolean);
+    function profDirty() { if (!p0) return false; const m = $('sMsg'); if (m && m.textContent === 'Kaydedildi.') { p0 = {}; profFields().forEach(i => { p0[i.id] = i.value; }); return false; } return profFields().some(i => i.value !== p0[i.id]); }
+    function paintBar() { const bar = el.querySelector('[data-spbar]'); if (bar) bar.style.display = (cur !== 'home' && cur !== 'moto' && (acted || lsChanged() || (cur === 'profile' && profDirty()))) ? '' : 'none'; }
+    function revertAll() {
+      const n = snapTake(); for (const k of Object.keys(n)) if (!(k in snap)) LS.del(k); for (const k of Object.keys(snap)) if (n[k] !== snap[k]) LS.set(k, snap[k]);
+      applyFont(); applyDisplay(); applyTheme(); if (h.mapPrefs) h.mapPrefs(); if (h.maintChanged) h.maintChanged();
+      if (p0) profFields().forEach(i => { if (i.id in p0) i.value = p0[i.id]; });
+    }
+    const leave = () => show('home');
     function motoFields() { return [...el.querySelectorAll('[data-moto]')]; }
     function motoDirty() { const bar = el.querySelector('[data-motobar]'); if (bar) bar.style.display = motoFields().some(i => i.value !== i.dataset.v0) ? '' : 'none'; }
     function motoDirtyInit() { motoFields().forEach(i => { i.dataset.v0 = i.value; i.addEventListener('input', motoDirty); i.addEventListener('change', motoDirty); }); motoDirty(); }
@@ -251,7 +266,14 @@
         try { const r = await fetch('/api/social/blocks/' + encodeURIComponent(b.dataset.u), { method: 'DELETE', credentials: 'same-origin' }); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Engel kaldırılamadı.'); msg('Engel kaldırıldı.'); await blocksLoad(); }
         catch (err) { b.disabled = false; msg(err.message, true); }
       }
-      else if (a === 'motocancel') { el.querySelectorAll('[data-moto]').forEach(i => { i.value = i.dataset.v0 || ''; }); motoDirty(); msg(''); }
+      else if (a === 'motocancel') { el.querySelectorAll('[data-moto]').forEach(i => { i.value = i.dataset.v0 || ''; }); motoDirty(); if (b.dataset.exit) return leave(); msg(''); }
+      else if (a === 'spcancel') { revertAll(); leave(); }
+      else if (a === 'spsave') {
+        if (cur !== 'profile') return leave();
+        const sv = $('sSave'); if (!sv) return leave(); b.disabled = true; sv.click();
+        for (let i = 0; i < 40; i++) { await new Promise(r => setTimeout(r, 100)); const m = $('sMsg'); if (m && m.textContent) { if (m.textContent === 'Kaydedildi.') { b.disabled = false; return leave(); } break; } }
+        b.disabled = false; paintBar();
+      }
       else if (a === 'motosave') {
         const g = k => (el.querySelector('[data-moto=' + k + ']').value || '').trim(), nm = g('name').replace(/\s+/g, ' '), M = root.MyMoto, u = me().username;
         const sp = nm.indexOf(' '), br = sp < 0 ? nm : nm.slice(0, sp), mo = !nm ? '' : sp < 0 ? nm : nm.slice(sp + 1);
@@ -266,6 +288,7 @@
           if (motoH && motoH.refresh) motoH.refresh(); if (h.motoRefresh) h.motoRefresh();
           motoFields().forEach(i => { i.dataset.v0 = i.value; }); motoDirty();
           msg(ok ? 'Kaydedildi.' : 'Motosiklet bilgileri kaydedildi; sahip, km ve muayene tarihi bu tarayıcıda saklanamadı.', !ok);
+          if (ok && b.dataset.exit) { leave(); return; }
         } catch (err) { msg(err.message || 'Kaydedilemedi.', true); } finally { b.disabled = false; }
       }
       else if (a === 'fontdd') { fontOpen = !fontOpen; show(cur); }
@@ -314,6 +337,8 @@
         });
       }
     });
+    for (const ev of ['input', 'change']) el.addEventListener(ev, paintBar);
+    el.addEventListener('click', () => setTimeout(paintBar, 60));
     show('home');
     return { show, home: () => show('home'), refresh: () => show(cur === 'profile' ? 'profile' : cur) };
   }

@@ -16,7 +16,7 @@
     const { sock, $, esc, toast, modal, closeModal, store, haversine } = ctx;
     const sheet = $('mm-gsheet'), chipEl = $('mm-gchip'), btn = $('mm-gbtn');
     const G = { list: [], cur: store.get('mm_gcur', ''), detail: null, live: null, sharing: false, sharedGid: '', sharedRide: '', consent: {}, sent: null,
-      route: null, routeLayers: [], showRoute: store.get('mm_groute', '1') !== '0', open: false, view: 'main', watching: '', timer: 0, confirmFn: null, selfLeft: false, listT: 0, memT: 0 };
+      route: null, routeLayers: [], showRoute: store.get('mm_groute', '1') !== '0', open: false, view: 'main', watching: '', timer: 0, confirmFn: null, selfLeft: false, listT: 0, memT: 0, mshared: false, mlisten: '', mseq: 0, mcur: '', mgid: '' };
 
     async function req(method, url, body, raw) {
       const opt = { method, credentials: 'same-origin', headers: {} };
@@ -67,6 +67,7 @@
       catch { if (gid === G.cur) { G.detail = null; } return; }
       if (!G.detail.ride) { G.live = null; if (G.sharing && G.sharedGid === gid) stop(false); }
       syncWatch();
+      if (G.evFor !== gid) { G.evFor = gid; evLoad().then(c => { c.reset(); return c.load(); }).then(renderIf).catch(() => { G.evFor = ''; }); }
       if (G.detail.route && (!G.route || G.route.gid !== gid || G.route.v !== G.detail.route.v)) loadRoute();
       else if (!G.detail.route && G.route) { clearRoute(); G.route = null; }
     }
@@ -143,6 +144,78 @@
         'Konumun ve hızın, bu grup sürüşü boyunca <b>yalnızca bu grubun üyelerine</b> gösterilir ve sürüş analizi için <b>kaydedilir</b> (grup üyeleri sonradan görebilir). İstediğin an durdurabilirsin; sürüş bitince paylaşım kendiliğinden durur.',
         'Paylaşımı Aç', startSharing);
     }
+
+    /* ---------- Etkinlikler (public/group-events.js) ---------- */
+    let evCtl = null, evLoading = null;
+    function evLoad() {
+      if (evCtl) return Promise.resolve(evCtl);
+      if (evLoading) return evLoading;
+      evLoading = new Promise((res, rej) => {
+        const ready = () => {
+          evCtl = window.GroupEvents.create({ req, esc, toast, ctx, gid: () => G.cur, rerender: () => renderSheet(), close: closeSheet,
+            view: v => { G.view = v; renderSheet(); sheet.scrollTop = 0; }, confirm: (t, html, ok, fn) => confirmDlg(t, html, ok, () => run(fn)) });
+          res(evCtl);
+        };
+        if (window.GroupEvents) return ready();
+        const sc = document.createElement('script'); sc.src = '/group-events.js'; sc.onload = ready; sc.onerror = () => { evLoading = null; rej(new Error('Etkinlik bileşeni yüklenemedi. Bağlantını kontrol edip tekrar dene.')); }; document.head.appendChild(sc);
+      });
+      return evLoading;
+    }
+    async function openEvents() { const c = await evLoad(); G.view = 'events'; renderSheet(); sheet.scrollTop = 0; try { await c.load(); } catch (e) { toast(e.message || 'Etkinlikler alınamadı.'); } if (G.view === 'events') renderSheet(); }
+
+    /* ---------- Müzik paylaşımı (YouTube; ses her üyenin kendi cihazında çalar) ----------
+       Lider: çalmaya başlarken «Etkinlikte paylaş» ya da «Sadece ben» seçer; paylaşırken durdur/devam/sonraki/önceki üyelere de gider.
+       Üye: lider paylaşınca bir kez sorulur; «Dinle» denince sonraki değişiklikler (parça, duraklat) kendiliğinden uygulanır. */
+    function emitMusic(p) {
+      if (!G.cur) return;
+      sock.timeout(6000).emit('grp:music', { gid: G.cur, ...p }, (err, r) => {
+        if (err || !r || r.error) { if (!(r && r.error === 'Çok sık deneme.')) { G.mshared = false; toast((r && r.error) || 'Müzik paylaşılamadı; sadece sen dinliyorsun.', 5000); } }
+        if (G.open && G.view === 'main') renderSheet();
+      });
+    }
+    function askMusic(id) {
+      G.mpend = id;
+      modal('<h3>Müzik Paylaşımı</h3><p>Çaldığın müziği bu grup sürüşündeki üyelere de dinletmek ister misin? Ses her üyenin kendi telefonunda çalar.</p><div class="mm-mbtns" style="flex-direction:column"><button type="button" class="mm-mb primary" data-gmu="share" data-focus>Etkinlikte Paylaş</button><button type="button" class="mm-mb" data-gmu="solo">Sadece Kendim Dinleyeyim</button></div>');
+    }
+    function musicLocal(o) {
+      const d = G.detail; if (!d || !d.ride || !iAmLeader() || !sock.connected) return;
+      if (o.t === 'play') { if (!G.mshared || !G.mkeep) askMusic(o.id); else emitMusic({ src: o.id, playing: true }); return; }
+      if (!G.mshared) return;
+      if (o.t === 'stop') { G.mshared = false; emitMusic({ src: null }); renderIf(); }
+      else if (o.t === 'toggle') emitMusic({ playing: !!o.playing });
+      else if (o.t === 'cmd') emitMusic({ cmd: o.cmd });
+    }
+    const renderIf = () => { if (G.open && G.view === 'main') renderSheet(); };
+    ctx.modalEl.addEventListener('click', e => {
+      const b = e.target.closest('[data-gmu]'); if (!b) return;
+      const id = G.mpend; G.mpend = null; closeModal(); if (!id) return;
+      if (b.dataset.gmu === 'share') { G.mshared = true; G.mkeep = true; emitMusic({ src: id, playing: true }); toast('Müzik grupla paylaşılıyor.', 3000); }
+      else { if (G.mshared) emitMusic({ src: null }); G.mshared = false; toast('Müziği sadece sen dinliyorsun.', 3000); }
+      renderIf();
+    });
+    function musicRemote(p) {
+      if (!p || p.gid !== G.cur || iAmLeader() || !ctx.yt) return;
+      const m = p.music;
+      if (!m) { if (G.mcur) { G.mcur = ''; if (G.mlisten === 'on') { ctx.yt.stop(); toast('Lider müziği durdurdu.', 3000); } } return; }
+      if (p.gid === G.mgid && m.seq <= G.mseq && !p.cmd) return;
+      G.mgid = p.gid; G.mseq = m.seq;
+      const key = (m.video || '') + '|' + (m.list || '');
+      const apply = () => {
+        if (G.mcur !== key || !ctx.yt.active()) { G.mcur = key; ctx.yt.play({ video: m.video, list: m.list }, m.playing); }
+        else if (p.cmd) ctx.yt.cmd(p.cmd); else ctx.yt.playing(m.playing);
+      };
+      if (G.mlisten === 'on') return apply();
+      if (G.mlisten === 'off') { G.mcur = key; return; }
+      G.mpendM = apply;
+      modal('<h3>Lider Müzik Paylaşıyor ♫</h3><p><b>' + esc(m.by || 'Lider') + '</b> çaldığı müziği gruba dinletiyor. Kendi telefonunda dinlemek ister misin?</p><div class="mm-mbtns" style="flex-direction:column"><button type="button" class="mm-mb primary" data-gml="on" data-focus>Dinle</button><button type="button" class="mm-mb" data-gml="off">Şimdi Değil</button></div>');
+    }
+    ctx.modalEl.addEventListener('click', e => {
+      const b = e.target.closest('[data-gml]'); if (!b) return;
+      const f = G.mpendM; G.mpendM = null; closeModal();
+      if (b.dataset.gml === 'on') { G.mlisten = 'on'; if (f) f(); } else G.mlisten = 'off';
+      renderIf();
+    });
+    sock.on('grp:music', musicRemote);
 
     /* ---------- Arayüz ---------- */
     function confirmDlg(title, html, okLabel, fn, danger) {
@@ -222,6 +295,9 @@
       h += '</div>';
       h += `<div class="mm-gsec"><div class="mm-gtitle"><b>Üyeler</b>${act && L && L.members.some(m => m.lat != null) ? '<button type="button" class="mm-glink" data-g="fit">Hepsini Göster</button>' : ''}</div><div id="mm-gmem">${membersHtml()}</div></div>`;
       h += voiceSection(d);
+      h += `<div class="mm-gsec"><b>Etkinlikler</b>${evCtl && evCtl.count() ? '<p class="mm-note">' + evCtl.count() + ' etkinlik' + (evCtl.next() ? ' · sıradaki: <b>' + esc(evCtl.next().title) + '</b>' : '') + '</p>' : '<p class="mm-note">Başlangıç, mola/uğrak ve varış noktalı tur planları.</p>'}<button type="button" class="mm-mb mm-gwide" data-g="events">Etkinlikler${evCtl && evCtl.count() ? ' (' + evCtl.count() + ')' : ''}</button></div>`;
+      if (act && lead) h += `<div class="mm-gsec"><b>Müzik</b><p class="mm-note">${G.mshared ? '♫ Müziğin gruba <b>paylaşılıyor</b>. Durdur, devam ve parça değişimi üyelere de gider.' : 'Haritada YouTube müziği çalarken «Etkinlikte paylaş» ya da «Sadece kendim dinleyeyim» diye sorulur.'}</p>${G.mshared ? '<button type="button" class="mm-mb mm-gwide" data-g="mstop">Paylaşımı Durdur (müzik sende çalmaya devam eder)</button>' : ''}</div>`;
+      else if (act && !lead) h += `<div class="mm-gsec"><b>Müzik</b><label class="mm-mrow"><span>Liderin Müziğini Dinle</span><input type="checkbox" id="mm-gml" ${G.mlisten === 'on' ? 'checked' : ''}></label><p class="mm-note">Lider müzik paylaşınca senin telefonunda da çalar. Kapatınca yalnızca kendi müziğin çalar.</p></div>`;
       // Güzergâh
       const mine = ctx.currentRoute();
       h += `<div class="mm-gsec"><b>Ana Güzergâh</b>`;
@@ -241,7 +317,7 @@
     }
     function renderSheet() {
       const keep = sheet.scrollTop, focusId = document.activeElement && sheet.contains(document.activeElement) ? document.activeElement.id : '';
-      const body = G.view === 'new' || G.view === 'join' ? formView(G.view) : G.view === 'list' || !G.detail ? listView() : detailView();
+      const body = G.view === 'new' || G.view === 'join' ? formView(G.view) : G.view === 'list' || !G.detail ? listView() : (G.view === 'events' || G.view === 'event') && evCtl ? (G.view === 'events' ? evCtl.listView() : evCtl.formView()) : detailView();
       sheet.innerHTML = `<div class="mm-gh"><b>Grup Sürüşü</b><button type="button" class="mm-gx" data-g="close" aria-label="Kapat">✕</button></div>${body}`;
       sheet.scrollTop = keep; if (focusId) { const f = sheet.querySelector('#' + focusId); if (f) f.focus(); }
     }
@@ -266,10 +342,11 @@
     const acts = {
       vjoin: () => run(async () => { const c = await gvLoad(); const r = await c.join(G.cur, (G.detail && G.detail.name) || ''); if (r && r.error) toast(r.error, 6000); renderSheet(); }),
       vleave: () => run(async () => { if (gvCtl) await gvCtl.leave(); renderSheet(); }),
+      main: () => { G.view = 'main'; renderSheet(); }, events: () => run(openEvents), mstop: () => { G.mshared = false; emitMusic({ src: null }); renderSheet(); toast('Müzik paylaşımı durduruldu.', 3000); },
       close: closeSheet, list: () => { G.view = 'list'; renderSheet(); }, new: () => { if (window.openSocialGroups) { closeSheet(); window.openSocialGroups(); } else { G.view = 'new'; renderSheet(); const i = sheet.querySelector('#mm-gin'); if (i) i.focus(); } },   // asıl kaynak: Sosyal › Gruplarım
       social: () => { closeSheet(); if (window.openSocialGroups) window.openSocialGroups(G.cur); },
       join: () => { G.view = 'join'; renderSheet(); const i = sheet.querySelector('#mm-gin'); if (i) i.focus(); },
-      pick: d => { G.cur = d.id; store.set('mm_gcur', G.cur); G.view = 'main'; G.detail = null; G.live = null; clearRoute(); G.route = null; G.watching = ''; renderSheet(); loadDetail().then(paint); },
+      pick: d => { if (evCtl) evCtl.reset(); G.cur = d.id; store.set('mm_gcur', G.cur); G.view = 'main'; G.detail = null; G.live = null; clearRoute(); G.route = null; G.watching = ''; renderSheet(); loadDetail().then(paint); },
       create: () => run(async () => { const j = await req('POST', '/api/rgroups', { name: inputVal() }); G.cur = j.group.id; store.set('mm_gcur', G.cur); G.view = 'main'; await loadList(); toast('Grup oluşturuldu. Davet kodunu arkadaşlarınla paylaş.'); }),
       joingo: () => run(() => joinWith(inputVal())),
       start: () => run(async () => { await req('POST', detailUrl('/start')); await loadDetail(); paint(); toast('Grup sürüşü başladı. Konumunu paylaşmak için anahtarı aç.', 6000); }),
@@ -299,7 +376,11 @@
       focus: d => { const m = markers().find(x => x.name === d.u); if (m) { ctx.flyTo(m.lat, m.lon); closeSheet(); } else if (d.u === ctx.user && ctx.me()) { ctx.flyTo(ctx.me().lat, ctx.me().lon); closeSheet(); } }
     };
     sheet.addEventListener('click', e => { const b = e.target.closest('[data-g]'); if (b && !b.disabled && acts[b.dataset.g]) acts[b.dataset.g](b.dataset); });
+    sheet.addEventListener('click', e => { const b = e.target.closest('[data-ev]'); if (b && !b.disabled && evCtl) evCtl.act(b.dataset.ev, b.dataset); });
+    sheet.addEventListener('input', e => { if (evCtl) evCtl.input(e); });
     sheet.addEventListener('change', e => {
+      if (e.target.dataset && e.target.dataset.ef && evCtl) return evCtl.input(e);
+      if (e.target.id === 'mm-gml') { G.mlisten = e.target.checked ? 'on' : 'off'; if (!e.target.checked && G.mcur && ctx.yt) ctx.yt.stop(); else if (e.target.checked) toast('Lider müziği paylaşınca otomatik çalacak.', 3500); return; }
       if (e.target.id !== 'mm-gshare') return;
       if (e.target.checked) { e.target.checked = false; askShare(); } else stop(true);
     });
@@ -324,9 +405,10 @@
       if (!p) return;
       const cur = p.gid === G.cur;
       if (p.kind === 'ride-start') toast('Grup sürüşü başladı' + ((G.list.find(g => g.id === p.gid) || {}).name ? ': ' + G.list.find(g => g.id === p.gid).name : '') + '.', 6000);
-      else if (p.kind === 'ride-end') { if (G.sharing && G.sharedGid === p.gid) { G.sharing = false; G.sent = null; ctx.releaseGps(); } if (cur) { toast('Grup sürüşü bitti.', 5000); G.live = null; } }
+      else if (p.kind === 'ride-end') { G.mshared = false; G.mkeep = false; G.mlisten = ''; G.mcur = ''; G.mseq = 0; if (G.sharing && G.sharedGid === p.gid) { G.sharing = false; G.sent = null; ctx.releaseGps(); } if (cur) { toast('Grup sürüşü bitti.', 5000); G.live = null; } }
       else if (p.kind === 'removed' && cur && !G.selfLeft) { toast('Bu gruptan çıkarıldın.', 6000); if (G.sharing) { G.sharing = false; ctx.releaseGps(); } }
       else if (p.kind === 'deleted' && cur) { toast('Grup silindi.', 5000); if (G.sharing) { G.sharing = false; ctx.releaseGps(); } }
+      else if (p.kind === 'events' && cur) { if (evCtl) evCtl.load().then(() => { if (G.open && (G.view === 'events' || G.view === 'main')) renderSheet(); }).catch(() => {}); }
       else if (p.kind === 'join' && cur && p.u) toast(p.u + ' gruba katıldı.', 4000);
       else if (p.kind === 'leader' && cur) toast('Grup lideri değişti.', 4000);
       listSoon();
@@ -355,7 +437,7 @@
       activate() { syncWatch(); clearInterval(G.timer); G.timer = setInterval(() => { if (G.live) { paintChip(); ctx.refresh(); if (G.open && G.view === 'main') paintMembers(); } }, 5000); ctx.refresh(); },
       deactivate() { clearInterval(G.timer); G.timer = 0; if (G.watching) { if (sock.connected) sock.emit('grp:unwatch', { gid: G.watching }); G.watching = ''; } G.live = null; closeSheet(); },
       onFix(f) { sendFix(f, false); },
-      markers, sharing: () => G.sharing, stop, joinPrompt, open: openSheet
+      markers, sharing: () => G.sharing, stop, joinPrompt, open: openSheet, musicLocal
     };
   }
   window.GroupRide = { mount };
