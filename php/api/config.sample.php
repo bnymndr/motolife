@@ -16,9 +16,6 @@ return [
     'MAIL_FROM' => '',               // örn. Moto Life <noreply@alanadin.com>
     'SMTP_HOST' => '', 'SMTP_PORT' => 587, 'SMTP_USER' => '', 'SMTP_PASS' => '',
 
-    // ---- Google / Apple ile giriş: istemci kimlikleri (boşsa düğmeler görünür ama «etkinleştirilmemiş» uyarısı verir) ----
-    'GOOGLE_CLIENT_ID' => '',
-    'APPLE_CLIENT_ID' => '',
 
     // ---- Harita / rota (anahtarlar yalnızca burada, istemciye gitmez) ----
     'GEOAPIFY_API_KEY' => '',        // motosiklet rotası

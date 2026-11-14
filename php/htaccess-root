@@ -2,6 +2,7 @@
 Options -Indexes
 DirectoryIndex index.html
 AddType application/manifest+json .webmanifest
+AddType application/octet-stream .pmtiles
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteRule ^api/ api/index.php [L,QSA]

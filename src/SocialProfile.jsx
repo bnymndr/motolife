@@ -479,7 +479,7 @@ function PostList({ feed, onOpenUser, emptyTitle, emptyText }) {
 }
 
 /* ---------- Arkadaşlık düğmeleri ---------- */
-function FriendActions({ rel, requestId, username, onDone, onChat }) {
+function FriendActionsInner({ rel, requestId, username, onDone, onChat }) {
   const [busy, setBusy] = useState(false);
   const act = async fn => {
     setBusy(true);
@@ -504,6 +504,20 @@ function FriendActions({ rel, requestId, username, onDone, onChat }) {
     return <button type="button" disabled={busy} className={GHOST} onClick={() => act(() => api('/requests/' + requestId, { method: 'DELETE' }))}>İstek Gönderildi · İptal Et</button>;
   }
   return <button type="button" disabled={busy} className={PRIMARY} onClick={() => act(() => api('/requests', { method: 'POST', body: { username } }))}>Arkadaş Ekle</button>;
+}
+
+function FriendActions({ canBlock, ...props }) {
+  const { rel, username, onDone } = props;
+  const act = fn => async () => { try { await fn(); onDone(); } catch (e) { onDone(e.message); } };
+  if (rel === 'blocked') {
+    return <button type="button" className={PRIMARY} onClick={act(() => api('/blocks/' + encodeURIComponent(username), { method: 'DELETE' }))}>Engeli Kaldır</button>;
+  }
+  return (
+    <>
+      <FriendActionsInner {...props} />
+      {canBlock && rel !== 'self' && <ConfirmButton className={DANGER} confirmLabel="Engellensin Mi?" onConfirm={act(() => api('/blocks', { method: 'POST', body: { username } }))}>Engelle</ConfirmButton>}
+    </>
+  );
 }
 
 /* ---------- Profil ---------- */
@@ -586,7 +600,7 @@ function ProfileView({ username, self, version, onOpenUser, onChat, onRefresh, o
             <div className="flex flex-wrap justify-end gap-2">
               {isSelf
                 ? <button type="button" className={GHOST} onClick={() => setEditing(e => !e)}>{editing ? 'Vazgeç' : 'Profili Düzenle'}</button>
-                : <FriendActions rel={info.rel} requestId={info.requestId} username={p.username} onDone={onDone} onChat={onChat} />}
+                : <FriendActions canBlock rel={info.rel} requestId={info.requestId} username={p.username} onDone={onDone} onChat={onChat} />}
             </div>
           </div>
           <h2 className="mt-2 truncate text-xl font-bold">{p.name}</h2>

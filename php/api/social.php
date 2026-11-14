@@ -43,7 +43,10 @@ function h_so_cover(string $name): never { need_user(); $o = user_by_name($name)
 function so_profile(array $u): array {
     return card($u) + ['cv' => pic_ver('cover', $u['id']), 'bio' => $u['bio'], 'status' => $u['status'], 'mood' => $u['mood'], 'statusAt' => (int)$u['status_at'], 'since' => (int)$u['created_at'], 'stats' => so_stats($u['id'])];
 }
+function blocked_by(string $a, string $b): bool { return (bool)val('SELECT 1 FROM ml_blocks WHERE a = ? AND b = ?', [$a, $b]); }
+function is_blocked(string $a, string $b): bool { return blocked_by($a, $b) || blocked_by($b, $a); }
 function relation(string $meId, array $o): array {
+    if (blocked_by($meId, $o['id'])) return ['rel' => 'blocked'];
     if (is_friend($meId, $o['id'])) return ['rel' => 'friend'];
     if ($r = one('SELECT id FROM ml_requests WHERE from_uid = ? AND to_uid = ?', [$meId, $o['id']])) return ['rel' => 'outgoing', 'requestId' => $r['id']];
     if ($r = one('SELECT id FROM ml_requests WHERE from_uid = ? AND to_uid = ?', [$o['id'], $meId])) return ['rel' => 'incoming', 'requestId' => $r['id']];
@@ -104,7 +107,7 @@ function h_so_avatar(string $name): never {
 }
 function h_so_user(string $name): never {
     $u = need_user(); $o = user_by_name($name);
-    if (!$o) fail(404, 'Kullanıcı bulunamadı.');
+    if (!$o || blocked_by($o['id'], $u['id'])) fail(404, 'Kullanıcı bulunamadı.');
     out(['profile' => so_profile($o)] + ($o['id'] === $u['id'] ? ['rel' => 'self'] : relation($u['id'], $o)) + ['locked' => !visible_to($u['id'], $o['id'])]);
 }
 function h_so_user_posts(string $name): never {
@@ -193,7 +196,7 @@ function h_so_search(): never {
         $like = '%' . str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $tok) . '%';
         $where[] = "(ulc LIKE ? ESCAPE '!' OR first_name LIKE ? ESCAPE '!' OR last_name LIKE ? ESCAPE '!')"; array_push($p, $like, $like, $like);
     }
-    $rows = all('SELECT * FROM ml_users WHERE id <> ? AND ' . implode(' AND ', $where) . ' LIMIT 10', $p);
+    $rows = all('SELECT * FROM ml_users WHERE id <> ? AND ' . implode(' AND ', $where) . ' AND id NOT IN (SELECT b FROM ml_blocks WHERE a = ?) AND id NOT IN (SELECT a FROM ml_blocks WHERE b = ?) LIMIT 10', array_merge($p, [$u['id'], $u['id']]));
     out(['users' => array_map(fn($r) => card($r) + relation($u['id'], $r), $rows)]);
 }
 function so_unread(string $me, string $other): int { return (int)val('SELECT COUNT(*) FROM ml_msgs WHERE pair = ? AND to_uid = ? AND rd = 0', [pair_key($me, $other), $me]); }
@@ -218,6 +221,8 @@ function h_so_request_create(): never {
     $u = need_user(); $o = user_by_name((string)(body()['username'] ?? ''));
     if (!$o) fail(404, 'Kullanıcı bulunamadı.');
     if ($o['id'] === $u['id']) fail(400, 'Kendine istek gönderemezsin.');
+    if (blocked_by($u['id'], $o['id'])) fail(403, 'Engellediğin kullanıcıya istek gönderemezsin. Önce engeli kaldır.');
+    if (blocked_by($o['id'], $u['id'])) fail(404, 'Kullanıcı bulunamadı.');
     if (rl('rq:' . $u['id'], 20, 60000)) fail(429, 'Çok fazla istek gönderdin, biraz bekle.');
     $rel = relation($u['id'], $o);
     if ($rel['rel'] === 'friend') fail(409, 'Zaten arkadaşsınız.');
@@ -240,6 +245,30 @@ function h_so_request_delete(string $id): never {
     if (!$r) fail(404, 'İstek bulunamadı.');
     q('DELETE FROM ml_requests WHERE id = ?', [$id]);
     rt_to_user($r['from_uid'], 'social:friends', new stdClass); rt_to_user($r['to_uid'], 'social:friends', new stdClass);
+    out(['rel' => 'none']);
+}
+function h_so_blocks(): never {
+    $u = need_user();
+    out(['blocks' => array_values(array_map('card', array_filter(array_map('user_by_id', array_column(all('SELECT b FROM ml_blocks WHERE a = ? ORDER BY at DESC', [$u['id']]), 'b')))))]);
+}
+function h_so_block_add(): never {
+    $u = need_user(); $o = user_by_name((string)(body()['username'] ?? ''));
+    if (!$o) fail(404, 'Kullanıcı bulunamadı.');
+    if ($o['id'] === $u['id']) fail(400, 'Kendini engelleyemezsin.');
+    if (!blocked_by($u['id'], $o['id'])) {
+        if ((int)val('SELECT COUNT(*) FROM ml_blocks WHERE a = ?', [$u['id']]) >= 200) fail(400, 'En çok 200 kullanıcı engellenebilir.');
+        q('INSERT INTO ml_blocks (a, b, at) VALUES (?, ?, ?)', [$u['id'], $o['id'], now_ms()]);
+    }
+    q('DELETE FROM ml_friends WHERE (a = ? AND b = ?) OR (a = ? AND b = ?)', [$u['id'], $o['id'], $o['id'], $u['id']]);
+    q('DELETE FROM ml_requests WHERE (from_uid = ? AND to_uid = ?) OR (from_uid = ? AND to_uid = ?)', [$u['id'], $o['id'], $o['id'], $u['id']]);
+    q('DELETE FROM ml_msgs WHERE pair = ?', [pair_key($u['id'], $o['id'])]);
+    rt_to_user($o['id'], 'social:friends', new stdClass); rt_to_user($u['id'], 'social:friends', new stdClass);
+    out(['rel' => 'blocked']);
+}
+function h_so_block_del(string $name): never {
+    $u = need_user(); $o = user_by_name($name);
+    if (!$o || !blocked_by($u['id'], $o['id'])) fail(404, 'Engellenen kullanıcı bulunamadı.');
+    q('DELETE FROM ml_blocks WHERE a = ? AND b = ?', [$u['id'], $o['id']]);
     out(['rel' => 'none']);
 }
 function h_so_friend_delete(string $name): never {
@@ -305,6 +334,7 @@ function social_remove_user(string $uid): void {
     q('DELETE FROM ml_posts WHERE uid = ?', [$uid]);
     q('DELETE FROM ml_likes WHERE uid = ?', [$uid]); q('DELETE FROM ml_comments WHERE uid = ?', [$uid]); q('DELETE FROM ml_images WHERE uid = ?', [$uid]);
     q('DELETE FROM ml_friends WHERE a = ? OR b = ?', [$uid, $uid]);
+    q('DELETE FROM ml_blocks WHERE a = ? OR b = ?', [$uid, $uid]);
     q('DELETE FROM ml_requests WHERE from_uid = ? OR to_uid = ?', [$uid, $uid]);
     q('DELETE FROM ml_msgs WHERE from_uid = ? OR to_uid = ?', [$uid, $uid]);
 }

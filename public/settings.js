@@ -35,14 +35,15 @@
   }
 
   const ICON = {
-    display: 'M4 5h16v11H4zM9 20h6M12 16v4', sound: 'M11 5 6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13',
+    display: 'M4 5h16v11H4zM9 20h6M12 16v4',
     theme: 'M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z', lang: 'M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18',
     notif: 'M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7M10 20a2 2 0 0 0 4 0', privacy: 'M12 21s7-6 7-11a7 7 0 0 0-14 0c0 5 7 11 7 11zM12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4',
+    blocks: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM5.6 5.6l12.8 12.8', offmaps: 'M12 3v11M8 10l4 4 4-4M5 17v3h14v-3',
     calib: 'M12 3v4M12 17v4M3 12h4M17 12h4M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6', data: 'M4 6c0-1.5 3.6-3 8-3s8 1.5 8 3-3.6 3-8 3-8-1.5-8-3zM4 6v6c0 1.5 3.6 3 8 3s8-1.5 8-3V6M4 12v6c0 1.5 3.6 3 8 3s8-1.5 8-3v-6',
     support: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01', logout: 'M9 4H5v16h4M16 8l4 4-4 4M20 12H9',
     moto: 'M5 18.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 18.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM5 15.5 9 9.5h5.5l2.2 3.4M14.5 9.5 13.3 6H16M9 9.5H6.5',
     analysis: 'M4 19V9M10 19V5M16 19v-8M3 20h18',
-    trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3', user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0'
+    trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3'
   };
   const ic = (k, cls) => `<svg class="${cls || 'h-5 w-5'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ICON[k]}"/></svg>`;
   const chev = '<svg class="h-4 w-4 shrink-0 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>';
@@ -137,7 +138,7 @@
     }
 
     /* ---------- Alt sayfalar ---------- */
-    const TITLES = { moto: 'Motosiklet Ayarları', profile: 'Profili Düzenle', display: 'Ekran', sound: 'Ses', theme: 'Tema', lang: 'Uygulama Dili', notif: 'Bildirim', privacy: 'Konum ve Gizlilik', calib: 'Kalibrasyon', data: 'Veri ve Depolama', support: 'Destek', delete: 'Hesabı Sil' };
+    const TITLES = { moto: 'Motosiklet Ayarları', profile: 'Profili Düzenle', display: 'Ekran', theme: 'Tema', lang: 'Uygulama Dili', notif: 'Bildirim', privacy: 'Konum ve Gizlilik', blocks: 'Engellenen Kullanıcılar', offmaps: 'Çevrimdışı Haritalar', calib: 'Kalibrasyon', data: 'Veri ve Depolama', support: 'Destek', delete: 'Hesabı Sil' };
     const PANELS = {
       display: () => box(`<div class="px-4 pt-3 text-sm text-zinc-300">Yazı Tipi</div>${fontCards()}<div class="px-4 pt-3 text-sm text-zinc-300">Yazı Boyutu (Punto)</div>${seg('fs', FS.map(([v, t]) => [v, t]), LS.get('ml_fs', '100'))}`
         + sw('Hareketi Azalt', 'ml_rm', '0', 'Geçiş efektlerini kapatır')
@@ -150,7 +151,10 @@
         + sw('Bakım Hatırlatıcıları', 'ml_maint', '1', 'My Moto’da zamanı gelen bakım, sigorta ve muayene ana sayfada görünür')
         + sw('Titreşimli Grup Uyarıları', 'ml_vib', '1', navigator.vibrate ? 'Geride kaldın / uzaklaştın uyarılarında titreşir' : 'Bu cihaz titreşimi desteklemiyor (ör. iPhone)', !navigator.vibrate)) + note('Notification' in window && Notification.permission === 'denied' ? 'Bildirim engelli: tarayıcının site ayarlarından açabilirsin.' : 'Uygulama kapalıyken bildirim (push) gönderilmez; uyarılar uygulama açıkken gelir.'),
       privacy: () => `<div class="space-y-3"><p class="rounded-2xl bg-white/[.055] p-4 text-sm text-zinc-300">Canlı konum paylaşımı her açılışta <b>kapalı</b> başlar. Açarken kapsamı (arkadaşlar / herkes) için onay istenir. Grup sürüşünde konum, her sürüşte ayrıca onayınla paylaşılır ve sürüş bitince durur.</p>`
+        + box(row('blocks', 'Engellenen Kullanıcılar', 'Arkadaşlık isteği ve mesaj gönderemezler') + row('offmaps', 'Çevrimdışı Haritalar', 'İl il ya da tüm Türkiye, internetsiz kullanım'))
         + btn('resetcons', 'Konum Paylaşım Onaylarını Sıfırla') + `<div data-slot="perm"></div></div>`,
+      blocks: () => `<p class="rounded-2xl bg-white/[.055] p-4 text-sm text-zinc-300">Engellediğin kişi sana arkadaşlık isteği ve mesaj gönderemez, seni aramada ve haritada göremez; arkadaşlık ve mesajlar silinir. Birini engellemek için profiline gidip <b>Engelle</b>'ye dokun.</p><div data-slot="blocks" class="space-y-2"><p class="px-1 text-sm text-zinc-400">Yükleniyor…</p></div>`,
+      offmaps: () => `<div data-slot="offmaps"></div>`,
       moto: () => { const m = me(), D = root.MyMoto && root.MyMoto.read ? root.MyMoto.read(m.username) : { owner: '', km: null, dates: {} }, fld = (k, t, inner) => `<label class="block text-xs text-zinc-400">${t}${inner}</label>`,
           nm = [m.bikeBrand, m.bikeModel].filter((x, i, a) => x && a.indexOf(x) === i).join(' '), owner = D.owner || [m.firstName, m.lastName].filter(Boolean).join(' ');
         return `<div class="space-y-3"><h2 class="road text-xl font-semibold">Motosiklet Bilgileri</h2><div class="space-y-3 rounded-2xl bg-white/[.055] p-4">`
@@ -187,15 +191,27 @@
       for (const k of ['perm', 'cal', 'profile']) { const b = $('lg-' + k); if (b) $('setLegacy').appendChild(b); }   // eski bloklar (kimlikler korunur) saklama alanına dön
       if (name === 'home') { el.innerHTML = `<h1 class="road mb-3 text-3xl font-bold">Ayarlar</h1><div class="space-y-4">${home()}</div>`; window.scrollTo(0, 0); return; }
       const inner = name === 'profile' ? '<div data-slot="profile"></div>' : PANELS[name]();
-      el.innerHTML = `<div class="mb-3 flex items-center gap-2"><button type="button" data-go="home" aria-label="Geri" class="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-xl">‹</button><h1 class="road text-3xl font-bold">${TITLES[name]}</h1></div><div data-sp-msg class="hidden" role="status"></div><div class="space-y-3 pb-2">${inner}</div>`;
+      el.innerHTML = `<div class="mb-3 flex items-center gap-2"><button type="button" data-go="${name === 'blocks' || name === 'offmaps' ? 'privacy' : 'home'}" aria-label="Geri" class="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-xl">‹</button><h1 class="road text-3xl font-bold">${TITLES[name]}</h1></div><div data-sp-msg class="hidden" role="status"></div><div class="space-y-3 pb-2">${inner}</div>`;
       for (const [slot, id] of [['perm', 'lg-perm'], ['profile', 'lg-profile']]) { const s = el.querySelector(`[data-slot="${slot}"]`); if (s && $(id)) s.appendChild($(id)); }
       window.scrollTo(0, 0);
-      if (name === 'display' || name === 'data' || name === 'moto') after(name);
+      if (name === 'display' || name === 'data' || name === 'moto' || name === 'blocks' || name === 'offmaps') after(name);
     }
     function motoFields() { return [...el.querySelectorAll('[data-moto]')]; }
     function motoDirty() { const bar = el.querySelector('[data-motobar]'); if (bar) bar.style.display = motoFields().some(i => i.value !== i.dataset.v0) ? '' : 'none'; }
     function motoDirtyInit() { motoFields().forEach(i => { i.dataset.v0 = i.value; i.addEventListener('input', motoDirty); i.addEventListener('change', motoDirty); }); motoDirty(); }
+    const lzScript = src => new Promise((ok, no) => { if (document.querySelector(`script[data-lz="${src}"]`)) return ok(); const t = document.createElement('script'); t.src = src; t.dataset.lz = src; t.onload = ok; t.onerror = () => no(new Error(src)); document.head.appendChild(t); });
+    async function blocksLoad() {
+      const sl = el.querySelector('[data-slot="blocks"]'); if (!sl) return;
+      try {
+        const r = await fetch('/api/social/blocks', { credentials: 'same-origin' }), j = await r.json(); if (!r.ok) throw new Error(j.error || 'Liste alınamadı.');
+        if (cur !== 'blocks') return;
+        sl.innerHTML = j.blocks.length ? box(j.blocks.map(u => `<div class="flex min-h-[60px] items-center gap-3 px-4 py-2"><span class="min-w-0 flex-1"><span class="block truncate">${esc(u.name || u.username)}</span><small class="block truncate text-xs text-zinc-400">@${esc(u.username)}</small></span><button type="button" data-act="unblock" data-u="${esc(u.username)}" class="btn-sec min-h-[44px] !px-3 text-sm">Engeli Kaldır</button></div>`).join(''))
+          : '<p class="rounded-2xl bg-white/[.055] p-4 text-sm text-zinc-400">Engellenen kullanıcı yok.</p>';
+      } catch (e) { sl.innerHTML = `<p class="rounded-xl bg-rose-500/15 px-3 py-2 text-sm text-rose-300" role="alert">${esc(e.message || 'Liste alınamadı.')} <button type="button" data-act="blocksretry" class="underline">Tekrar Dene</button></p>`; }
+    }
     function after(name) {
+      if (name === 'blocks') { blocksLoad(); return; }
+      if (name === 'offmaps') { const sl = el.querySelector('[data-slot="offmaps"]'); lzScript('/offline-maps.js').then(() => { if (cur === 'offmaps' && sl.isConnected) root.OfflineMaps.mount(sl, { user: me().username }); }).catch(() => { sl.innerHTML = '<p class="text-sm text-rose-300">Harita modülü yüklenemedi.</p>'; }); return; }
       if (name === 'moto') { motoDirtyInit(); const sl = el.querySelector('[data-slot="mymoto"]'); motoH = sl && root.MyMoto && root.MyMoto.mount ? root.MyMoto.mount(sl, { user: me().username }) : null; return; }
       if (name === 'data') {
         const R = $('stRides');
@@ -229,6 +245,12 @@
       if (a === 'logout') h.ask('Çıkış Yapılsın mı?', h.logout);
       else if (a === 'notifperm') { try { await Notification.requestPermission(); } catch {} show('notif'); }
       else if (a === 'resetcons') { LS.del('mm_cons_friends'); LS.del('mm_cons_all'); msg('Onaylar sıfırlandı. Bir sonraki paylaşımda yeniden sorulur.'); }
+      else if (a === 'blocksretry') blocksLoad();
+      else if (a === 'unblock') {
+        b.disabled = true;
+        try { const r = await fetch('/api/social/blocks/' + encodeURIComponent(b.dataset.u), { method: 'DELETE', credentials: 'same-origin' }); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Engel kaldırılamadı.'); msg('Engel kaldırıldı.'); await blocksLoad(); }
+        catch (err) { b.disabled = false; msg(err.message, true); }
+      }
       else if (a === 'motocancel') { el.querySelectorAll('[data-moto]').forEach(i => { i.value = i.dataset.v0 || ''; }); motoDirty(); msg(''); }
       else if (a === 'motosave') {
         const g = k => (el.querySelector('[data-moto=' + k + ']').value || '').trim(), nm = g('name').replace(/\s+/g, ' '), M = root.MyMoto, u = me().username;

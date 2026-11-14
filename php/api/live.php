@@ -43,6 +43,7 @@ function loc_snapshot(array $S): array {
     if ($S['w_lat'] === null) return ['list' => [], 'key' => ''];
     $me = $S['uid']; $now = now_ms(); $rows = [];
     foreach (all('SELECT * FROM ml_live WHERE uid <> ? AND lat IS NOT NULL AND at > ?', [$me, $now - LV_AGE_MS]) as $e) {
+        if (is_blocked($me, $e['uid'])) continue;                                          // engelli kullanıcılar birbirini görmez
         $fr = is_friend($me, $e['uid']);
         if ($e['aud'] === 'friends' && !$fr) continue;
         if ($S['w_fo'] && !$fr) continue;

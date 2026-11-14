@@ -52,7 +52,7 @@ function val(string $sql, array $p = []) { $r = q($sql, $p)->fetch(PDO::FETCH_NU
 function ins_ignore(): string { return sqlite_mode() ? 'INSERT OR IGNORE' : 'INSERT IGNORE'; }
 function lob($v): string { if (is_resource($v)) return (string)stream_get_contents($v); return $v === null ? '' : (string)$v; }
 
-const SCHEMA_VERSION = '5';
+const SCHEMA_VERSION = '6';
 function ensure_schema(PDO $pdo): void {
     static $done = false;
     if ($done) return; $done = true;
@@ -65,7 +65,7 @@ function ensure_schema(PDO $pdo): void {
             first_name VARCHAR(80) NOT NULL DEFAULT \'\', last_name VARCHAR(80) NOT NULL DEFAULT \'\', gender VARCHAR(30) NOT NULL DEFAULT \'belirtmek-istemiyorum\',
             bike_brand VARCHAR(80) NOT NULL DEFAULT \'\', bike_model VARCHAR(80) NOT NULL DEFAULT \'\', bike_year INT NULL, bike_type VARCHAR(20) NOT NULL DEFAULT \'\', bike_cc INT NULL,
             emergency_name VARCHAR(80) NOT NULL DEFAULT \'\', emergency_phone VARCHAR(30) NOT NULL DEFAULT \'\', pw_hash VARCHAR(255) NULL,
-            google_sub VARCHAR(190) NULL UNIQUE, apple_sub VARCHAR(190) NULL UNIQUE, sv INT NOT NULL DEFAULT 0, reset_hash VARCHAR(64) NULL, reset_exp BIGINT NOT NULL DEFAULT 0,
+            sv INT NOT NULL DEFAULT 0, reset_hash VARCHAR(64) NULL, reset_exp BIGINT NOT NULL DEFAULT 0,
             avatar MEDIUMTEXT NULL, created_at BIGINT NOT NULL DEFAULT 0, bio VARCHAR(255) NOT NULL DEFAULT \'\', status VARCHAR(255) NOT NULL DEFAULT \'\',
             mood VARCHAR(20) NOT NULL DEFAULT \'\', status_at BIGINT NOT NULL DEFAULT 0',
         'ml_posts' => 'id CHAR(16) PRIMARY KEY, uid CHAR(24) NOT NULL, text TEXT NOT NULL, at BIGINT NOT NULL, mood VARCHAR(20) NOT NULL DEFAULT \'\', image CHAR(16) NOT NULL DEFAULT \'\'',
@@ -73,6 +73,7 @@ function ensure_schema(PDO $pdo): void {
         'ml_comments' => 'id CHAR(16) PRIMARY KEY, post CHAR(16) NOT NULL, uid CHAR(24) NOT NULL, text TEXT NOT NULL, at BIGINT NOT NULL',
         'ml_images' => 'id CHAR(16) PRIMARY KEY, uid CHAR(24) NOT NULL, at BIGINT NOT NULL, post CHAR(16) NULL, data MEDIUMBLOB NOT NULL',
         'ml_friends' => 'a CHAR(24) NOT NULL, b CHAR(24) NOT NULL, PRIMARY KEY (a, b)',
+        'ml_blocks' => 'a CHAR(24) NOT NULL, b CHAR(24) NOT NULL, at BIGINT NOT NULL DEFAULT 0, PRIMARY KEY (a, b)',
         'ml_requests' => 'id CHAR(16) PRIMARY KEY, from_uid CHAR(24) NOT NULL, to_uid CHAR(24) NOT NULL, at BIGINT NOT NULL',
         'ml_msgs' => 'id CHAR(16) PRIMARY KEY, pair VARCHAR(50) NOT NULL, from_uid CHAR(24) NOT NULL, to_uid CHAR(24) NOT NULL, text TEXT NOT NULL, at BIGINT NOT NULL, rd TINYINT NOT NULL DEFAULT 0',
         'ml_rides' => 'uid CHAR(24) NOT NULL, id VARCHAR(40) NOT NULL, started BIGINT NOT NULL, ended BIGINT NOT NULL, summary TEXT NOT NULL, data MEDIUMTEXT NOT NULL,

@@ -139,7 +139,6 @@
     menu: ic('<path d="M4 7h16M4 12h16M4 17h16"/>'),
     close: ic('<path d="M6 6l12 12M18 6L6 18"/>'),
     play: '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>',
-    stop: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
     nav: ic('<path d="M3 11l18-8-8 18-2-8-8-2z"/>'),
     chev: ic('<path d="M6 9l6 6 6-6"/>'),
     group: ic('<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17.5" cy="9" r="2.5"/><path d="M17 14.2c2.4.3 4 2.2 4 4.8"/>')
@@ -185,6 +184,7 @@
   const TEMPLATE = `
   <div class="mm" id="mm" data-theme="dark">
     <div class="mm-map" id="mm-map"></div>
+    <button type="button" class="mm-ctr" id="mm-ctr" hidden aria-label="Konumuma Ortala"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4"/></svg>Ortala</button>
     <div class="mm-load" id="mm-load"><p id="mm-load-msg">Harita yükleniyor…</p><button type="button" class="mm-retry" id="mm-retry" hidden>Tekrar Dene</button></div>
 
     <div class="mm-top">
@@ -363,18 +363,64 @@
       S.cfg = cfg;
       const L = window.L;
       S.map = L.map(el.map, { zoomControl: false, attributionControl: false, worldCopyJump: true, maxZoom: cfg.tileMax || 19, preferCanvas: true, zoomSnap: 0.5, zoomDelta: 1, wheelPxPerZoomLevel: 90, tapTolerance: 18, bounceAtZoomLimits: false }).setView([39, 35], 5);   // karşılama görünümü (Türkiye); konum işareti değil
-      S.tiles = L.tileLayer(cfg.tileUrl, { maxZoom: cfg.tileMax || 19, maxNativeZoom: cfg.tileMax || 19, updateWhenIdle: true, updateWhenZooming: false, keepBuffer: 1, detectRetina: /@2x/.test(cfg.tileUrl) ? false : (window.devicePixelRatio || 1) > 1.5 && !!cfg.tileRetina }).addTo(S.map);
+      S.tiles = L.tileLayer(cfg.tileUrl, { subdomains: cfg.tileSub || 'abc', maxZoom: cfg.tileMax || 19, maxNativeZoom: cfg.tileMax || 19, updateWhenIdle: true, updateWhenZooming: false, keepBuffer: 1, detectRetina: /@2x|\{r\}/.test(cfg.tileUrl) ? false : (window.devicePixelRatio || 1) > 1.5 && !!cfg.tileRetina }).addTo(S.map);
       el.attr.innerHTML = (cfg.tileAttr || '') + (cfg.route && cfg.route.attr ? ' · ' + cfg.route.attr : '');
       S.riders = L.layerGroup().addTo(S.map);
-      S.map.on('dragstart', () => { S.follow = false; paintLocate(); });
+      S.map.on('dragstart', () => { S.follow = false; paintLocate(); paintRot(); });
+      el.map.addEventListener('pointerdown', flattenForTouch, true);
       el.load.hidden = true;
       S.ready = true;
       paintLocate(); setTheme(S.theme);
-      if ('ResizeObserver' in window) new ResizeObserver(() => { S.map && S.map.invalidateSize(); measureHead(); }).observe(el.root);
+      if ('ResizeObserver' in window) new ResizeObserver(() => { if (S.boxOn) rotBox(true); else S.map && S.map.invalidateSize(); measureHead(); }).observe(el.root);
       measureHead();
       if (S.active) startWatch();
     }
-    function paintLocate() { $('mm-loc').classList.toggle('on', S.follow && !!S.me); }
+    function paintLocate() { $('mm-loc').classList.toggle('on', S.follow && !!S.me); $('mm-ctr').hidden = !(S.nav && !S.follow && S.me); }
+
+    /* ---------- Yön-yukarı (heading-up) harita: navigasyonda harita dönerek işaret hep ileriye bakar ----------
+       Leaflet dönmeyi desteklemez: harita kabı ekran köşegeni kadar büyütülür ve CSS ile döndürülür.
+       Dokununca düz (kuzey-yukarı) görünüme dönülür (sürükleme doğruluğu için), «Ortala» ile geri gelinir. */
+    function rotBox(on) {
+      const m = el.map;
+      if (!on) { ['left', 'top', 'width', 'height', 'inset', 'transform', 'transition'].forEach(k => m.style.removeProperty(k)); el.root.classList.remove('rotated'); S.rotCur = null; S.boxOn = false; }
+      else {
+        const W = el.root.clientWidth, H = el.root.clientHeight, d = Math.ceil(Math.hypot(W, H)) + 4;
+        m.style.inset = 'auto'; m.style.width = d + 'px'; m.style.height = d + 'px'; m.style.left = Math.round((W - d) / 2) + 'px'; m.style.top = Math.round((H - d) / 2) + 'px';
+        el.root.classList.add('rotated'); S.boxOn = true; if (S.rotCur == null) S.rotCur = 0;
+      }
+      S.map && S.map.invalidateSize({ animate: false });
+    }
+    function setRot(deg, instant) {
+      const m = el.map; m.style.transition = instant ? 'none' : 'transform .6s linear'; m.style.transform = `rotate(${deg}deg)`;
+      m.style.setProperty('--unrot', `rotate(${-deg}deg)`);
+    }
+    function bearingTo(a, b, c, d) {
+      const y = Math.sin(toRad(d - b)) * Math.cos(toRad(c)), x = Math.cos(toRad(a)) * Math.sin(toRad(c)) - Math.sin(toRad(a)) * Math.cos(toRad(c)) * Math.cos(toRad(d - b));
+      return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+    }
+    function navHeading() {
+      if (S.hdv != null && Date.now() - (S.hdvAt || 0) < 8000) return S.hdv;      // hareket ederken ölçülen yön
+      const t = S.route && S.route.tracker; if (!t || !S.me) return S.hdv;          // duruyorsa rotadaki yön
+      const along = t.total - t.progress(S.me.lat, S.me.lon).remaining; let i = 1;
+      while (i < t.c.length - 1 && t.cum[i] < along + 40) i++;
+      return bearingTo(S.me.lat, S.me.lon, t.c[i][0], t.c[i][1]);
+    }
+    function paintRot() {
+      if (!S.nav || !S.me || !S.map) return;
+      if (!S.boxOn) rotBox(true);
+      const m = S.meMarker && S.meMarker.getElement && S.meMarker.getElement(), box = m && m.querySelector('.mm-me'), rot = m && m.querySelector('.rot');
+      if (!S.follow) { if (S.rotCur) { S.rotCur = 0; setRot(0, true); } return; }
+      const h = navHeading(); if (h == null) return;
+      S.rotCur = (S.rotCur || 0) + (((-h - (S.rotCur || 0)) % 360 + 540) % 360 - 180);
+      setRot(S.rotCur);
+      if (box) box.classList.add('hd', 'up'); if (rot) rot.style.transform = `rotate(${h}deg)`;
+    }
+    function flattenForTouch() {          // dokunuş başlayınca düz görünüm; bırakılınca takip sürüyorsa yeniden döner
+      if (!S.nav || !S.boxOn || !S.rotCur) return;
+      S.rotCur = 0; setRot(0, true);
+      const back = () => { document.removeEventListener('pointerup', back, true); document.removeEventListener('pointercancel', back, true); setTimeout(() => { if (S.nav && S.follow) paintRot(); }, 60); };
+      document.addEventListener('pointerup', back, true); document.addEventListener('pointercancel', back, true);
+    }
 
     function meIcon() {
       return window.L.divIcon({ className: 'mm-icon', iconSize: [28, 28], iconAnchor: [14, 14],
@@ -387,13 +433,15 @@
       const m = S.meMarker.getElement && S.meMarker.getElement();
       if (m) {
         const hd = f.heading != null && f.speed != null && f.speed > 1.5;
-        if (hd) {                                                       // yönü yumuşat (en kısa açı yolu)
+        if (hd) {                                                       // yönü yumuşat
+          S.hdvAt = Date.now();   // (en kısa açı yolu)
           const d = ((f.heading - (S.hdv == null ? f.heading : S.hdv) + 540) % 360) - 180;
           S.hdv = (S.hdv == null ? f.heading : S.hdv + d * 0.5 + 360) % 360;
         }
         const box = m.querySelector('.mm-me'); if (box) { box.classList.toggle('hd', hd); box.classList.remove('stale'); }
         const rot = m.querySelector('.rot'); if (rot && hd) rot.style.transform = `rotate(${S.hdv}deg)`;
       }
+      paintRot();
       if (f.acc >= 12 && f.acc < 500) {
         if (!S.accCircle) S.accCircle = L.circle(ll, { radius: f.acc, weight: 1, color: accent(), opacity: 0.5, fillColor: accent(), fillOpacity: 0.1, interactive: false }).addTo(S.map);
         else { S.accCircle.setLatLng(ll); S.accCircle.setRadius(f.acc); }
@@ -459,7 +507,7 @@
       if (!S.ready) return;
       if (!S.me) { toast(el.gps.dataset.s === 'bad' ? el.gps.textContent + '. Konum alınamadı.' : 'Konum henüz bulunamadı, GPS aranıyor…'); startWatch(); return; }
       S.follow = true; paintLocate();
-      S.map.setView([S.me.lat, S.me.lon], Math.max(S.map.getZoom(), 16), { animate: true });
+      S.map.setView([S.me.lat, S.me.lon], Math.max(S.map.getZoom(), 16), { animate: true }); paintRot();
     }
 
     /* ---------- Diğer sürücüler (altyapı) ---------- */
@@ -747,7 +795,7 @@
     function dropRoute() {
       clearTimeout(S.routeTimer); S.reqId++; S.routeBusy = false; S.routeMsg = ''; S.pendingRoute = false; closeSteps(); $('mm-turn').hidden = true;
       clearRouteLayers(); S.route = null;
-      if (S.nav) { S.nav = null; el.navbar.hidden = true; S.spOpen = false; paintNavMode(); }
+      if (S.nav) { S.nav = null; el.navbar.hidden = true; S.spOpen = false; rotBox(false); paintNavMode(); paintLocate(); }
       $('mm-form').hidden = false; measureHead();
       if (!S.active && !rideActive() && !gpsHeld()) stopWatch();
     }
@@ -826,6 +874,8 @@
       S.follow = true; paintLocate();
       if (S.me) S.map.setView([S.me.lat, S.me.lon], Math.max(S.map.getZoom(), 16));
       startWatch(); measureHead(); S.spOpen = false; paintNavMode();
+      if (S.me) { paintRot(); S.map.setView([S.me.lat, S.me.lon], Math.max(S.map.getZoom(), 16)); }
+      paintLocate();
       if (S.me) updateNav(S.me);
     }
     function updateNav(f) {
@@ -1083,6 +1133,7 @@
     $('mm-zin').addEventListener('click', () => S.ready && S.map.zoomIn());
     $('mm-zout').addEventListener('click', () => S.ready && S.map.zoomOut());
     $('mm-loc').addEventListener('click', flyToMe);
+    $('mm-ctr').addEventListener('click', flyToMe);
 
     /* ---------- Müzik: YouTube bağlantısı ya da cihazdaki müzik dosyaları (sürüş boyunca; yeni sunucu/depolama yok) ---------- */
     const MU = { tab: 'yt', tracks: [], i: -1, urls: [] }, mu = $('mm-music'), aud = $('mm-aud');

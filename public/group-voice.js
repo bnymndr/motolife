@@ -306,7 +306,6 @@
       warn.hidden = !(bad || v.error); warn.textContent = v.error ? v.error : bad ? bad + ' kişiyle bağlantı kurulamadı (ağ engelli olabilir). Yeniden deneniyor.' : '';
       if (v.toast) { warn.hidden = false; warn.textContent = v.toast; clearTimeout(toastT); toastT = setTimeout(() => paint(ctl.state()), 5000); }
     }
-    function btn(text, act, pressed) { const b = d.createElement('button'); b.type = 'button'; b.textContent = text; b.dataset.act = act; b.setAttribute('aria-pressed', String(!!pressed)); return b; }
     const down = e => { e.preventDefault(); try { main.setPointerCapture(e.pointerId); } catch {} const v = ctl.state(); if (v.mode === 'ptt') ctl.pttDown(); };
     const up = e => { e.preventDefault(); const v = ctl.state(); if (v.mode === 'ptt') ctl.pttUp(); };
     main.addEventListener('pointerdown', down); main.addEventListener('pointerup', up); main.addEventListener('pointercancel', up); main.addEventListener('lostpointercapture', up); main.addEventListener('contextmenu', e => e.preventDefault());

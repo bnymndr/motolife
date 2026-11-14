@@ -29,9 +29,10 @@
 .mm-chip[data-s=warn]:before{background:var(--accent2)}
 .mm-chip[data-s=bad]:before{background:#E8675D}
 .mm-search{display:flex;align-items:center;height:54px;border-radius:27px;background:var(--bg);box-shadow:0 6px 22px rgba(0,0,0,.4),inset 0 0 0 1px var(--line)}
-.mm-search:focus-within{box-shadow:0 6px 22px rgba(0,0,0,.4),inset 0 0 0 1.5px var(--accent)}
+.mm-search:focus-within{box-shadow:0 6px 22px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.28)}
 .mm-sico{display:flex;padding-left:14px;color:#93A4B2}
-.mm-search input{flex:1;min-width:0;height:100%;background:transparent;border:0;outline:0;color:#F4EFE6;font:500 16px/1 var(--font,system-ui,sans-serif);padding:0 8px 0 10px;-webkit-appearance:none;appearance:none}
+.mm-search input{flex:1;min-width:0;height:100%;background:transparent;border:0;outline:0;color:#F4EFE6;font:500 16px/1 var(--font,system-ui,sans-serif);padding:0 8px 0 10px;-webkit-appearance:none;appearance:none;caret-color:#F4EFE6}
+.mm-search input:focus,.mm-search input:focus-visible{outline:0;box-shadow:none}
 .mm-search input::placeholder{color:#7f93a3}
 .mm-search input::-webkit-search-cancel-button{display:none}
 .mm-go{height:46px;margin-right:4px;padding:0 20px;border-radius:23px;background:var(--accent);color:var(--ink);font-weight:700;font-size:16px}
@@ -334,3 +335,9 @@
 .mm-lean .mm-ln{min-height:12px}
 .mm-lean[data-st=off] b,.mm-lean[data-st=off] .mm-lg i{opacity:.55}
 @media (prefers-reduced-motion:reduce){.mm-lean .mm-lg i{transition:none}}
+
+/* Yön-yukarı harita: Ortala düğmesi, dönen kapta işaret/sürücü yazıları dik kalır */
+.mm-ctr{position:absolute;z-index:19;left:50%;transform:translateX(-50%);bottom:calc(var(--pad) + env(safe-area-inset-bottom,0px) + 8px);display:flex;align-items:center;gap:8px;min-height:48px;padding:0 20px;border:0;border-radius:24px;background:var(--accent);color:#031420;font:700 16px/1 var(--font,system-ui,sans-serif);box-shadow:0 6px 20px rgba(0,0,0,.45)}
+.mm-ctr[hidden]{display:none}
+.mm.rotated .mm-rider{transform:var(--unrot,none)}
+.mm-me.up i{top:-12px;margin-left:-9px;border-width:9px;border-bottom-width:15px;border-top:0}

@@ -10,7 +10,7 @@ self.addEventListener('fetch', e => {
   const u = new URL(e.request.url);
   // API, soket ve parametreli adresler (ör. şifre sıfırlama bağlantısı) önbelleğe alınmaz
   if (e.request.method !== 'GET' || u.origin !== location.origin || u.search ||
-      u.pathname.startsWith('/api') || u.pathname.startsWith('/socket.io')) return;
+      u.pathname.startsWith('/api') || u.pathname.startsWith('/offline/') || u.pathname.startsWith('/socket.io')) return;   // /offline: büyük harita paketleri SW'den geçmez
   e.respondWith(
     fetch(e.request).then(r => {
       if (r.ok) { const copy = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }

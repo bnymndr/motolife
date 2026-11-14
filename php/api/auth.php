@@ -1,5 +1,5 @@
 <?php
-// Hesaplar: kayıt, giriş, profil, şifre sıfırlama, hesap silme, Google/Apple girişi (server.js + social-auth.js + accountdel.js karşılığı).
+// Hesaplar: kayıt, giriş, profil, şifre sıfırlama, hesap silme, şifre kuralları (server.js + accountdel.js karşılığı).
 declare(strict_types=1);
 
 const GENDERS = ['erkek', 'kadin', 'belirtmek-istemiyorum'];
@@ -21,7 +21,6 @@ function pub_user(array $u): array {
         'bikeYear' => $u['bike_year'] ?: '', 'bikeType' => $u['bike_type'], 'bikeCc' => $u['bike_cc'] ?: '',
         'phone' => (string)($u['phone'] ?? ''), 'emergencyName' => $u['emergency_name'], 'emergencyPhone' => $u['emergency_phone'],
         'email' => $u['email'], 'hasPassword' => !empty($u['pw_hash']),
-        'providers' => array_values(array_filter([!empty($u['google_sub']) ? 'google' : null, !empty($u['apple_sub']) ? 'apple' : null])),
         'avatar' => (string)($u['avatar'] ?? ''),
     ];
 }
@@ -69,7 +68,7 @@ function user_set_cols(array $f): array {   // read_profile alanları → ml_use
         'email' => $f['email'], 'phone' => $f['phone'] === '' ? null : $f['phone'], 'emergency_name' => $f['emergencyName'], 'emergency_phone' => $f['emergencyPhone']];
 }
 function user_insert(array $f, array $extra = []): array {
-    $u = ['id' => bin2hex(random_bytes(12))] + user_set_cols($f) + ['pw_hash' => null, 'google_sub' => null, 'apple_sub' => null, 'sv' => 0, 'created_at' => now_ms()];
+    $u = ['id' => bin2hex(random_bytes(12))] + user_set_cols($f) + ['pw_hash' => null, 'sv' => 0, 'created_at' => now_ms()];
     foreach ($extra as $k => $v) $u[$k] = $v;
     q('INSERT INTO ml_users (' . implode(',', array_keys($u)) . ') VALUES (' . implode(',', array_fill(0, count($u), '?')) . ')', array_values($u));
     return user_by_id($u['id']);
@@ -130,12 +129,42 @@ function cap_check(array $b): void {
     if ($bad) fail(400, 'Güvenlik sorusunu doğru yanıtla.', ['code' => 'captcha']);
 }
 
+// ---------- Şifre gücü (public/password.js ile AYNI kurallar; biri değişirse ikisi birlikte değişir) ----------
+const PW_MIN = 10, PW_MAX = 64;
+const PW_COMMON = ['password', 'parola', 'sifre', 'şifre', 'qwerty', 'asdfgh', 'zxcvbn', '123456', '654321', 'abcdef', 'motolife', 'motosiklet', 'motor', 'admin', 'letmein', 'iloveyou', 'welcome', 'istanbul', 'ankara'];
+function pw_lower(string $s): string { return mb_strtolower(strtr($s, ['İ' => 'i', 'I' => 'ı']), 'UTF-8'); }
+function pw_seq(string $s): bool {
+    $t = preg_replace('/[^\p{L}\p{N}]/u', '', pw_lower($s)); $c = preg_split('//u', (string)$t, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    for ($i = 0; $i + 3 < count($c); $i++) {
+        $d = mb_ord($c[$i + 1]) - mb_ord($c[$i]);
+        if (($d === 1 || $d === -1) && mb_ord($c[$i + 2]) - mb_ord($c[$i + 1]) === $d && mb_ord($c[$i + 3]) - mb_ord($c[$i + 2]) === $d) return true;
+    }
+    return false;
+}
+/** Eksik kuralların kısa adları ([] = güçlü). */
+function pw_check(string $pw, string $username = '', string $email = ''): array {
+    $bad = []; $n = mb_strlen($pw); $low = pw_lower($pw); $user = pw_lower($username); $mail = pw_lower(explode('@', $email)[0]);
+    if ($n < PW_MIN || $n > PW_MAX) $bad[] = 'En az ' . PW_MIN . ' karakter';
+    if (!preg_match('/\p{Ll}/u', $pw)) $bad[] = 'Küçük harf';
+    if (!preg_match('/\p{Lu}/u', $pw)) $bad[] = 'Büyük harf';
+    if (!preg_match('/\p{N}/u', $pw)) $bad[] = 'Rakam';
+    if (!preg_match('/[^\p{L}\p{N}\s]/u', $pw)) $bad[] = 'Özel karakter';
+    $guess = $pw === '' || (mb_strlen($user) >= 3 && str_contains($low, $user)) || (mb_strlen($mail) >= 3 && str_contains($low, $mail)) || preg_match('/(.)\1\1/u', $pw) || pw_seq($pw);
+    if (!$guess) foreach (PW_COMMON as $w) if (str_contains($low, $w)) { $guess = true; break; }
+    if ($guess) $bad[] = 'Tahmin edilmesi kolay olmamalı';
+    return $bad;
+}
+function pw_require(string $pw, string $username, string $email): void {
+    $bad = pw_check($pw, $username, $email);
+    if ($bad) fail(400, 'Şifre yeterince güçlü değil. Eksik: ' . implode(', ', $bad) . '.', ['code' => 'weakpw']);
+}
+
 function h_register(): never {
     $b = body(); cap_check($b); $r = read_profile($b, true); $pw = (string)($b['password'] ?? '');
     if (rl('reg:' . client_ip(), (int)cfg('REG_LIMIT', 10), 3600000)) fail(429, 'Çok fazla kayıt denemesi. Bir saat sonra tekrar dene.');
     if (isset($r['error'])) fail(400, $r['error']);
     $f = $r['f'];
-    if (strlen($pw) < 6 || mb_strlen($pw) > 64) fail(400, 'Şifre 6-64 karakter olmalı.');
+    pw_require($pw, $f['username'], $f['email']);
     if (user_by_name($f['username'])) fail(409, 'Bu kullanıcı adı alınmış.');
     if (one('SELECT id FROM ml_users WHERE email = ?', [$f['email']])) fail(409, 'Bu e-posta ile zaten bir hesap var.');
     if (one('SELECT id FROM ml_users WHERE phone = ?', [$f['phone']])) fail(409, 'Bu telefon numarası başka bir hesapta kayıtlı.');
@@ -164,7 +193,7 @@ function h_account(): never {
     if (!empty($u['phone']) && $f['phone'] === '') fail(400, 'Telefon numarası boş bırakılamaz.');
     if ($f['phone'] !== '') { $byPh = one('SELECT id FROM ml_users WHERE phone = ?', [$f['phone']]); if ($byPh && $byPh['id'] !== $u['id']) fail(409, 'Bu telefon numarası başka bir hesapta kayıtlı.'); }
     $newPw = array_key_exists('newPassword', $b) ? (string)$b['newPassword'] : '';
-    if ($newPw !== '' && (strlen($newPw) < 6 || mb_strlen($newPw) > 64)) fail(400, 'Yeni şifre 6-64 karakter olmalı.');
+    if ($newPw !== '') pw_require($newPw, (string)$u['username'], $f['email']);
     if (!empty($u['pw_hash']) && ($f['email'] !== $u['email'] || $newPw !== '')) {
         $ip = client_ip();
         if (is_locked($ip)) fail(429, 'Çok fazla yanlış deneme. 1 dakika bekle.');
@@ -199,9 +228,9 @@ function h_forgot(): never {
 }
 function h_reset(): never {
     $b = body(); $pw = (string)($b['password'] ?? '');
-    if (strlen($pw) < 6 || mb_strlen($pw) > 64) fail(400, 'Şifre 6-64 karakter olmalı.');
     $u = one('SELECT * FROM ml_users WHERE reset_hash = ? AND reset_exp > ?', [hash('sha256', (string)($b['token'] ?? '')), now_ms()]);
     if (!$u) fail(400, 'Bağlantı geçersiz ya da süresi dolmuş. Yeni bir bağlantı iste.');
+    pw_require($pw, (string)$u['username'], (string)$u['email']);
     q('UPDATE ml_users SET pw_hash = ?, reset_hash = NULL, reset_exp = 0, sv = sv + 1 WHERE id = ?', [password_hash($pw, PASSWORD_DEFAULT), $u['id']]);
     out(['ok' => true]);
 }
@@ -224,80 +253,4 @@ function h_account_delete(): never {
     } catch (Throwable $e) { error_log('[moto-life] Hesap silinemedi: ' . $e->getMessage()); fail(500, 'Hesap silinirken hata oluştu. Tekrar dene.'); }
     clear_session_cookie();
     out(['ok' => true]);
-}
-
-// ---------- Google / Apple ile giriş ----------
-const SOCIAL_PROVIDERS = [
-    'google' => ['env' => 'GOOGLE_CLIENT_ID', 'jwks' => 'https://www.googleapis.com/oauth2/v3/certs', 'iss' => ['https://accounts.google.com', 'accounts.google.com'], 'col' => 'google_sub'],
-    'apple' => ['env' => 'APPLE_CLIENT_ID', 'jwks' => 'https://appleid.apple.com/auth/keys', 'iss' => ['https://appleid.apple.com'], 'col' => 'apple_sub'],
-];
-function der_len(int $l): string { if ($l < 128) return chr($l); $b = ltrim(pack('N', $l), "\0"); return chr(0x80 | strlen($b)) . $b; }
-function der_int(string $bin): string { $bin = ltrim($bin, "\0"); if ($bin === '' || ord($bin[0]) > 127) $bin = "\0" . $bin; return "\x02" . der_len(strlen($bin)) . $bin; }
-function der_seq(string $c): string { return "\x30" . der_len(strlen($c)) . $c; }
-function jwk_to_pem(array $jwk): string {
-    $rsa = der_seq(der_int(b64u_dec($jwk['n'])) . der_int(b64u_dec($jwk['e'])));
-    $spki = der_seq(der_seq("\x06\x09\x2a\x86\x48\x86\xf7\x0d\x01\x01\x01\x05\x00") . "\x03" . der_len(strlen($rsa) + 1) . "\x00" . $rsa);
-    return "-----BEGIN PUBLIC KEY-----\n" . chunk_split(base64_encode($spki), 64, "\n") . "-----END PUBLIC KEY-----\n";
-}
-function jwks_keys(string $p, bool $force = false): array {
-    $ov = cfg('TEST_JWKS_' . strtoupper($p), '');            // yalnızca otomatik testler için (üretimde tanımlama)
-    if ($ov !== '') return json_decode((string)$ov, true)['keys'] ?? [];
-    if (!$force && ($c = kv_get('jwks:' . $p)) !== null) return json_decode($c, true) ?: [];
-    $r = http_json(SOCIAL_PROVIDERS[$p]['jwks']);
-    if (!$r['ok'] || !is_array($r['body']['keys'] ?? null)) throw new RuntimeException('jwks');
-    kv_set('jwks:' . $p, json_encode($r['body']['keys']), 3600000);
-    return $r['body']['keys'];
-}
-function verify_id_token(string $p, string $token): array {
-    $cfgp = SOCIAL_PROVIDERS[$p]; $aud = (string)cfg($cfgp['env'], '');
-    if ($aud === '') throw new RuntimeException('config');
-    $parts = explode('.', $token);
-    if (count($parts) !== 3) throw new RuntimeException('format');
-    $head = json_decode(b64u_dec($parts[0]), true);
-    if (!is_array($head) || ($head['alg'] ?? '') !== 'RS256') throw new RuntimeException('alg');
-    $find = fn(array $ks) => current(array_filter($ks, fn($k) => ($k['kid'] ?? null) === ($head['kid'] ?? '#'))) ?: null;
-    $jwk = $find(jwks_keys($p)) ?? $find(jwks_keys($p, true));
-    if (!$jwk) throw new RuntimeException('kid');
-    if (openssl_verify($parts[0] . '.' . $parts[1], b64u_dec($parts[2]), jwk_to_pem($jwk), OPENSSL_ALGO_SHA256) !== 1) throw new RuntimeException('sig');
-    $c = json_decode(b64u_dec($parts[1]), true);
-    if (!is_array($c)) throw new RuntimeException('claims');
-    if (!in_array($c['iss'] ?? '', $cfgp['iss'], true)) throw new RuntimeException('iss');
-    if (!in_array($aud, (array)($c['aud'] ?? []), true)) throw new RuntimeException('aud');
-    if (!(($c['exp'] ?? 0) * 1000 > now_ms())) throw new RuntimeException('exp');
-    if (empty($c['sub']) || empty($c['email'])) throw new RuntimeException('claims');
-    if (!(($c['email_verified'] ?? false) === true || ($c['email_verified'] ?? '') === 'true')) throw new RuntimeException('unverified');
-    return ['sub' => (string)$c['sub'], 'email' => mb_strtolower((string)$c['email']), 'firstName' => clean($c['given_name'] ?? '', 40), 'lastName' => clean($c['family_name'] ?? '', 40)];
-}
-function make_ticket(string $p, array $i): string { $b = b64u(json_encode(['p' => $p, 'sub' => $i['sub'], 'email' => $i['email'], 'exp' => now_ms() + 900000])); return $b . '.' . sign('tk|' . $b); }
-function read_ticket($t): ?array {
-    $x = explode('.', (string)$t);
-    if (count($x) !== 2 || !hash_equals(sign('tk|' . $x[0]), $x[1])) return null;
-    $o = json_decode(b64u_dec($x[0]), true);
-    return is_array($o) && ($o['exp'] ?? 0) > now_ms() && isset(SOCIAL_PROVIDERS[$o['p'] ?? '']) ? $o : null;
-}
-function h_auth_config(): never { out(['google' => cfg('GOOGLE_CLIENT_ID', '') ?: null, 'apple' => cfg('APPLE_CLIENT_ID', '') ?: null]); }
-function h_auth_provider(string $p): never {
-    if (cfg(SOCIAL_PROVIDERS[$p]['env'], '') === '') fail(503, ($p === 'google' ? 'Google' : 'Apple') . ' girişi bu sunucuda ayarlanmamış.');
-    $b = body(16384);
-    try { $id = verify_id_token($p, (string)($b['credential'] ?? '')); }
-    catch (Throwable $e) { fail(401, $e->getMessage() === 'unverified' ? 'Hesabın e-postası doğrulanmamış.' : 'Giriş doğrulanamadı. Tekrar dene.'); }
-    $col = SOCIAL_PROVIDERS[$p]['col'];
-    $u = one("SELECT * FROM ml_users WHERE $col = ?", [$id['sub']]) ?? one('SELECT * FROM ml_users WHERE email = ?', [$id['email']]);
-    if ($u) {
-        if (empty($u[$col])) { q("UPDATE ml_users SET $col = ? WHERE id = ?", [$id['sub'], $u['id']]); $u = user_by_id($u['id']); }
-        start_session($u);
-    }
-    out(['needProfile' => true, 'ticket' => make_ticket($p, $id), 'email' => $id['email'], 'firstName' => $id['firstName'] ?: clean($b['firstName'] ?? '', 40), 'lastName' => $id['lastName'] ?: clean($b['lastName'] ?? '', 40)]);
-}
-function h_auth_complete(): never {
-    $b = body(); $t = read_ticket($b['ticket'] ?? '');
-    if (!$t) fail(400, 'Oturum süresi doldu. Google/Apple ile yeniden dene.');
-    $r = read_profile(array_merge($b, ['email' => $t['email']]), true);
-    if (isset($r['error'])) fail(400, $r['error']);
-    $f = $r['f']; $col = SOCIAL_PROVIDERS[$t['p']]['col'];
-    if (user_by_name($f['username'])) fail(409, 'Bu kullanıcı adı alınmış.');
-    if (one('SELECT id FROM ml_users WHERE email = ?', [$f['email']]) || one("SELECT id FROM ml_users WHERE $col = ?", [$t['sub']])) fail(409, 'Bu hesapla zaten kayıt olunmuş. Giriş yap.');
-    if (one('SELECT id FROM ml_users WHERE phone = ?', [$f['phone']])) fail(409, 'Bu telefon numarası başka bir hesapta kayıtlı.');
-    try { $u = user_insert($f, [$col => $t['sub']]); } catch (PDOException $e) { fail(409, 'Bu kullanıcı adı, e-posta ya da telefon zaten kayıtlı.'); }
-    start_session($u);
 }
