@@ -2,7 +2,7 @@
 // Harita ekranı: GERÇEK map.js/map.css/ride-core/ride-store Chromium'da; Leaflet, GPS ve /api/* SAHTE (gerçek harita çizimi, karo, GPS, rota servisi test EDİLMEDİ). node test/map-ui.js
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || '/opt/npm-tools/node_modules/playwright'); const http = require('http'), fs = require('fs'), path = require('path');
 const root = path.join(__dirname, '../public'); const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
-let p = 0, f = 0; const ok = (c, m) => { c ? p++ : f++; console.log((c ? 'ok: ' : 'FAIL: ') + m); };
+let VEC = false; let p = 0, f = 0; const ok = (c, m) => { c ? p++ : f++; console.log((c ? 'ok: ' : 'FAIL: ') + m); };
 
 // ---- Çekirdek (Node)
 const Core = require('../public/map.js');
@@ -37,7 +37,7 @@ const ROUTE = { provider: 'valhalla', profile: 'motorcycle', label: 'Motosiklet 
 let routeCalls = [], geoMode = 'two', routing = true;
 const srv = http.createServer((q, r) => {
   const u = new URL(q.url, 'http://x'), J = (o, s = 200) => { r.writeHead(s, { 'content-type': 'application/json' }); r.end(JSON.stringify(o)); };
-  if (u.pathname === '/api/maps/config') return J({ tileUrl: 'T/{z}/{x}/{y}.png', tileUrlDark: '', tileAttr: 'OSM', tileMax: 19, routing, route: { provider: 'valhalla', profile: 'motorcycle', label: 'Motosiklet rotası', avoid: ['highways', 'tolls', 'ferries'], attr: 'Rota: Valhalla' } });
+  if (u.pathname === '/api/maps/config') return J({ vecLight: VEC ? 'https://tiles.openfreemap.org/styles/liberty' : '', vecDark: VEC ? 'https://tiles.openfreemap.org/styles/dark' : '', tileUrl: 'T/{z}/{x}/{y}.png', tileUrlDark: '', tileAttr: 'OSM', tileMax: 19, routing, route: { provider: 'valhalla', profile: 'motorcycle', label: 'Motosiklet rotası', avoid: ['highways', 'tolls', 'ferries'], attr: 'Rota: Valhalla' } });
   if (u.pathname === '/api/geocode') return J({ results: geoMode === 'one' ? [{ title: 'Tek Yer', subtitle: 'Tek, İstanbul', lat: 41.01, lon: 29.01 }] : [{ title: 'Kafe A', subtitle: 'A, İstanbul', lat: 41.01, lon: 29.01 }, { title: 'Kafe B', subtitle: 'B, İstanbul', lat: 41.02, lon: 29.02 }] });
   if (u.pathname === '/api/route') { routeCalls.push(u.search); return J(ROUTE); }
   if (u.pathname.startsWith('/api/')) return J({}, 404);
@@ -48,7 +48,7 @@ const FAKE = () => {
   window.__calls = []; const C = window.__calls, box = document.createDocumentFragment();
   const layer = () => ({ addTo(m) { return this; }, remove() { this.gone = true; }, addLayer() {}, clearLayers() {} });
   window.L = {
-    map(el) { const m = { _z: 5, _c: [39, 35], setView(c, z) { m._c = c; if (z) m._z = z; C.push(['setView', c, z]); return m; }, panTo(c) { m._c = c; C.push(['panTo', c]); }, fitBounds(b, o) { C.push(['fit', b, o]); }, getZoom: () => m._z, getSize: () => ({ x: 390, y: 844 }),
+    map(el) { const m = { removeLayer(l) { l.gone = true; window.__removed = (window.__removed || 0) + 1; }, _z: 5, _c: [39, 35], setView(c, z) { m._c = c; if (z) m._z = z; C.push(['setView', c, z]); return m; }, panTo(c) { m._c = c; C.push(['panTo', c]); }, fitBounds(b, o) { C.push(['fit', b, o]); }, getZoom: () => m._z, getSize: () => ({ x: 390, y: 844 }),
       latLngToContainerPoint: ll => ({ x: 195 + (ll[1] - m._c[1]) * 1e5, y: 422 - (ll[0] - m._c[0]) * 1e5 }), _h: {}, on(e, fn) { (m._h[e] = m._h[e] || []).push(fn); }, invalidateSize() {}, zoomIn() {}, zoomOut() {} }; window.__map = m; window.__fire = e => (m._h[e] || []).forEach(fn => fn({})); return m; },
     tileLayer(u) { const t = { _url: u, options: {}, _h: {}, addTo() { return this; }, setUrl(x) { this._url = x; }, on(e, fn) { (t._h[e] = t._h[e] || []).push(fn); } }; window.__tiles = t; return t; }, divIcon: o => o,
     marker(ll, o) { const e = document.createElement('div'); e.innerHTML = o.icon && o.icon.html || ''; document.body.appendChild(e); const k = { ll, el: e, addTo() { return this; }, setLatLng(x) { k.ll = x; C.push(['marker', x]); }, getElement: () => k.el, remove() { e.remove(); }, bindTooltip() {} }; window.__me = window.__me || k; return k; },
@@ -66,6 +66,21 @@ srv.listen(0, async () => {
   const search = async (pg, q) => { if (await pg.$eval('#mm-rt', e => e.hidden)) await pg.click('#mm-rtbtn'); await pg.fill('#mm-q', q); await pg.click('#mm-go'); };
   let pg = await open();
   { const u0 = await pg.evaluate(() => window.__tiles._url); await pg.evaluate(() => { for (let i = 0; i < 4; i++) window.__tiles._h.tileerror.forEach(f => f()); }); const u1 = await pg.evaluate(() => window.__tiles._url); ok(u1 !== u0 && /openstreetmap/.test(u1), 'karolar yüklenmezse ücretsiz yedek sağlayıcıya geçilir'); }
+  { // vektör (OpenFreeMap): CDN kütüphaneleri SAHTE; yüklenince raster kalkar, tema değişince stil değişir
+    VEC = true; const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true }), vp = await ctx.newPage();
+    await vp.route(/cdn\.jsdelivr\.net/, r => r.fulfill({ status: 200, contentType: /\.css/.test(r.request().url()) ? 'text/css' : 'text/javascript', body: /maplibre-gl-leaflet/.test(r.request().url())
+      ? "window.L.maplibreGL = o => { const h = {}, mm = { on(e, fn) { h[e] = fn; }, setStyle(u) { window.__style = u; } }; window.__glopt = o; const g = { addTo() { window.__gl = g; return g; }, getMaplibreMap: () => mm }; window.__glfire = e => h[e] && h[e](); return g; };"
+      : 'window.maplibregl = {};' }));
+    await vp.addInitScript(FAKE); await vp.goto(base + '/_host');
+    await vp.evaluate(() => { window.__mm = window.MotoMap.mount(document.getElementById('r'), { user: 'tester' }); window.__mm.activate(); });
+    await vp.waitForFunction(() => window.__gl, null, { timeout: 8000 }).catch(() => {});
+    ok(await vp.evaluate(() => !!window.__gl && /openfreemap\.org\/styles\/(liberty|dark)/.test(String(window.__glopt && window.__glopt.style))), 'vektör: OpenFreeMap stili (temaya göre Liberty/Dark) yüklenir');
+    await vp.evaluate(() => window.__glfire('load'));
+    ok(await vp.evaluate(() => window.__removed === 1 && document.querySelector('.mm').dataset.vec === '1'), 'vektör hazır olunca raster katman kalkar');
+    ok(await vp.evaluate(() => /OpenFreeMap/.test(document.getElementById('mm-attr').innerHTML)), 'vektör: OpenFreeMap/OpenMapTiles/OSM atfı görünür');
+    await vp.click('#mm-mbtn'); await vp.click('button[data-th=light]'); await vp.click('button[data-th=dark]');
+    ok(await vp.evaluate(() => /styles\/dark/.test(window.__style || '')), 'vektör: koyu temada Dark stili uygulanır');
+    await ctx.close(); VEC = false; }
   { await pg.click('#mm-mbtn'); const d0 = await pg.evaluate(() => document.querySelector('.mm').dataset.hud + '/' + document.querySelector('.mm').dataset.gsz);
     await pg.click('button[data-hud=bar]'); await pg.click('button[data-gsz=l]');
     const d1 = await pg.evaluate(() => [document.querySelector('.mm').dataset.hud, document.querySelector('.mm').dataset.gsz, localStorage.getItem('mm_hud'), localStorage.getItem('mm_gsz'), document.querySelector('button[data-hud=bar]').getAttribute('aria-pressed')].join());

@@ -302,7 +302,7 @@ const T0 = Date.now() - 3600e3;
   // ---------- Hava durumu / harita (ağ yok: yalnızca doğrulamalar) ----------
   r = await new C().get('/api/weather?lat=41&lon=29'); ok(r.s === 401, 'hava durumu oturum ister'); r = await A.get('/api/weather?lat=abc&lon=29'); ok(r.s === 400, 'hava durumu: geçersiz konum');
   r = await A.get('/api/weather?lat=95&lon=29'); ok(r.s === 400, 'hava durumu: aralık dışı');
-  r = await A.get('/api/maps/config'); ok(r.s === 200 && /cartocdn.*voyager/.test(r.j.tileUrl) && /dark_all/.test(r.j.tileUrlDark) && r.j.tileSub === 'abcd' && r.j.routing === true && r.j.route.provider === 'valhalla' && r.j.route.avoid.includes('highways') && !JSON.stringify(r.j).includes('apiKey'), 'maps/config: varsayılan karo + anahtarsız Valhalla, anahtar sızmaz');
+  r = await A.get('/api/maps/config'); ok(r.s === 200 && /tile\.openstreetmap\.org/.test(r.j.tileUrl) && !r.j.tileUrlDark && /openfreemap\.org\/styles\/liberty/.test(r.j.vecLight) && /styles\/dark/.test(r.j.vecDark) && r.j.routing === true && r.j.route.provider === 'valhalla' && r.j.route.avoid.includes('highways') && !JSON.stringify(r.j).includes('apiKey'), 'maps/config: varsayılan karo + anahtarsız Valhalla, anahtar sızmaz');
   r = await A.get('/api/geocode?q=ab'); ok(r.s === 400, 'geocode: kısa sorgu'); r = await new C().get('/api/geocode?q=istanbul'); ok(r.s === 401, 'geocode oturum ister');
   r = await A.get('/api/route?from=41,29&to=abc'); ok(r.s === 400, 'route: geçersiz koordinat'); r = await A.get('/api/route?from=41,29&to=95,29'); ok(r.s === 400, 'route: aralık dışı');
 

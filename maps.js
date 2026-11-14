@@ -12,13 +12,12 @@
 //   ROUTE_USER_DAILY     Kullanıcı başına günlük rota isteği. Varsayılan 100.
 //   MAP_TILE_URL         Karo adresi ({z}/{x}/{y} içermeli). Varsayılan: OSM standart karoları (yoğun kullanım için uygun değildir).
 //   MAP_TILE_URL_DARK    Koyu tema için hazır koyu karo adresi (ops.). Yoksa OSM karoları CSS ile koyulaştırılır. Sağlayıcının lisansını kontrol et
-//                        (ör. CARTO ücretsiz katmanı yalnızca ticari olmayan kullanım içindir).
+//                        (CARTO artık API anahtarı istiyor; anahtarsız kullanma).
 //   MAP_TILE_ATTRIBUTION Karo sağlayıcısının atıf metni (HTML).
 //   APP_URL              Nominatim'e gönderilen User-Agent içinde kullanılır (politika gereği uygulamayı tanıtmalı).
 
-const OSM_TILES = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';   // varsayılan: CARTO Voyager (sade, okunaklı; OSM verisi). Ücretsiz katman yalnız ticari olmayan kullanım içindir
-const CARTO_DARK = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png';
-const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>';
+const OSM_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';   // varsayılan: OpenStreetMap standart karoları (anahtarsız, telifsiz veri; yoğun trafikte MAP_TILE_URL ile kendi sağlayıcını kullan)
+const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
 
 // Sağlayıcı yetenekleri. avoid: bu profilde gerçekten uygulanabilen kaçınma seçenekleri (Geoapify belgesine göre
 // otoyol/ücretli yol kaçınma yalnızca araba/kamyon/otobüs modlarında çalışır, motosiklette yalnızca feribot).
@@ -88,7 +87,9 @@ module.exports = function mountMaps({ app, userFromCookie }) {
   const UA = `MotoLife/1.0 (${process.env.APP_URL || 'yerel gelistirme'})`;
   const tileUrl = process.env.MAP_TILE_URL || OSM_TILES;
   const tileAttr = process.env.MAP_TILE_ATTRIBUTION || OSM_ATTR;
-  const tileDark = process.env.MAP_TILE_URL_DARK || (process.env.MAP_TILE_URL ? '' : CARTO_DARK);
+  const tileDark = process.env.MAP_TILE_URL_DARK || '';
+  const VEC_ON = !process.env.MAP_TILE_URL && String(process.env.MAP_VECTOR || 'on').toLowerCase() !== 'off';   // OpenFreeMap (vektör, anahtarsız); kendi karo adresin varsa kapalı
+  const vecLight = VEC_ON ? (process.env.MAP_VECTOR_STYLE || 'https://tiles.openfreemap.org/styles/liberty') : '', vecDark = VEC_ON ? (process.env.MAP_VECTOR_STYLE_DARK || 'https://tiles.openfreemap.org/styles/dark') : '';
   const tileSub = /cartocdn/.test(tileUrl) ? 'abcd' : 'abc';
 
   const needAuth = (req, res) => {
@@ -157,7 +158,7 @@ module.exports = function mountMaps({ app, userFromCookie }) {
   // ---------- İstemci yapılandırması (anahtarlar ASLA buradan geçmez) ----------
   app.get('/api/maps/config', (req, res) => {
     if (!needAuth(req, res)) return;
-    res.json({ tileUrl, tileUrlDark: tileDark, tileSub, tileAttr, tileMax: 19, tileRetina: /@2x|\{r\}/.test(tileUrl), routing: !!P,
+    res.json({ tileUrl, tileUrlDark: tileDark, vecLight, vecDark, tileSub, tileAttr, tileMax: 19, tileRetina: /@2x|\{r\}/.test(tileUrl), routing: !!P,
       route: P ? { provider, profile: P.profile, label: P.label, avoid: P.avoid, attr: P.attr } : null });
   });
 
