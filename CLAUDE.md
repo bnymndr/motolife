@@ -393,3 +393,9 @@ Paralel: TURN ve bağlantı toparlanması, grup sürüşünden (7) önce.
 - Not: önizleme n-1 ayak isteği yapar (/api/route sınırı 12/dk, en çok 8 mola → 9 istek).
 - Test: map-ui 114.
 - Onay panelinin sağında sabit 132×178 px mini GERÇEK harita (`#mm-ovmini`, ikinci Leaflet örneği: etkileşimsiz, aynı karo URL'i, numaralı küçük pinler + aynı rota çizgileri, «© OpenStreetMap» etiketi). Panel yüksekliği artmaz. Mini harita/çizimler `evOvClear` ile kaldırılır. Test: map-ui 116 (sahte Leaflet; gerçek karo/çizim TEST EDİLMEDİ).
+
+## Etkinlik: zincir çizimi + otomatik güncelleme
+- Ayak önbelleği `S.evLegs` («a>b» → coords/distance/duration): ön izleme ve navigasyon aynı yolu kullanır, tekrar istek atılmaz (`evLeg`).
+- Navigasyonda mevcut ayak ana rota; sıradaki ayaklar (nokta→nokta) soluk kesikli çizgiyle haritada görünür (`evChain`, `S.evChain`; eksik ayaklar arka planda alınır).
+- Etkinlik düzenlenince (`EventForm.save` → `window` olayı `ml:event-changed`, detail.event) `map.js evUpdated`: ön izleme açıksa yenilenir; navigasyon sürüyorsa varılan noktalar (`q.done`) korunup sıradaki ziyaret edilmemiş noktadan yeni sıraya göre yol yeniden çizilir. Yalnız düzenlemeyi yapan cihazda anında; diğer üyelerde sonraki «Navigasyonla Başla»da (TEST EDİLMEDİ: canlı çoklu cihaz).
+- Test: map-ui 120.
