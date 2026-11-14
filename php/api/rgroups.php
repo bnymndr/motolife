@@ -212,6 +212,7 @@ function rg_end_ride(array $g, ?array $by, ?string $why): void {
     $sum = json_encode(['v' => 1, 'rideId' => $rid, 'groupId' => $g['id'], 'name' => $g['name'], 'startedAt' => (int)$g['ride_started'], 'endedAt' => $t, 'endedBy' => $by ? uname($by) : null,
         'reason' => $why, 'recFull' => (bool)$g['rec_full'], 'route' => (int)$g['route_v'] > 0 ? ['len' => (int)$g['route_len'], 'v' => (int)$g['route_v']] : null, 'members' => $members], JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
     q('INSERT INTO ml_rgrides (id, gid, started, ended, sum) VALUES (?, ?, ?, ?, ?)', [$rid, $g['id'], (int)$g['ride_started'], $t, $sum]);
+    if (rg_music_get($g['id'])) { q('DELETE FROM ml_kv WHERE k = ?', ['rgmus:' . $g['id']]); rt_to_room('rg:' . $g['id'], 'grp:music', ['gid' => $g['id'], 'music' => null]); }
     q('UPDATE ml_rg SET ride_id = NULL, ride_started = 0, ride_by = NULL, ride_idle = 0 WHERE id = ?', [$g['id']]);
     q('DELETE FROM ml_rgstat WHERE rideid = ?', [$rid]);
     foreach (all('SELECT id FROM ml_rgrides WHERE gid = ? ORDER BY started DESC LIMIT 1000 OFFSET 50', [$g['id']]) as $old) { q('DELETE FROM ml_rgrec WHERE rideid = ?', [$old['id']]); q('DELETE FROM ml_rgrides WHERE id = ?', [$old['id']]); }
@@ -226,6 +227,7 @@ function rg_destroy(array $g, string $kind): void {
     rg_gpost_drop(array_column(all('SELECT id FROM ml_gp WHERE gid = ?', [$g['id']]), 'id'));
     foreach (['ml_rgrides', 'ml_rgm', 'ml_rglive', 'ml_rgx'] as $t) q("DELETE FROM $t WHERE gid = ?", [$g['id']]);
     q("DELETE FROM ml_pics WHERE kind IN ('gphoto','gcover') AND ref = ?", [$g['id']]);
+    q('DELETE FROM ml_kv WHERE k IN (?, ?)', ['rgev:' . $g['id'], 'rgmus:' . $g['id']]);
     q('DELETE FROM ml_rg WHERE id = ?', [$g['id']]);
 }
 function rg_remove_member(array $g, string $uid, string $kind): void {
@@ -256,6 +258,7 @@ function grp_watch(array $S, array $u, array $p): array {
     $s = rg_compute_state($g);
     q('UPDATE ml_rtr SET skey = ? WHERE sid = ? AND room = ?', [$s['key'], $S['sid'], 'rg:' . $g['id']]);
     rt_to_sid($S['sid'], 'grp:state', rg_payload($g, $s));
+    rt_to_sid($S['sid'], 'grp:music', ['gid' => $g['id'], 'music' => $g['ride_id'] ? rg_music_view(rg_music_get($g['id'])) : null]);
     return ['ok' => true, 'ride' => (bool)$g['ride_id']];
 }
 function grp_unwatch(array $S, array $u, array $p): void { $g = rg_member_group($p['gid'] ?? '', $u); if ($g) rt_leave($S['sid'], 'rg:' . $g['id']); }
@@ -303,6 +306,83 @@ function rg_ctx(string $id, $need = false): array {   // $need: true = yalnız l
     if ($need === true && $g['leader'] !== $u['id']) fail(403, 'Bu işlem için grup lideri olmalısın.');
     if ($need === 'staff' && !rg_is_staff($g, $u['id'])) fail(403, 'Bu işlem için grup lideri ya da yöneticisi olmalısın.');
     return [$u, $g];
+}
+// ---------- Etkinlikler (grup içi plan) + liderin müzik paylaşımı ----------
+// Etkinlikler ml_kv içinde JSON (anahtar rgev:<grup>); şema değişikliği YOK. Müzik durumu rgmus:<grup> (12 sa).
+const RG_MAX_EVENTS = 20, RG_MAX_STOPS = 8;
+function rg_pt($p, bool $kind = false): ?array {
+    if (!is_array($p)) return null;
+    $la = $p['lat'] ?? null; $lo = $p['lon'] ?? null; $name = rg_txt($p['name'] ?? '', 60);
+    if (!is_numeric($la) || !is_numeric($lo) || is_string($la) || is_string($lo) || abs((float)$la) > 90 || abs((float)$lo) > 180 || $name === '') return null;
+    $o = ['name' => $name, 'lat' => round((float)$la, 5), 'lon' => round((float)$lo, 5)];
+    if ($kind) $o['kind'] = ($p['kind'] ?? '') === 'ugrak' ? 'ugrak' : 'mola';
+    return $o;
+}
+function rg_clean_event(array $b): array {
+    $title = rg_txt($b['title'] ?? '', 60); if (mb_strlen($title) < 2) return ['error' => 'Etkinlik adı en az 2 karakter olmalı.'];
+    $at = null;
+    if (($b['at'] ?? null) !== null && $b['at'] !== '') { $now = now_ms(); if (!is_numeric($b['at']) || is_string($b['at']) || $b['at'] < $now - 86400000 || $b['at'] > $now + 3 * 365 * 86400000) return ['error' => 'Etkinlik tarihi geçersiz.']; $at = (int)$b['at']; }
+    $start = rg_pt($b['start'] ?? null); $dest = rg_pt($b['dest'] ?? null);
+    if (!$start) return ['error' => 'Başlangıç yeri seçilmeli.']; if (!$dest) return ['error' => 'Varış noktası seçilmeli.'];
+    $raw = is_array($b['stops'] ?? null) ? array_values($b['stops']) : [];
+    if (count($raw) > RG_MAX_STOPS) return ['error' => 'En fazla ' . RG_MAX_STOPS . ' uğrak/mola noktası eklenebilir.'];
+    $stops = []; foreach ($raw as $x) { $c = rg_pt($x, true); if (!$c) return ['error' => 'Uğrak/mola noktalarından birinde ad ya da konum eksik.']; $stops[] = $c; }
+    return ['ev' => ['title' => $title, 'at' => $at, 'start' => $start, 'dest' => $dest, 'stops' => $stops, 'note' => rg_txt($b['note'] ?? '', 200)]];
+}
+function rg_events_load(string $gid): array { $a = json_decode(kv_get('rgev:' . $gid) ?? '[]', true); return is_array($a) ? $a : []; }
+function rg_events_save(string $gid, array $a): void { kv_set('rgev:' . $gid, json_encode(array_values($a), JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION)); }
+function rg_event_view(array $e): array { return ['id' => $e['id'], 'title' => $e['title'], 'at' => $e['at'], 'start' => $e['start'], 'dest' => $e['dest'], 'stops' => $e['stops'], 'note' => $e['note'] ?? '', 'by' => rg_name($e['by']), 'createdAt' => $e['createdAt']]; }
+function rg_event_list(string $gid): array {
+    $a = rg_events_load($gid);
+    usort($a, fn($x, $y) => (($x['at'] === null) <=> ($y['at'] === null)) ?: (($x['at'] ?? 0) <=> ($y['at'] ?? 0)) ?: ($x['createdAt'] <=> $y['createdAt']));
+    return array_map('rg_event_view', $a);
+}
+function h_rg_events(string $id): never { [$u, $g] = rg_ctx($id); out(['events' => rg_event_list($g['id']), 'canEdit' => rg_is_staff($g, $u['id'])]); }
+function h_rg_event_create(string $id): never {
+    [$u, $g] = rg_ctx($id, 'staff');
+    if (rl('rge:' . $u['id'], 20, 600000)) fail(429, 'Çok sık etkinlik değiştirildi, biraz bekle.');
+    $r = rg_clean_event(body()); if (isset($r['error'])) fail(400, $r['error']);
+    $a = rg_events_load($g['id']); if (count($a) >= RG_MAX_EVENTS) fail(409, 'En fazla ' . RG_MAX_EVENTS . ' etkinlik olabilir; eskilerini sil.');
+    $e = ['id' => rid()] + $r['ev'] + ['by' => $u['id'], 'createdAt' => now_ms()]; $a[] = $e; rg_events_save($g['id'], $a); rg_notify($g, 'events');
+    out(['event' => rg_event_view($e), 'events' => rg_event_list($g['id'])]);
+}
+function h_rg_event_put(string $id, string $eid): never {
+    [$u, $g] = rg_ctx($id, 'staff'); $a = rg_events_load($g['id']); $i = null;
+    foreach ($a as $k => $x) if ($x['id'] === $eid) $i = $k;
+    if ($i === null) fail(404, 'Etkinlik bulunamadı.');
+    $r = rg_clean_event(body()); if (isset($r['error'])) fail(400, $r['error']);
+    $a[$i] = $r['ev'] + $a[$i]; rg_events_save($g['id'], $a); rg_notify($g, 'events');
+    out(['event' => rg_event_view($a[$i]), 'events' => rg_event_list($g['id'])]);
+}
+function h_rg_event_delete(string $id, string $eid): never {
+    [$u, $g] = rg_ctx($id, 'staff'); $a = rg_events_load($g['id']); $n = count($a);
+    $a = array_values(array_filter($a, fn($x) => $x['id'] !== $eid)); if (count($a) === $n) fail(404, 'Etkinlik bulunamadı.');
+    rg_events_save($g['id'], $a); rg_notify($g, 'events'); out(['ok' => true, 'events' => rg_event_list($g['id'])]);
+}
+function rg_music_get(string $gid): ?array { $m = json_decode(kv_get('rgmus:' . $gid) ?? 'null', true); return is_array($m) ? $m : null; }
+function rg_music_view(?array $m): ?array { return $m ? ['video' => $m['video'], 'list' => $m['list'], 'playing' => (bool)$m['playing'], 'seq' => (int)$m['seq'], 'by' => $m['by']] : null; }
+function grp_music(array $S, array $u, array $p): array {
+    $g = rg_member_group($p['gid'] ?? '', $u); if (!$g) return ['error' => 'Grup bulunamadı.'];
+    if (!$g['ride_id']) return ['error' => 'Aktif grup sürüşü yok.'];
+    if ($g['leader'] !== $u['id']) return ['error' => 'Müziği yalnız grup lideri paylaşır.'];
+    if (rl('gmus:' . $u['id'], 6, 1000)) return ['error' => 'Çok sık deneme.'];
+    $old = rg_music_get($g['id']); $room = 'rg:' . $g['id'];
+    if (array_key_exists('src', $p) && $p['src'] === null) { if ($old) { q('DELETE FROM ml_kv WHERE k = ?', ['rgmus:' . $g['id']]); rt_to_room($room, 'grp:music', ['gid' => $g['id'], 'music' => null]); } return ['ok' => true, 'shared' => false]; }
+    if (is_array($p['src'] ?? null)) {
+        $v = (string)($p['src']['video'] ?? ''); $l = (string)($p['src']['list'] ?? '');
+        $video = preg_match('/^[A-Za-z0-9_-]{11}$/', $v) ? $v : null; $list = preg_match('/^[A-Za-z0-9_-]{10,64}$/', $l) ? $l : null;
+        if (!$video && !$list) return ['error' => 'Geçersiz YouTube bağlantısı.'];
+        $m = ['video' => $video, 'list' => $list, 'playing' => ($p['playing'] ?? true) !== false, 'seq' => (int)($old['seq'] ?? 0) + 1, 'by' => rg_name($u['id'])];
+        kv_set('rgmus:' . $g['id'], json_encode($m), 12 * 3600000); rt_to_room($room, 'grp:music', ['gid' => $g['id'], 'music' => rg_music_view($m)]);
+        return ['ok' => true, 'shared' => true];
+    }
+    if (!$old) return ['error' => 'Paylaşılan müzik yok.'];
+    $cmd = in_array($p['cmd'] ?? null, ['next', 'prev'], true) ? $p['cmd'] : null;
+    if (is_bool($p['playing'] ?? null)) $old['playing'] = $p['playing']; elseif (!$cmd) return ['error' => 'Geçersiz komut.'];
+    $old['seq'] = (int)$old['seq'] + 1; kv_set('rgmus:' . $g['id'], json_encode($old), 12 * 3600000);
+    $pl = ['gid' => $g['id'], 'music' => rg_music_view($old)]; if ($cmd) $pl['cmd'] = $cmd;
+    rt_to_room($room, 'grp:music', $pl);
+    return ['ok' => true, 'shared' => true];
 }
 function rg_member_by_name(array $g, $n): ?array { foreach (rg_members($g['id']) as $m) if (lower(rg_name($m['uid'])) === lower((string)$n)) return $m; return null; }
 function h_rg_list(): never {

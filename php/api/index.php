@@ -35,6 +35,7 @@ $routes = [
     ['PUT', "/rgroups/$U/route", 'h_rg_route_put'], ['GET', "/rgroups/$U/route", 'h_rg_route_get'], ['DELETE', "/rgroups/$U/route", 'h_rg_route_delete'],
     ['GET', "/rgroups/$U/posts", 'h_rg_posts'], ['POST', "/rgroups/$U/posts", 'h_rg_post_create'], ['DELETE', "/rgroups/$U/posts/$U", 'h_rg_post_delete'],
     ['POST', "/rgroups/$U/posts/$U/like", 'h_rg_post_like'], ['POST', "/rgroups/$U/posts/$U/comments", 'h_rg_post_comment'], ['DELETE', "/rgroups/$U/posts/$U/comments/$U", 'h_rg_comment_delete'],
+    ['GET', "/rgroups/$U/events", 'h_rg_events'], ['POST', "/rgroups/$U/events", 'h_rg_event_create'], ['PUT', "/rgroups/$U/events/$U", 'h_rg_event_put'], ['DELETE', "/rgroups/$U/events/$U", 'h_rg_event_delete'],
     ['GET', "/rgroups/$U/rides", 'h_rg_rides'], ['GET', "/rgroups/$U/rides/$U", 'h_rg_ride_get'],
     ['GET', '/gvoice/ice', 'h_gv_ice'], ['GET', '/weather', 'h_weather'], ['GET', '/maps/config', 'h_maps_config'], ['GET', '/offline/manifest', 'h_offline_manifest'], ['GET', '/geocode', 'h_geocode'], ['GET', '/route', 'h_route'],
     ['POST', '/rt', 'h_rt'],

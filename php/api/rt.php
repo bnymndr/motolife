@@ -65,6 +65,7 @@ function rt_dispatch(array $S, array $u, string $ev, $d): array {
         case 'grp:unwatch': grp_unwatch($S, $u, $d); return ['ok' => true];
         case 'grp:share': return grp_share($S, $u, $d);
         case 'grp:update': grp_update($S, $u, $d); return ['ok' => true];
+        case 'grp:music': return grp_music($S, $u, $d);
         case 'gv:join': return gv_join($S, $u, $d);
         case 'gv:signal': return gv_signal($S, $u, $d);
         case 'gv:leave': gv_remove_peer($S['sid'], 'left'); return ['ok' => true];
