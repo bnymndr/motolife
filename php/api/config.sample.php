@@ -22,7 +22,7 @@ return [
     'ORS_API_KEY' => '', 'ORS_BASE_URL' => '',
     'VALHALLA_URL' => '',            // boşsa herkese açık sunucu; 'off' = kapat
     'ROUTE_PROVIDER' => 'auto', 'ROUTE_DAILY_LIMIT' => '', 'ROUTE_USER_DAILY' => '',
-    'MAP_TILE_URL' => '', 'MAP_TILE_URL_DARK' => '', 'MAP_TILE_ATTRIBUTION' => '',
+    'MAP_TILE_URL' => ' ' '', 'MAP_TILE_URL_DARK' => ' ' '', 'MAP_TILE_ATTRIBUTION' => ' ' '',
     'WEATHER_CONTACT' => '',         // MET Norway User-Agent iletişim bilgisi (e-posta/alan adı)
 
     // ---- Grup sesi ----
