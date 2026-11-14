@@ -50,7 +50,7 @@ const FAKE = () => {
   window.L = {
     map(el) { const m = { _z: 5, _c: [39, 35], setView(c, z) { m._c = c; if (z) m._z = z; C.push(['setView', c, z]); return m; }, panTo(c) { m._c = c; C.push(['panTo', c]); }, fitBounds(b, o) { C.push(['fit', b, o]); }, getZoom: () => m._z, getSize: () => ({ x: 390, y: 844 }),
       latLngToContainerPoint: ll => ({ x: 195 + (ll[1] - m._c[1]) * 1e5, y: 422 - (ll[0] - m._c[0]) * 1e5 }), _h: {}, on(e, fn) { (m._h[e] = m._h[e] || []).push(fn); }, invalidateSize() {}, zoomIn() {}, zoomOut() {} }; window.__map = m; window.__fire = e => (m._h[e] || []).forEach(fn => fn({})); return m; },
-    tileLayer(u) { return { _url: u, options: {}, addTo() { return this; }, setUrl(x) { this._url = x; } }; }, divIcon: o => o,
+    tileLayer(u) { const t = { _url: u, options: {}, _h: {}, addTo() { return this; }, setUrl(x) { this._url = x; }, on(e, fn) { (t._h[e] = t._h[e] || []).push(fn); } }; window.__tiles = t; return t; }, divIcon: o => o,
     marker(ll, o) { const e = document.createElement('div'); e.innerHTML = o.icon && o.icon.html || ''; document.body.appendChild(e); const k = { ll, el: e, addTo() { return this; }, setLatLng(x) { k.ll = x; C.push(['marker', x]); }, getElement: () => k.el, remove() { e.remove(); }, bindTooltip() {} }; window.__me = window.__me || k; return k; },
     circle(ll, o) { const k = { ll, r: o.radius, addTo() { return this; }, setLatLng(x) { k.ll = x; }, setRadius(r) { k.r = r; }, remove() { k.gone = true; } }; window.__circle = k; return k; },
     polyline(pts) { return { addTo() { return this; }, remove() {}, addLatLng() {} }; }, layerGroup() { return layer(); }
@@ -65,6 +65,12 @@ srv.listen(0, async () => {
     await pg.evaluate(() => { window.__mm = window.MotoMap.mount(document.getElementById('r'), { user: 'tester' }); window.__mm.activate(); }); await pg.waitForFunction(() => !document.getElementById('mm-load').hidden === false, null, { timeout: 8000 }); return pg; };
   const search = async (pg, q) => { if (await pg.$eval('#mm-rt', e => e.hidden)) await pg.click('#mm-rtbtn'); await pg.fill('#mm-q', q); await pg.click('#mm-go'); };
   let pg = await open();
+  { const u0 = await pg.evaluate(() => window.__tiles._url); await pg.evaluate(() => { for (let i = 0; i < 4; i++) window.__tiles._h.tileerror.forEach(f => f()); }); const u1 = await pg.evaluate(() => window.__tiles._url); ok(u1 !== u0 && /openstreetmap/.test(u1), 'karolar yüklenmezse ücretsiz yedek sağlayıcıya geçilir'); }
+  { await pg.click('#mm-mbtn'); const d0 = await pg.evaluate(() => document.querySelector('.mm').dataset.hud + '/' + document.querySelector('.mm').dataset.gsz);
+    await pg.click('button[data-hud=bar]'); await pg.click('button[data-gsz=l]');
+    const d1 = await pg.evaluate(() => [document.querySelector('.mm').dataset.hud, document.querySelector('.mm').dataset.gsz, localStorage.getItem('mm_hud'), localStorage.getItem('mm_gsz'), document.querySelector('button[data-hud=bar]').getAttribute('aria-pressed')].join());
+    ok(d0 === 'full/s' && d1 === 'bar,l,bar,l,true', 'sürüş ekranı yerleşimi ve grup bilgi boyutu seçilir, saklanır (' + d0 + ' → ' + d1 + ')');
+    await pg.click('button[data-hud=full]'); await pg.click('button[data-gsz=s]'); await pg.click('#mm-mbtn'); }
   ok(await pg.evaluate(() => { const r = document.getElementById('mm-rt'); return r.hidden && !document.querySelector('.mm-top #mm-form') && !document.querySelector('.mm-top #mm-q'); }), 'ana harita ekranında arama kutusu yok; harita bütün halde');
   ok(await pg.evaluate(() => [...document.querySelectorAll('.mm-side > .mm-btn:not([hidden])')].map(b => b.id).join() === 'mm-zin,mm-zout,mm-loc,mm-rtbtn,mm-musbtn,mm-mbtn'), 'sağ düğmeler: +, −, konum, ROTA, MÜZİK, ayarlar');
   ok(await pg.evaluate(() => { const o = [...document.querySelectorAll('.mm-side > *')].map(b => b.id); return o.indexOf('mm-gbtn') < o.indexOf('mm-rtbtn') && o.indexOf('mm-rtbtn') < o.indexOf('mm-mbtn'); }), 'Rota düğmesi Grup ile Ayarlar düğmesi arasında');
@@ -148,7 +154,9 @@ srv.listen(0, async () => {
     await pg.evaluate(() => document.dispatchEvent(new PointerEvent('pointerup'))); await pg.waitForTimeout(150);
     ok(/rotate\((-90|270)/.test(await pg.$eval('#mm-map', e => e.style.transform)), 'dokunuş bırakılınca takip sürüyorsa tekrar yöne döner'); }
   const sp = await pg.evaluate(() => { const r = document.getElementById('mm-spill').getBoundingClientRect(); return { l: r.left, b: r.bottom, h: r.height }; });
-  ok(sp.l < 20 && sp.b > 800 && sp.h >= 44 && sp.h < 70, 'gösterge sol altta, ≥44 px dokunma alanı (' + Math.round(sp.l) + ',' + Math.round(sp.b) + ')');
+  ok(sp.l < 20 && sp.b > 600 && sp.h >= 44 && sp.h < 70, 'gösterge sol altta (tarif şeridinin üstünde), ≥44 px dokunma alanı (' + Math.round(sp.l) + ',' + Math.round(sp.b) + ')');
+  { const nv = await pg.evaluate(() => { const n = document.getElementById('mm-navbar'), r = n.getBoundingClientRect(), t = document.getElementById('mm-head').getBoundingClientRect(); return { inBottom: !!n.closest('.mm-bottom'), h: r.height, bot: r.bottom, headH: t.height }; });
+    ok(nv.inBottom && nv.h < 150 && nv.bot > 700, 'navigasyonda yol tarifi ALT şeritte, en çok ~3 satır (' + Math.round(nv.h) + ' px)'); ok(nv.headH < 70, 'navigasyonda üst kısım boş: harita tam görünür (' + Math.round(nv.headH) + ' px)'); }
   await pg.click('#mm-spill'); ok(await pg.isVisible('#mm-panel') && await pg.isVisible('#mm-pcol') && await pg.isHidden('#mm-spill'), 'göstergeye dokununca tam sürüş paneli açılır');
   await pg.click('#mm-pcol'); ok(await pg.isHidden('#mm-panel') && await pg.isVisible('#mm-spill'), '«Küçült» ile tekrar küçülür');
   await pg.evaluate(() => { for (let i = 1; i <= 6; i++) window.__fix(41.0, 29.0 + 0.0014 * i, 6, 14, 90); }); await pg.waitForTimeout(150);   // ≈ 700 m ilerle (ekranda düzeltilmiş konum biraz geride)
