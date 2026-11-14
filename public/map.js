@@ -780,7 +780,7 @@
       dropRoute();
       if (S.destMarker) { S.destMarker.remove(); S.destMarker = null; }
       S.dest = null; el.dest.hidden = true; paintRtEmpty();
-      if (!S.evAdv) S.evq = null;                                          // etkinlik rotası yalnızca «sıradaki noktaya geç» ile korunur
+      if (!S.evAdv) { S.evq = null; evChainClear(); }                      // etkinlik rotası yalnızca «sıradaki noktaya geç» ile korunur
     }
     function destDistText() { return S.me && S.dest ? 'Kuş uçuşu: ' + fmtDist(haversine(S.me.lat, S.me.lon, S.dest.lat, S.dest.lon)) + ' (yol mesafesi değildir)' : 'Mesafe için konumun bekleniyor…'; }
     function paintDest() {
@@ -915,9 +915,38 @@
       q.i = i; q.autoNav = !!autoNav; const n = q.pts[i];
       setDest({ lat: n.lat, lon: n.lon, title: evLabel(q, i), subtitle: 'Etkinlik: ' + q.title + ' · nokta ' + (i + 1) + '/' + q.pts.length });
       if (!autoNav) openRt(false);
-      autoRoute();
+      autoRoute(); evChain();
     }
     /* Etkinlik ön izleme: başlangıç → molalar → varış TÜM yol tarifi tek haritada; onaylanınca sırayla navigasyon başlar */
+    const evKey = p => p.lat.toFixed(4) + ',' + p.lon.toFixed(4);
+    S.evLegs = S.evLegs || {};                                               // ayak önbelleği: «a>b» → {coords, distance, duration} (ön izleme ve navigasyon aynı yolu kullanır, ek istek yok)
+    async function evLeg(a, b) {
+      const key = evKey(a) + '>' + evKey(b); if (S.evLegs[key]) return S.evLegs[key];
+      if (!routingOn()) return null;
+      const p = new URLSearchParams({ from: a.lat.toFixed(6) + ',' + a.lon.toFixed(6), to: b.lat.toFixed(6) + ',' + b.lon.toFixed(6) });
+      const r = await fetch('/api/route?' + p, { credentials: 'same-origin' }); const j = await r.json().catch(() => ({}));
+      if (!r.ok || !Array.isArray(j.coords) || j.coords.length < 2) return null;
+      return (S.evLegs[key] = { coords: j.coords, distance: Number(j.distance) || 0, duration: Number(j.duration) || 0 });
+    }
+    function evChainClear() { (S.evChain || []).forEach(l => l.remove()); S.evChain = []; }
+    async function evChain() {                                               // navigasyonda: sıradaki ayaklar (nokta → nokta) soluk kesikli çizgiyle haritada görünür
+      const q = S.evq; evChainClear(); if (!q) return; const tok = q.ctok = (q.ctok || 0) + 1;
+      for (let j = q.i; j < q.pts.length - 1; j++) {
+        let leg = null; try { leg = await evLeg(q.pts[j], q.pts[j + 1]); } catch {}
+        if (S.evq !== q || q.ctok !== tok) return; if (!leg) continue;
+        S.evChain.push(window.L.polyline(leg.coords, { color: '#F4EFE6', weight: 4, opacity: 0.55, dashArray: '2 9', lineCap: 'round', interactive: false }).addTo(S.map));
+      }
+    }
+    function evUpdated(ev) {                                                 // etkinlik düzenlendi (mola eklendi/silindi/sırası değişti): ön izleme ve navigasyon otomatik yenilenir
+      if (S.evOv && S.evOv.ev && S.evOv.ev.id === ev.id) { evOverview(ev); toast('Etkinlik güncellendi.', 3000); return; }
+      const q = S.evq; if (!q || q.id !== ev.id) return;
+      const pts = [ev.start, ...(ev.stops || []), ev.dest]; q.done = q.done || new Set();
+      let i = pts.findIndex(x => !q.done.has(evKey(x))); if (i < 0) i = pts.length - 1;
+      const navWas = !!S.nav; q.title = ev.title || q.title; q.pts = pts;
+      S.evAdv = true; clearDest(); S.evAdv = false;
+      toast('Etkinlik değişti: rota yeni sıraya göre güncellendi.', 6000); evGo(i, navWas);
+    }
+    window.addEventListener('ml:event-changed', e => { const ev = e.detail && e.detail.event; if (ev && ev.start && ev.dest && ev.id) evUpdated(ev); });
     function evOvClear() { const o = S.evOv; if (!o) return; o.tok = -1; o.layers.forEach(l => l.remove()); if (o.mini) { try { o.mini.remove(); } catch {} } const sh = $('mm-evov'); if (sh) sh.remove(); S.evOv = null; }
     async function evOverview(ev) {
       const L = window.L, pts = [ev.start, ...(ev.stops || []), ev.dest];
@@ -953,14 +982,10 @@
       for (let i = 0; i < pts.length - 1; i++) {
         if (S.evOv === null || o.tok !== tok) return;
         try {
-          if (!routingOn()) throw new Error('off');
-          const p = new URLSearchParams({ from: pts[i].lat.toFixed(6) + ',' + pts[i].lon.toFixed(6), to: pts[i + 1].lat.toFixed(6) + ',' + pts[i + 1].lon.toFixed(6) });
-          const r = await fetch('/api/route?' + p, { credentials: 'same-origin' }); const j = await r.json().catch(() => ({}));
-          if (o.tok !== tok) return;
-          if (!r.ok || !Array.isArray(j.coords) || j.coords.length < 2) throw new Error('x');
-          legs[i] = { distance: Number(j.distance) || 0, duration: Number(j.duration) || 0 };
-          if (o.mini) { try { o.layers.push(L.polyline(j.coords, { color: '#031420', weight: 7, opacity: 0.8, lineCap: 'round', interactive: false }).addTo(o.mini), L.polyline(j.coords, { color: accent(), weight: 4, opacity: 1, lineCap: 'round', interactive: false }).addTo(o.mini)); } catch {} }
-          o.layers.push(L.polyline(j.coords, { color: '#031420', weight: 10, opacity: 0.8, lineCap: 'round', interactive: false }).addTo(S.map), L.polyline(j.coords, { color: accent(), weight: 6, opacity: 1, lineCap: 'round', interactive: false }).addTo(S.map));
+          const leg = await evLeg(pts[i], pts[i + 1]); if (o.tok !== tok) return; if (!leg) throw new Error('x');
+          legs[i] = { distance: leg.distance, duration: leg.duration }; const coords = leg.coords;
+          if (o.mini) { try { o.layers.push(L.polyline(coords, { color: '#031420', weight: 7, opacity: 0.8, lineCap: 'round', interactive: false }).addTo(o.mini), L.polyline(coords, { color: accent(), weight: 4, opacity: 1, lineCap: 'round', interactive: false }).addTo(o.mini)); } catch {} }
+          o.layers.push(L.polyline(coords, { color: '#031420', weight: 10, opacity: 0.8, lineCap: 'round', interactive: false }).addTo(S.map), L.polyline(coords, { color: accent(), weight: 6, opacity: 1, lineCap: 'round', interactive: false }).addTo(S.map));
         } catch { if (o.tok !== tok) return; legs[i] = false; }
         paint(legs, i < pts.length - 2);
       }
@@ -974,8 +999,9 @@
     }
     function beginEvent(ev) {
       if (S.nav) { toast('Önce mevcut navigasyonu bitir.', 4000); return; }
-      const pts = [ev.start, ...(ev.stops || []), ev.dest]; S.evq = { title: ev.title || 'Etkinlik', pts, i: 0, autoNav: false };
+      const pts = [ev.start, ...(ev.stops || []), ev.dest]; S.evq = { id: ev.id, title: ev.title || 'Etkinlik', pts, i: 0, autoNav: false, done: new Set() };
       let i = 0; if (S.me && haversine(S.me.lat, S.me.lon, ev.start.lat, ev.start.lon) < 500) i = 1;        // zaten başlangıçtaysan 2. noktadan başla
+      if (i === 1) S.evq.done.add(evKey(pts[0]));
       toast('Etkinlik rotası: ' + pts.length + ' nokta. Sırayla yol tarifi alacaksın.', 5000);
       evGo(i, false);
     }
@@ -1016,7 +1042,7 @@
       $('mm-naveta').textContent = '≈ ' + fmtEta(eta) + ' · Varış ' + hhmm(eta);
       if (p.remaining < Math.max(40, f.acc * 1.5) && r.distance > 100) {
         const q = S.evq;
-        if (q && q.i + 1 < q.pts.length) { toast('Ulaştın: ' + q.pts[q.i].name + '. Sıradaki nokta için yol tarifi hazırlanıyor.', 6000); S.evAdv = true; clearDest(); S.evAdv = false; return evGo(q.i + 1, true); }
+        if (q && q.i + 1 < q.pts.length) { q.done = q.done || new Set(); q.done.add(evKey(q.pts[q.i])); toast('Ulaştın: ' + q.pts[q.i].name + '. Sıradaki nokta için yol tarifi hazırlanıyor.', 6000); S.evAdv = true; clearDest(); S.evAdv = false; return evGo(q.i + 1, true); }
         toast(q ? 'Etkinlik rotası tamamlandı: ' + q.title : 'Hedefe ulaştın.', 6000); return clearDest();
       }
       if (f.acc > 50) return;                                          // zayıf konumla sapma kararı verme

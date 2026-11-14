@@ -1082,7 +1082,7 @@ function EventForm({ gid, ev, onDone, onCancel, toast }) {
     try {
       const body = { title: title.trim(), at: ts, note: note.trim(), start, dest, stops: stops.map(({ name, lat, lon }) => ({ name, lat, lon, kind: 'mola' })) };
       const j = await api(`/api/rgroups/${gid}/events${ev ? '/' + ev.id : ''}`, { method: ev ? 'PUT' : 'POST', body });
-      toast('Etkinlik kaydedildi.'); onDone(j.events || []);
+      toast('Etkinlik kaydedildi.'); if (j.event) window.dispatchEvent(new CustomEvent('ml:event-changed', { detail: { event: j.event } })); onDone(j.events || []);
     } catch (x) { toast(x.message); setBusy(false); }
   };
   return (

@@ -280,6 +280,25 @@ srv.listen(0, async () => {
     await fixN(41.0, 29.0); await ep.evaluate(e => window.__mm.startEvent(e), EV); await ep.waitForSelector('#mm-evov [data-ov="ok"]:not([disabled])', { timeout: 5000 }); await ep.click('#mm-evov [data-ov="ok"]'); await ep.waitForTimeout(500);
     ok(/Mola: Ömerli/.test(await ep.textContent('#mm-dtitle')), 'başlangıç yerindeyken ilk hedef doğrudan «Mola: Ömerli»');
     global.__dynRoute = false; await ep.context().close(); }
+  // ---- Etkinlik düzenlenince (mola yeri/sırası değişince) navigasyon otomatik güncellenir
+  {
+    global.__dynRoute = true; const ep2 = await open();
+    const fixM = async (la, lo) => { for (let k = 0; k < 4; k++) { await ep2.evaluate(([a, o]) => window.__fix(a, o, 5, 8), [la, lo]); await ep2.waitForTimeout(130); } await ep2.waitForTimeout(400); };
+    await ep2.evaluate(() => window.__fix(40.5, 28.5, 5, 0)); await ep2.waitForTimeout(300);
+    const EV2 = { id: 'e1', title: 'Şile Turu', start: { name: 'Kadıköy', lat: 41.0, lon: 29.0 }, stops: [{ name: 'Ömerli', lat: 41.05, lon: 29.05, kind: 'mola' }, { name: 'Ağva', lat: 41.08, lon: 29.08, kind: 'mola' }], dest: { name: 'Şile', lat: 41.1, lon: 29.1 } };
+    await ep2.evaluate(e => window.__mm.startEvent(e), EV2); await ep2.waitForSelector('#mm-evov [data-ov="ok"]:not([disabled])', { timeout: 5000 });
+    await ep2.evaluate(e => window.dispatchEvent(new CustomEvent('ml:event-changed', { detail: { event: { ...e, stops: [e.stops[1], e.stops[0]] } } })), EV2);
+    await ep2.waitForTimeout(600); ok(/Mola 1 · Ağva/.test(await ep2.textContent('#mm-evov')) && /Mola 2 · Ömerli/.test(await ep2.textContent('#mm-evov')), 'etkinlik: ön izleme açıkken mola sırası değişince panel/harita otomatik yenilenir');
+    await ep2.click('#mm-evov [data-ov="ok"]'); await ep2.waitForSelector('#mm-rinfo:not([hidden])', { timeout: 5000 }); await ep2.click('#mm-navgo'); await ep2.waitForTimeout(200);
+    await fixM(41.0, 29.0);
+    ok(/Mola: Ağva/.test(await ep2.textContent('#mm-navto')), 'yeni sıraya göre başlangıçtan sonra 1. mola «Ağva»');
+    await ep2.evaluate(e => window.dispatchEvent(new CustomEvent('ml:event-changed', { detail: { event: { ...e, stops: [e.stops[0], e.stops[1], { name: 'Kumköy', lat: 41.09, lon: 29.09, kind: 'mola' }] } } })), EV2);
+    await ep2.waitForTimeout(700);
+    ok(/Mola: Ömerli/.test(await ep2.textContent('#mm-navto')), 'navigasyon sürerken etkinlik değişince sıradaki ziyaret edilmemiş noktaya otomatik geçilir');
+    await fixM(41.05, 29.05); await fixM(41.08, 29.08);
+    ok(/Mola: Kumköy/.test(await ep2.textContent('#mm-navto')), 'eklenen yeni mola sırada yer alır');
+    global.__dynRoute = false; await ep2.context().close();
+  }
   // ---- Lider müzik paylaşımı: map.js ↔ group-ride.js bağlantısı (group-ride.js burada SAHTE; gerçek YouTube sesi/iframe içeriği test EDİLMEDİ)
   { const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true }), g = await ctx.newPage(); g.on('pageerror', e => errs.push(e.message)); await g.addInitScript(FAKE);
     await g.addInitScript(() => { window.__gm = []; window.GroupRide = { mount: c => { window.__gctx = c; return { musicLocal: o => window.__gm.push(o), markers: () => [], activate() {}, deactivate() {}, onFix() {}, sharing: () => false, stop() {}, joinPrompt() {}, open() {} }; } }; });
