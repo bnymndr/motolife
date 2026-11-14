@@ -253,21 +253,31 @@ srv.listen(0, async () => {
   { global.__dynRoute = true; const ep = await open(); routeCalls.length = 0;
     const fixN = async (la, lo) => { for (let k = 0; k < 4; k++) { await ep.evaluate(([a, o]) => window.__fix(a, o, 5, 8), [la, lo]); await ep.waitForTimeout(130); } await ep.waitForTimeout(400); };
     await ep.evaluate(() => window.__fix(40.5, 28.5, 5, 0)); await ep.waitForTimeout(300);
-    const EV = { title: 'Şile Turu', start: { name: 'Kadıköy', lat: 41.0, lon: 29.0 }, stops: [{ name: 'Ömerli', lat: 41.05, lon: 29.05, kind: 'mola' }, { name: 'Ağva', lat: 41.08, lon: 29.08, kind: 'ugrak' }], dest: { name: 'Şile', lat: 41.1, lon: 29.1 } };
-    await ep.evaluate(e => window.__mm.startEvent(e), EV); await ep.waitForSelector('#mm-rinfo:not([hidden])', { timeout: 5000 });
+    const EV = { title: 'Şile Turu', start: { name: 'Kadıköy', lat: 41.0, lon: 29.0 }, stops: [{ name: 'Ömerli', lat: 41.05, lon: 29.05, kind: 'mola' }, { name: 'Ağva', lat: 41.08, lon: 29.08, kind: 'mola' }], dest: { name: 'Şile', lat: 41.1, lon: 29.1 } };
+    await ep.evaluate(e => window.__mm.startEvent(e), EV); await ep.waitForSelector('#mm-evov [data-ov="ok"]:not([disabled])', { timeout: 5000 });
+    { const bb = await ep.locator('#mm-ovmini').boundingBox(), pb = await ep.locator('#mm-evov').boundingBox();
+      ok(bb && Math.round(bb.width) === 132 && Math.round(bb.height) === 178 && bb.x > 390 / 2 && await ep.locator('#mm-ovmini .mm-ovattr').count() === 1, 'etkinlik: panelin SAĞINDA 132×178 mini harita (+ © OSM)');
+      ok(pb.height < 844 * 0.62 + 2, 'etkinlik: panel yüksekliği büyümez (≤ %62)'); }
+    const ovTxt = await ep.textContent('#mm-evov');
+    ok(/Kadıköy/.test(ovTxt) && /Mola 1 · Ömerli/.test(ovTxt) && /Mola 2 · Ağva/.test(ovTxt) && /Varış · Şile/.test(ovTxt) && /Toplam/.test(ovTxt), 'etkinlik: başta TÜM program (başlangıç, molalar, varış, toplam) onay panelinde görünür');
+    ok(routeCalls.length === 3 && !(await ep.evaluate(() => !!document.querySelector('#mm-navbar') && !document.getElementById('mm-navbar').hidden)), 'etkinlik: onaydan önce her ayak için yol çizilir (3 istek), navigasyon BAŞLAMAZ');
+    await ep.click('#mm-evov [data-ov="x"]'); ok(await ep.locator('#mm-evov').count() === 0, 'etkinlik: Vazgeç paneli kapatır'); routeCalls.length = 0;
+    await ep.evaluate(e => window.__mm.startEvent(e), EV); await ep.waitForSelector('#mm-evov [data-ov="ok"]:not([disabled])', { timeout: 5000 }); routeCalls.length = 0;
+    await ep.click('#mm-evov [data-ov="ok"]'); ok(await ep.locator('#mm-evov').count() === 0, 'etkinlik: «Onayla ve Başla» paneli kapatır');
+    await ep.waitForSelector('#mm-rinfo:not([hidden])', { timeout: 5000 });
     ok(/Başlangıç: Kadıköy/.test(await ep.textContent('#mm-dtitle')) && /nokta 1\/4/.test(await ep.textContent('#mm-dsub') + await ep.evaluate(() => document.getElementById('mm-dsub').textContent)), 'etkinlik: ilk hedef «Başlangıç: Kadıköy», nokta 1/4');
     ok(routeCalls.length === 1 && /to=41\.0+%2C29\.0+|to=41\.0+,29\.0+/.test(routeCalls[0]), 'etkinlik: ilk ayak için GERÇEK yol tarifi istenir (konum → başlangıç)');
     await ep.click('#mm-navgo'); await ep.waitForTimeout(150); ok(await ep.isVisible('#mm-navbar') || await ep.evaluate(() => !document.getElementById('mm-navbar').hidden), 'etkinlik: normal navigasyon başlar');
     await fixN(41.0, 29.0);
     ok(/Mola: Ömerli/.test(await ep.textContent('#mm-navto')) && routeCalls.length === 2, 'başlangıca varınca navigasyon kesintisiz sıradaki noktaya (Mola: Ömerli) geçer, yeni yol tarifi alınır');
     await fixN(41.05, 29.05);
-    ok(/Uğrak: Ağva/.test(await ep.textContent('#mm-navto')) && routeCalls.length === 3, 'mola noktasından sonra «Uğrak: Ağva»');
+    ok(/Mola: Ağva/.test(await ep.textContent('#mm-navto')) && routeCalls.length === 3, 'mola noktasından sonra «Mola: Ağva»');
     await fixN(41.08, 29.08);
     ok(/Varış: Şile/.test(await ep.textContent('#mm-navto')) && routeCalls.length === 4, 'son ayak «Varış: Şile»');
     await fixN(41.1, 29.1);
     ok(await ep.evaluate(() => document.getElementById('mm-navbar').hidden) && /tamamlandı/.test(await ep.textContent('#mm-toast')), 'varışta etkinlik rotası tamamlanır, navigasyon kapanır');
     // zaten başlangıçtaysa 2. noktadan başlar
-    await fixN(41.0, 29.0); await ep.evaluate(e => window.__mm.startEvent(e), EV); await ep.waitForTimeout(500);
+    await fixN(41.0, 29.0); await ep.evaluate(e => window.__mm.startEvent(e), EV); await ep.waitForSelector('#mm-evov [data-ov="ok"]:not([disabled])', { timeout: 5000 }); await ep.click('#mm-evov [data-ov="ok"]'); await ep.waitForTimeout(500);
     ok(/Mola: Ömerli/.test(await ep.textContent('#mm-dtitle')), 'başlangıç yerindeyken ilk hedef doğrudan «Mola: Ömerli»');
     global.__dynRoute = false; await ep.context().close(); }
   // ---- Lider müzik paylaşımı: map.js ↔ group-ride.js bağlantısı (group-ride.js burada SAHTE; gerçek YouTube sesi/iframe içeriği test EDİLMEDİ)

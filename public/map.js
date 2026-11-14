@@ -909,7 +909,7 @@
     $('mm-spill').addEventListener('click', () => { S.spOpen = true; paintNavMode(); });
     $('mm-pcol').addEventListener('click', () => { S.spOpen = false; paintNavMode(); });
     /* ---------- Etkinlik rotası: noktalar (başlangıç → mola/uğrak → varış) sırayla NORMAL navigasyona bağlanır (her ayak: konum → sıradaki nokta) ---------- */
-    const evLabel = (q, i) => { const n = q.pts[i], last = i === q.pts.length - 1; return (i === 0 ? 'Başlangıç' : last ? 'Varış' : n.kind === 'ugrak' ? 'Uğrak' : 'Mola') + ': ' + n.name; };
+    const evLabel = (q, i) => { const n = q.pts[i], last = i === q.pts.length - 1; return (i === 0 ? 'Başlangıç' : last ? 'Varış' : 'Mola') + ': ' + n.name; };
     function evGo(i, autoNav) {
       const q = S.evq; if (!q || i >= q.pts.length) return;
       q.i = i; q.autoNav = !!autoNav; const n = q.pts[i];
@@ -917,9 +917,62 @@
       if (!autoNav) openRt(false);
       autoRoute();
     }
+    /* Etkinlik ön izleme: başlangıç → molalar → varış TÜM yol tarifi tek haritada; onaylanınca sırayla navigasyon başlar */
+    function evOvClear() { const o = S.evOv; if (!o) return; o.tok = -1; o.layers.forEach(l => l.remove()); if (o.mini) { try { o.mini.remove(); } catch {} } const sh = $('mm-evov'); if (sh) sh.remove(); S.evOv = null; }
+    async function evOverview(ev) {
+      const L = window.L, pts = [ev.start, ...(ev.stops || []), ev.dest];
+      evOvClear();
+      const o = S.evOv = { tok: Date.now(), layers: [], ev }; const tok = o.tok;
+      const sh = document.createElement('div'); sh.className = 'mm-gsheet'; sh.id = 'mm-evov'; el.root.appendChild(sh);
+      const paint = (legs, busy) => {
+        const tot = legs.reduce((a, l) => (l ? { d: a.d + l.distance, t: a.t + l.duration } : a), { d: 0, t: 0 }), miss = legs.some(l => l === false);
+        const role = i => (i === 0 ? 'Başlangıç' : i === pts.length - 1 ? 'Varış' : 'Mola ' + i);
+        let rows = '';
+        pts.forEach((n, i) => {
+          rows += '<li class="mm-ovp"><span class="mm-ovn" style="background:' + (i === 0 ? '#2E9E5B' : i === pts.length - 1 ? '#D64545' : 'var(--accent,#EA8621)') + '">' + (i + 1) + '</span><span><b>' + esc(role(i)) + '</b> · ' + esc(n.name) + '</span></li>';
+          if (i < pts.length - 1) { const l = legs[i]; rows += '<li class="mm-ovl">' + (l ? fmtDist(l.distance) + ' · ' + fmtEta(l.duration) : l === false ? 'Yol çizilemedi' : '…') + '</li>'; }
+        });
+        $('mm-ovdyn').innerHTML = '<ol class="mm-ovlist">' + rows + '</ol>';
+        $('mm-ovfoot').innerHTML = '<p class="mm-ovtot">' + (busy ? 'Rota hesaplanıyor…' : 'Toplam: <b>' + fmtDist(tot.d) + '</b> · <b>' + fmtEta(tot.t) + '</b>' + (miss ? ' <span class="warn">(bazı bölümlerin yolu çizilemedi)</span>' : '')) + '</p>'
+          + '<div class="mm-grow2"><button type="button" class="mm-mb" data-ov="x">Vazgeç</button><button type="button" class="mm-mb primary" data-ov="ok"' + (busy ? ' disabled' : '') + '>Onayla ve Başla</button></div>';
+      };
+      sh.innerHTML = '<div class="mm-gh"><span>' + esc(ev.title || 'Etkinlik') + '</span><button type="button" class="mm-gx" data-ov="x" aria-label="Kapat">✕</button></div><div class="mm-ovrow"><div id="mm-ovdyn"></div><div class="mm-ovmini" id="mm-ovmini"></div></div><div id="mm-ovfoot"></div>';
+      const legs = pts.slice(1).map(() => null); paint(legs, true);
+      sh.addEventListener('click', e => { const b = e.target.closest('[data-ov]'); if (!b) return; if (b.dataset.ov === 'x') evOvClear(); else if (!b.disabled) { evOvClear(); beginEvent(ev); } });
+      const bounds = []; pts.forEach(n => bounds.push([n.lat, n.lon]));
+      try {                                                                  // sağda küçük gerçek harita (sayfa yerleşimi büyümez: sabit 132×178)
+        const mm = L.map($('mm-ovmini'), { zoomControl: false, attributionControl: false, dragging: false, touchZoom: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, tap: false, zoomSnap: 0.25 });
+        const tu = (S.tiles && S.tiles._url) || S.cfg.tileUrl;
+        L.tileLayer(tu, { subdomains: S.cfg.tileSub || 'abc', maxZoom: S.cfg.tileMax || 19, maxNativeZoom: S.cfg.tileMax || 19, updateWhenIdle: true }).addTo(mm);
+        o.mini = mm; if (mm.invalidateSize) mm.invalidateSize(); mm.fitBounds(bounds, { padding: [18, 18], maxZoom: 15 });
+        $('mm-ovmini').insertAdjacentHTML('beforeend', '<span class="mm-ovattr">© OpenStreetMap</span>');
+        pts.forEach((n, i) => L.marker([n.lat, n.lon], { icon: L.divIcon({ className: 'mm-ovpin mm-ovpin-s', html: '<b style="background:' + (i === 0 ? '#2E9E5B' : i === pts.length - 1 ? '#D64545' : '#EA8621') + '">' + (i + 1) + '</b>', iconSize: [20, 20], iconAnchor: [10, 10] }), interactive: false }).addTo(mm));
+      } catch { o.mini = o.mini || null; }
+      S.follow = false; paintLocate(); S.map.fitBounds(bounds, { paddingTopLeft: [40, 90], paddingBottomRight: [40, 330], maxZoom: 15 });
+      pts.forEach((n, i) => o.layers.push(L.marker([n.lat, n.lon], { icon: L.divIcon({ className: 'mm-ovpin', html: '<b style="background:' + (i === 0 ? '#2E9E5B' : i === pts.length - 1 ? '#D64545' : '#EA8621') + '">' + (i + 1) + '</b>', iconSize: [28, 28], iconAnchor: [14, 14] }), title: n.name, interactive: false }).addTo(S.map)));
+      for (let i = 0; i < pts.length - 1; i++) {
+        if (S.evOv === null || o.tok !== tok) return;
+        try {
+          if (!routingOn()) throw new Error('off');
+          const p = new URLSearchParams({ from: pts[i].lat.toFixed(6) + ',' + pts[i].lon.toFixed(6), to: pts[i + 1].lat.toFixed(6) + ',' + pts[i + 1].lon.toFixed(6) });
+          const r = await fetch('/api/route?' + p, { credentials: 'same-origin' }); const j = await r.json().catch(() => ({}));
+          if (o.tok !== tok) return;
+          if (!r.ok || !Array.isArray(j.coords) || j.coords.length < 2) throw new Error('x');
+          legs[i] = { distance: Number(j.distance) || 0, duration: Number(j.duration) || 0 };
+          if (o.mini) { try { o.layers.push(L.polyline(j.coords, { color: '#031420', weight: 7, opacity: 0.8, lineCap: 'round', interactive: false }).addTo(o.mini), L.polyline(j.coords, { color: accent(), weight: 4, opacity: 1, lineCap: 'round', interactive: false }).addTo(o.mini)); } catch {} }
+          o.layers.push(L.polyline(j.coords, { color: '#031420', weight: 10, opacity: 0.8, lineCap: 'round', interactive: false }).addTo(S.map), L.polyline(j.coords, { color: accent(), weight: 6, opacity: 1, lineCap: 'round', interactive: false }).addTo(S.map));
+        } catch { if (o.tok !== tok) return; legs[i] = false; }
+        paint(legs, i < pts.length - 2);
+      }
+      if (o.tok === tok) paint(legs, false);
+    }
     function startEvent(ev) {
       if (!ev || !ev.start || !ev.dest) return;
       if (!S.ready) { S.pendingEvent = ev; return; }
+      if (S.nav) { toast('Önce mevcut navigasyonu bitir.', 4000); return; }
+      evOverview(ev);
+    }
+    function beginEvent(ev) {
       if (S.nav) { toast('Önce mevcut navigasyonu bitir.', 4000); return; }
       const pts = [ev.start, ...(ev.stops || []), ev.dest]; S.evq = { title: ev.title || 'Etkinlik', pts, i: 0, autoNav: false };
       let i = 0; if (S.me && haversine(S.me.lat, S.me.lon, ev.start.lat, ev.start.lon) < 500) i = 1;        // zaten başlangıçtaysan 2. noktadan başla

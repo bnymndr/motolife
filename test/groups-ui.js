@@ -124,16 +124,28 @@ srv.listen(0, async () => {
   await pg.click('form button[type=submit]'); await new Promise(r => setTimeout(r, 150)); T(!calls.includes(`POST /api/rgroups/${G.id}/events`) && /Başlangıç yeri seçilmeli/.test(await pg.textContent('body')), 'başlangıç yeri seçilmeden kaydedilmez (uyarı gösterilir)');
   const pick = async (label, q, i) => { const box = pg.locator('div:has(> div > span:text-is("' + label + '"))').first(); await box.locator('button:has-text("Ara")').first().click(); await pg.fill('input[aria-label="' + label + ' ara"]', q); await pg.press('input[aria-label="' + label + ' ara"]', 'Enter'); await pg.waitForSelector('button:has(b:has-text("' + q + ' ' + (i ? 'Sahil' : 'Merkez') + '"))'); await pg.click('button:has(b:has-text("' + q + ' ' + (i ? 'Sahil' : 'Merkez') + '"))'); };
   await pick('Başlangıç yeri', 'Kadıköy', 0); T(/Kadıköy Merkez/.test(await pg.textContent('form')), 'arama sonucundan başlangıç yeri seçilir');
-  await pg.click('button:has-text("+ Mola / Uğrak Noktası Ekle")'); await pg.selectOption('select[aria-label="Tür"]', 'ugrak');
-  await pg.locator('button:has-text("Konumum")').nth(1).click(); await pg.waitForFunction(() => /Uğrak 1/.test(document.querySelector('form').textContent) && [...document.querySelectorAll('[data-ev-val]')].some(e => e.textContent === 'Konumum'), null, { timeout: 4000 });
-  T(true, 'uğrak türü seçilir, «Konumum» cihaz konumuyla nokta alır');
+  await pg.click('button:has-text("+ Mola Noktası Ekle")'); T(!/Uğrak/.test(await pg.textContent('form')), 'formda «Uğrak» sözcüğü yok');
+  await pg.locator('button:has-text("Konumum")').nth(1).click(); await pg.waitForFunction(() => /Mola 1/.test(document.querySelector('form').textContent) && [...document.querySelectorAll('[data-ev-val]')].some(e => e.textContent === 'Konumum'), null, { timeout: 4000 });
+  T(true, 'mola eklenir, «Konumum» cihaz konumuyla nokta alır');
   await pick('Varış noktası', 'Şile', 1); await pg.fill('input[aria-label="Not"]', 'Kask şart');
   await pg.click('form button[type=submit]'); await pg.waitForSelector('[data-ev-card]');
-  T(calls.includes(`POST /api/rgroups/${G.id}/events`) && EVS.length === 1 && EVS[0].title === 'Şile Turu' && EVS[0].start.name === 'Kadıköy Merkez' && EVS[0].dest.name === 'Şile Sahil' && EVS[0].stops.length === 1 && EVS[0].stops[0].kind === 'ugrak' && Math.abs(EVS[0].stops[0].lat - 41.01) < 1e-6 && EVS[0].note === 'Kask şart' && EVS[0].at > Date.now(), 'kayıt isteği: başlangıç, uğrak (tür + konum), varış, not, tarih');
-  const card = await pg.textContent('[data-ev-card]'); T(/Kadıköy Merkez → Şile Sahil/.test(card) && /Uğrak/.test(card) && /Kask şart/.test(card), 'etkinlik kartı: güzergâh özeti, uğrak, not');
+  T(calls.includes(`POST /api/rgroups/${G.id}/events`) && EVS.length === 1 && EVS[0].title === 'Şile Turu' && EVS[0].start.name === 'Kadıköy Merkez' && EVS[0].dest.name === 'Şile Sahil' && EVS[0].stops.length === 1 && EVS[0].stops[0].kind === 'mola' && Math.abs(EVS[0].stops[0].lat - 41.01) < 1e-6 && EVS[0].note === 'Kask şart' && EVS[0].at > Date.now(), 'kayıt isteği: başlangıç, uğrak (tür + konum), varış, not, tarih');
+  const card = await pg.textContent('[data-ev-card]'); T(/Kadıköy Merkez → Şile Sahil/.test(card) && /Mola/.test(card) && /Kask şart/.test(card), 'etkinlik kartı: güzergâh özeti, uğrak, not');
   await pg.click('button:has-text("Navigasyonla Başla")'); T(await pg.evaluate(() => window.__nav && window.__nav.title === 'Şile Turu' && window.__nav.stops.length === 1 && window.__nav.dest.name === 'Şile Sahil'), '«Navigasyonla Başla»: etkinlik haritaya (normal navigasyona) devredilir');
   await pg.click('[data-ev-card] button:has-text("Düzenle")'); T(await pg.inputValue('input[aria-label="Etkinlik adı"]') === 'Şile Turu' && await pg.inputValue('input[aria-label="Tarih ve saat"]') === '2099-01-01T09:00', 'düzenle: kayıtlı değerler forma dolar');
   await pg.fill('input[aria-label="Etkinlik adı"]', 'Şile Turu 2'); await pg.click('form button[type=submit]'); await pg.waitForSelector('[data-ev-card]:has-text("Şile Turu 2")'); T(calls.includes(`PUT /api/rgroups/${G.id}/events/e1`), 'düzenleme PUT ile kaydedilir');
+  // mola sırası: basılı tutup sürükle
+  await pg.click('[data-ev-card] button:has-text("Düzenle")'); await pg.click('button:has-text("+ Mola Noktası Ekle")'); await pick('Mola 2', 'Şile', 1);
+  T(await pg.locator('[data-grip]').count() === 2, 'iki mola olunca sürükleme tutamağı görünür');
+  const names0 = await pg.evaluate(() => [...document.querySelectorAll('[data-stop]')].map(e => (e.querySelector('[data-ev-val]') || {}).textContent));
+  const b1 = await pg.locator('[data-grip]').nth(0).boundingBox(), b2 = await pg.locator('[data-stop]').nth(1).boundingBox();
+  await pg.mouse.move(b1.x + 20, b1.y + 8); await pg.mouse.down(); await pg.waitForTimeout(150); await pg.mouse.move(b1.x + 20, b1.y + 40);
+  T(await pg.locator('[data-stop].ring-2').count() === 0, 'kısa basışta sürükleme başlamaz (uzun basma gerekir)');
+  await pg.waitForTimeout(400); await pg.mouse.move(b2.x + 30, b2.y + 30, { steps: 5 }); await pg.mouse.up();
+  const names1 = await pg.evaluate(() => [...document.querySelectorAll('[data-stop]')].map(e => (e.querySelector('[data-ev-val]') || {}).textContent));
+  T(names1[0] !== names0[0] && names1[1] === names0[0] || names1.join() !== names0.join(), 'basılı tutup sürükleyince mola sırası değişir');
+  T(/Mola 1/.test(await pg.locator('[data-stop]').nth(0).textContent()), 'etiketler sıraya göre yeniden numaralanır');
+  await pg.click('form button:has-text("Vazgeç")');
   await pg.click('[data-ev-card] button:has-text("Sil")'); T(EVS.length === 1, 'Sil ilk dokunuşta onay ister (silmez)'); await pg.click('[data-ev-card] button:has-text("Silinsin mi?")'); await pg.waitForSelector('text=Henüz Etkinlik Yok'); T(EVS.length === 0, 'onaylayınca etkinlik silinir');
   T(await pg.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'etkinlik ekranı 390 px: yatay taşma yok');
   // dışarıdan açma (harita → Sosyal)

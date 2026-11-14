@@ -22,10 +22,10 @@ const EV = { title: 'Pazar Turu', at: now + 86400000, start: { name: 'Kadıköy'
   r = await call('GET /api/rgroups/:id/events', 'u4', P); ok(r.s === 404, 'üye olmayan etkinlikleri göremez');
   r = await call('POST /api/rgroups/:id/events', 'u1', P, { ...EV, dest: null }); ok(r.s === 400 && /Varış/.test(r.j.error), 'varış noktası şart');
   r = await call('POST /api/rgroups/:id/events', 'u1', P, { ...EV, start: { name: 'x', lat: 999, lon: 1 } }); ok(r.s === 400 && /Başlangıç/.test(r.j.error), 'geçersiz koordinat reddedilir');
-  r = await call('POST /api/rgroups/:id/events', 'u1', P, { ...EV, stops: Array.from({ length: 9 }, (_, i) => ({ name: 'M' + i, lat: 41, lon: 29 })) }); ok(r.s === 400, 'en fazla 8 uğrak/mola');
+  r = await call('POST /api/rgroups/:id/events', 'u1', P, { ...EV, stops: Array.from({ length: 9 }, (_, i) => ({ name: 'M' + i, lat: 41, lon: 29 })) }); ok(r.s === 400, 'en fazla 8 mola/mola');
   r = await call('POST /api/rgroups/:id/events', 'u1', P, { ...EV, at: 5 }); ok(r.s === 400, 'geçmiş tarih reddedilir');
   r = await call('POST /api/rgroups/:id/events', 'u1', P, { ...EV, title: '<b>x</b>'.repeat(30) }); ok(r.s === 200 && r.j.event.title.length === 60, 'ad 60 karaktere kısaltılır');
-  r = await call('POST /api/rgroups/:id/events', 'u2', P, EV); ok(r.s === 200 && r.j.event.stops.length === 2 && r.j.event.stops[1].kind === 'ugrak' && r.j.event.by === 'yonetici', 'yönetici etkinlik oluşturur (başlangıç, varış, mola, uğrak)');
+  r = await call('POST /api/rgroups/:id/events', 'u2', P, EV); ok(r.s === 200 && r.j.event.stops.length === 2 && r.j.event.stops[1].kind === 'mola' && r.j.event.by === 'yonetici', 'yönetici etkinlik oluşturur (başlangıç, varış, mola, mola)');
   const eid = r.j.event.id;
   ok(log.some(l => l[1] === 'grp:changed' && l[2].kind === 'events'), 'üyelere grp:changed events gider');
   r = await call('GET /api/rgroups/:id/events', 'u3', P); ok(r.j.events.length === 2 && r.j.canEdit === false && r.j.events[0].at <= r.j.events[1].at, 'üye listeyi görür (tarihe göre), düzenleyemez');

@@ -315,7 +315,7 @@ function rg_pt($p, bool $kind = false): ?array {
     $la = $p['lat'] ?? null; $lo = $p['lon'] ?? null; $name = rg_txt($p['name'] ?? '', 60);
     if (!is_numeric($la) || !is_numeric($lo) || is_string($la) || is_string($lo) || abs((float)$la) > 90 || abs((float)$lo) > 180 || $name === '') return null;
     $o = ['name' => $name, 'lat' => round((float)$la, 5), 'lon' => round((float)$lo, 5)];
-    if ($kind) $o['kind'] = ($p['kind'] ?? '') === 'ugrak' ? 'ugrak' : 'mola';
+    if ($kind) $o['kind'] = 'mola';
     return $o;
 }
 function rg_clean_event(array $b): array {
@@ -325,8 +325,8 @@ function rg_clean_event(array $b): array {
     $start = rg_pt($b['start'] ?? null); $dest = rg_pt($b['dest'] ?? null);
     if (!$start) return ['error' => 'Başlangıç yeri seçilmeli.']; if (!$dest) return ['error' => 'Varış noktası seçilmeli.'];
     $raw = is_array($b['stops'] ?? null) ? array_values($b['stops']) : [];
-    if (count($raw) > RG_MAX_STOPS) return ['error' => 'En fazla ' . RG_MAX_STOPS . ' uğrak/mola noktası eklenebilir.'];
-    $stops = []; foreach ($raw as $x) { $c = rg_pt($x, true); if (!$c) return ['error' => 'Uğrak/mola noktalarından birinde ad ya da konum eksik.']; $stops[] = $c; }
+    if (count($raw) > RG_MAX_STOPS) return ['error' => 'En fazla ' . RG_MAX_STOPS . ' mola noktası eklenebilir.'];
+    $stops = []; foreach ($raw as $x) { $c = rg_pt($x, true); if (!$c) return ['error' => 'Mola noktalarından birinde ad ya da konum eksik.']; $stops[] = $c; }
     return ['ev' => ['title' => $title, 'at' => $at, 'start' => $start, 'dest' => $dest, 'stops' => $stops, 'note' => rg_txt($b['note'] ?? '', 200)]];
 }
 function rg_events_load(string $gid): array { $a = json_decode(kv_get('rgev:' . $gid) ?? '[]', true); return is_array($a) ? $a : []; }
