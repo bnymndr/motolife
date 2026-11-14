@@ -1,5 +1,5 @@
 'use strict';
-// Grup etkinlikleri arayüzü + müzik paylaşımı seçimi: GERÇEK group-ride.js + group-events.js + map.css Chromium'da; soket, harita ve /api SAHTE. node test/events-ui.js
+// Haritadaki grup sayfası: etkinlik arayüzü YOK (Sosyal'e taşındı) + liderin müzik paylaşımı seçimi: GERÇEK group-ride.js + map.css Chromium'da; soket, harita ve /api SAHTE. node test/events-ui.js
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || '/opt/npm-tools/node_modules/playwright'); const http = require('http'), fs = require('fs'), path = require('path');
 let p = 0, f = 0; const ok = (c, m) => { c ? p++ : f++; console.log((c ? 'ok: ' : 'FAIL: ') + m); };
 const mime = { '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
@@ -21,7 +21,6 @@ const HOST = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta n
   const sc = document.createElement('script'); sc.src = '/group-ride.js'; sc.onload = () => { window.__gr = GroupRide.mount(ctx); window.__ready = true; }; document.body.appendChild(sc);
 })();
 </script></body></html>`;
-const pt = (n, la, lo) => ({ name: n, lat: la, lon: lo });
 const srv = http.createServer((q, r) => {
   const u = new URL(q.url, 'http://x'), J = (o, s = 200) => { r.writeHead(s, { 'content-type': 'application/json' }); r.end(JSON.stringify(o)); };
   const leader = (u.searchParams.get('r') || (q.headers.referer || '').includes('r=member') ? 'member' : 'leader') === 'leader';
@@ -48,27 +47,9 @@ srv.listen(0, async () => {
   const open = async role => { const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true }), pg = await ctx.newPage(); pg.on('pageerror', e => errs.push(role + ': ' + e.message)); await pg.goto(base + '/host.html?r=' + role); await pg.waitForFunction(() => window.__ready); await pg.waitForTimeout(500); return pg; };
   const T = pg => pg.evaluate(() => document.getElementById('mm-gsheet').innerText);
   const A = await open('leader');
-  await A.evaluate(() => document.getElementById('mm-gbtn').click()); await A.waitForFunction(() => /Etkinlikler/.test(document.getElementById('mm-gsheet').innerText), null, { timeout: 5000 });
-  ok(/Etkinlikler/.test(await T(A)) && await A.isVisible('[data-g=events]'), 'grup sayfasında «Etkinlikler» bölümü ve düğmesi var');
-  await A.click('[data-g=events]'); await A.waitForFunction(() => /Henüz etkinlik yok/.test(document.getElementById('mm-gsheet').innerText), null, { timeout: 5000 });
-  ok(await A.isVisible('[data-ev=new]'), 'lider: «Yeni Etkinlik» düğmesi görünür; liste boş');
-  await A.click('[data-ev=new]'); await A.fill('#mm-ev-title', 'Şile Turu'); await A.fill('#mm-ev-at', '2099-01-01T09:00');
-  ok(await A.evaluate(() => /Başlangıç yeri/.test(document.getElementById('mm-gsheet').innerText) && /Varış noktası/.test(document.getElementById('mm-gsheet').innerText)), 'form: başlangıç yeri ve varış noktası alanları');
-  await A.click('[data-ev=save]'); ok(await A.evaluate(() => window.__toasts.some(t => /Başlangıç/.test(t))), 'başlangıç yeri seçilmeden kaydedilmez');
-  await A.click('[data-ev=find][data-s=start]'); await A.fill('#mm-ev-q', 'Kadıköy'); await A.click('[data-ev=go]'); await A.waitForSelector('[data-ev=use]'); await A.click('[data-ev=use][data-i="0"]');
-  ok(/Kadıköy Merkez/.test(await T(A)), 'arama sonucundan başlangıç yeri seçilir');
-  await A.click('[data-ev=add]'); ok(await A.$$eval('[data-ev=rm]', e => e.length) === 1, 'mola/uğrak noktası eklenir');
-  await A.selectOption('select[data-ef=kind]', 'ugrak'); await A.click('[data-ev=me][data-s="0"]'); ok(/Konumum/.test(await T(A)) && /Uğrak 1/.test(await T(A)), 'uğrak türü seçilir, «Konumum» ile nokta alınır');
-  await A.click('[data-ev=find][data-s=dest]'); await A.fill('#mm-ev-q', 'Şile'); await A.click('[data-ev=go]'); await A.waitForSelector('[data-ev=use]'); await A.click('[data-ev=use][data-i="1"]');
-  await A.fill('#mm-ev-note', 'Kask şart'); await A.click('[data-ev=save]'); await A.waitForFunction(() => /Şile Turu/.test(document.getElementById('mm-gsheet').innerText) && /durak/.test(document.getElementById('mm-gsheet').innerText), null, { timeout: 5000 });
-  const post = srv.calls.find(c => c[0] === 'POST'); ok(post && post[2].title === 'Şile Turu' && post[2].start.name === 'Kadıköy Merkez' && post[2].dest.name === 'Şile Sahil' && post[2].stops.length === 1 && post[2].stops[0].kind === 'ugrak' && post[2].note === 'Kask şart' && post[2].at > Date.now(), 'kayıt isteği: başlangıç, varış, uğrak (tür), not, tarih');
-  ok(/Kadıköy Merkez → Şile Sahil · 1 durak/.test(await T(A)), 'etkinlik kartı: güzergâh özeti');
-  await A.click('[data-ev=map]'); await A.waitForTimeout(150); ok(await A.evaluate(() => window.__layers === 4 && window.__fit === 1), 'haritada göster: çizgi + başlangıç, uğrak, varış işaretleri (4 katman), harita sığdırılır');
-  await A.evaluate(() => document.getElementById('mm-gbtn').click()); await A.waitForTimeout(100);
-  await A.click('[data-g=events]'); await A.waitForSelector('[data-ev=edit]'); await A.click('[data-ev=edit]'); ok(await A.inputValue('#mm-ev-title') === 'Şile Turu' && await A.inputValue('#mm-ev-at') === '2099-01-01T09:00', 'düzenle: kayıtlı değerler forma dolar');
-  await A.fill('#mm-ev-title', 'Şile Turu 2'); await A.click('[data-ev=save]'); await A.waitForFunction(() => /Şile Turu 2/.test(document.getElementById('mm-gsheet').innerText), null, { timeout: 5000 }); ok(srv.calls.some(c => c[0] === 'PUT' && c[2].title === 'Şile Turu 2'), 'düzenleme PUT ile kaydedilir');
-  await A.click('[data-ev=del]'); await A.waitForSelector('[data-gact=yes]'); await A.click('[data-gact=yes]'); await A.waitForFunction(() => /Henüz etkinlik yok/.test(document.getElementById('mm-gsheet').innerText), null, { timeout: 5000 }); ok(srv.calls.some(c => c[0] === 'DELETE'), 'silme onaydan sonra yapılır');
-  ok(await A.evaluate(() => { const s = document.getElementById('mm-gsheet'); return s.scrollWidth <= s.clientWidth + 1; }), 'etkinlik ekranı yatay taşmaz (390 px)');
+  await A.evaluate(() => document.getElementById('mm-gbtn').click()); await A.waitForFunction(() => /Konumumu Gruba Paylaş/.test(document.getElementById('mm-gsheet').innerText), null, { timeout: 5000 });
+  ok(!/Etkinlikler/.test(await T(A)) && !(await A.$('[data-g=events]')), 'haritadaki grup sayfasında etkinlik bölümü/düğmesi YOK (etkinlikler Sosyal › Gruplarım içinde)');
+  ok(await A.evaluate(() => { const s = document.getElementById('mm-gsheet'); return s.scrollWidth <= s.clientWidth + 1; }), 'grup sayfası yatay taşmaz (390 px)');
   // ---- müzik (lider)
   const vid = { video: 'dQw4w9WgXcQ', list: null };
   await A.evaluate(v => window.__gr.musicLocal({ t: 'play', id: v }), vid); await A.waitForSelector('[data-gmu=share]');
@@ -86,12 +67,6 @@ srv.listen(0, async () => {
   ok(await A.evaluate(() => window.__toasts.some(t => /Aktif grup sürüşü yok/.test(t))), 'sunucu reddederse kullanıcıya bildirilir');
   // ---- üye
   const B = await open('member');
-  await B.evaluate(() => document.getElementById('mm-gbtn').click()); await B.waitForFunction(() => /Etkinlikler/.test(document.getElementById('mm-gsheet').innerText), null, { timeout: 5000 });
-  await B.click('[data-g=events]'); await B.waitForFunction(() => /Henüz etkinlik yok/.test(document.getElementById('mm-gsheet').innerText) || /Lider ya da yönetici/.test(document.getElementById('mm-gsheet').innerText), null, { timeout: 5000 });
-  ok(!(await B.$('[data-ev=new]')) && /Lider ya da yönetici etkinlik ekleyebilir/.test(await T(B)), 'üye: «Yeni Etkinlik» yok, bilgi notu var');
-  srv.events = [{ id: 'x1', title: 'Cumartesi Turu', at: Date.now() + 1e8, start: pt('A', 41, 29), dest: pt('B', 41.2, 29.6), stops: [{ ...pt('Mola', 41.1, 29.3), kind: 'mola' }], note: '', by: 'ayse', createdAt: 1 }];
-  await B.evaluate(() => window.__fire('grp:changed', { gid: 'g1', kind: 'events' })); await B.waitForFunction(() => /Cumartesi Turu/.test(document.getElementById('mm-gsheet').innerText), null, { timeout: 5000 });
-  ok(!(await B.$('[data-ev=edit]')) && !(await B.$('[data-ev=del]')) && await B.isVisible('[data-ev=map]'), 'üye: Düzenle/Sil yok, haritada gösterebilir; grp:changed ile liste canlı yenilenir');
   const mus = (extra) => B.evaluate(m => window.__fire('grp:music', m), extra);
   await mus({ gid: 'g1', music: { video: 'dQw4w9WgXcQ', list: null, playing: true, seq: 1, by: 'ayse' } }); await B.waitForSelector('[data-gml=on]');
   ok(/ayse/.test(await B.textContent('#mm-modal')) && await B.evaluate(() => window.__yt.length === 0), 'üye: lider paylaşınca önce sorulur, kendiliğinden çalmaz');

@@ -39,7 +39,7 @@ const srv = http.createServer((q, r) => {
   const u = new URL(q.url, 'http://x'), J = (o, s = 200) => { r.writeHead(s, { 'content-type': 'application/json' }); r.end(JSON.stringify(o)); };
   if (u.pathname === '/api/maps/config') return J({ vecLight: VEC ? 'https://tiles.openfreemap.org/styles/liberty' : '', vecDark: VEC ? 'https://tiles.openfreemap.org/styles/dark' : '', tileUrl: 'T/{z}/{x}/{y}.png', tileUrlDark: '', tileAttr: 'OSM', tileMax: 19, routing, route: { provider: 'valhalla', profile: 'motorcycle', label: 'Motosiklet rotası', avoid: ['highways', 'tolls', 'ferries'], attr: 'Rota: Valhalla' } });
   if (u.pathname === '/api/geocode') return J({ results: geoMode === 'one' ? [{ title: 'Tek Yer', subtitle: 'Tek, İstanbul', lat: 41.01, lon: 29.01 }] : [{ title: 'Kafe A', subtitle: 'A, İstanbul', lat: 41.01, lon: 29.01 }, { title: 'Kafe B', subtitle: 'B, İstanbul', lat: 41.02, lon: 29.02 }] });
-  if (u.pathname === '/api/route') { routeCalls.push(u.search); return J(ROUTE); }
+  if (u.pathname === '/api/route') { routeCalls.push(u.search); if (global.__dynRoute) { const f2 = k => String(u.searchParams.get(k)).split(',').map(Number); return J({ ...ROUTE, coords: [f2('from'), f2('to')], steps: [], distance: 2000 }); } return J(ROUTE); }
   if (u.pathname.startsWith('/api/')) return J({}, 404);
   if (u.pathname === '/_host') { r.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return r.end('<!doctype html><meta charset=utf-8><style>:root{--accent:#EA8621;--accent-2:#F2A64E;--ink:#031420;--glow:234 134 33;--deep:#031420;--deep2:#0a2536;--deep3:#0a1a26;--panel:6 24 38}</style><meta name=viewport content="width=device-width,initial-scale=1"><link rel=stylesheet href=/map.css><body style="margin:0"><div id=r style="position:relative;width:390px;height:844px"></div><script src=/map.js></script>'); }
   const pa = path.join(root, u.pathname); if (!fs.existsSync(pa) || fs.statSync(pa).isDirectory()) { r.writeHead(404); return r.end(); } r.writeHead(200, { 'content-type': mime[path.extname(pa)] || 'application/octet-stream' }); r.end(fs.readFileSync(pa));
@@ -249,6 +249,27 @@ srv.listen(0, async () => {
     await lp.evaluate(() => { document.getElementById('mm-lean').click(); }); await lp.waitForTimeout(200);
     ok(await lp.evaluate(() => { const sh = document.getElementById('mm-tsheet'); return !!sh && !sh.hidden; }), 'Yatış satırına dokununca sensör ayrıntı sayfası açılır');
     await lp.context().close(); }
+  // ---- Etkinlik rotası: noktalar sırayla NORMAL navigasyona bağlanır (her ayak: konum → sıradaki nokta; kuş uçuşu çizgi YOK)
+  { global.__dynRoute = true; const ep = await open(); routeCalls.length = 0;
+    const fixN = async (la, lo) => { for (let k = 0; k < 4; k++) { await ep.evaluate(([a, o]) => window.__fix(a, o, 5, 8), [la, lo]); await ep.waitForTimeout(130); } await ep.waitForTimeout(400); };
+    await ep.evaluate(() => window.__fix(40.5, 28.5, 5, 0)); await ep.waitForTimeout(300);
+    const EV = { title: 'Şile Turu', start: { name: 'Kadıköy', lat: 41.0, lon: 29.0 }, stops: [{ name: 'Ömerli', lat: 41.05, lon: 29.05, kind: 'mola' }, { name: 'Ağva', lat: 41.08, lon: 29.08, kind: 'ugrak' }], dest: { name: 'Şile', lat: 41.1, lon: 29.1 } };
+    await ep.evaluate(e => window.__mm.startEvent(e), EV); await ep.waitForSelector('#mm-rinfo:not([hidden])', { timeout: 5000 });
+    ok(/Başlangıç: Kadıköy/.test(await ep.textContent('#mm-dtitle')) && /nokta 1\/4/.test(await ep.textContent('#mm-dsub') + await ep.evaluate(() => document.getElementById('mm-dsub').textContent)), 'etkinlik: ilk hedef «Başlangıç: Kadıköy», nokta 1/4');
+    ok(routeCalls.length === 1 && /to=41\.0+%2C29\.0+|to=41\.0+,29\.0+/.test(routeCalls[0]), 'etkinlik: ilk ayak için GERÇEK yol tarifi istenir (konum → başlangıç)');
+    await ep.click('#mm-navgo'); await ep.waitForTimeout(150); ok(await ep.isVisible('#mm-navbar') || await ep.evaluate(() => !document.getElementById('mm-navbar').hidden), 'etkinlik: normal navigasyon başlar');
+    await fixN(41.0, 29.0);
+    ok(/Mola: Ömerli/.test(await ep.textContent('#mm-navto')) && routeCalls.length === 2, 'başlangıca varınca navigasyon kesintisiz sıradaki noktaya (Mola: Ömerli) geçer, yeni yol tarifi alınır');
+    await fixN(41.05, 29.05);
+    ok(/Uğrak: Ağva/.test(await ep.textContent('#mm-navto')) && routeCalls.length === 3, 'mola noktasından sonra «Uğrak: Ağva»');
+    await fixN(41.08, 29.08);
+    ok(/Varış: Şile/.test(await ep.textContent('#mm-navto')) && routeCalls.length === 4, 'son ayak «Varış: Şile»');
+    await fixN(41.1, 29.1);
+    ok(await ep.evaluate(() => document.getElementById('mm-navbar').hidden) && /tamamlandı/.test(await ep.textContent('#mm-toast')), 'varışta etkinlik rotası tamamlanır, navigasyon kapanır');
+    // zaten başlangıçtaysa 2. noktadan başlar
+    await fixN(41.0, 29.0); await ep.evaluate(e => window.__mm.startEvent(e), EV); await ep.waitForTimeout(500);
+    ok(/Mola: Ömerli/.test(await ep.textContent('#mm-dtitle')), 'başlangıç yerindeyken ilk hedef doğrudan «Mola: Ömerli»');
+    global.__dynRoute = false; await ep.context().close(); }
   // ---- Lider müzik paylaşımı: map.js ↔ group-ride.js bağlantısı (group-ride.js burada SAHTE; gerçek YouTube sesi/iframe içeriği test EDİLMEDİ)
   { const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true }), g = await ctx.newPage(); g.on('pageerror', e => errs.push(e.message)); await g.addInitScript(FAKE);
     await g.addInitScript(() => { window.__gm = []; window.GroupRide = { mount: c => { window.__gctx = c; return { musicLocal: o => window.__gm.push(o), markers: () => [], activate() {}, deactivate() {}, onFix() {}, sharing: () => false, stop() {}, joinPrompt() {}, open() {} }; } }; });

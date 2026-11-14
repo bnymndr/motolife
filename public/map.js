@@ -408,6 +408,7 @@
       el.map.addEventListener('pointerdown', flattenForTouch, true);
       el.load.hidden = true;
       S.ready = true;
+      if (S.pendingEvent) { const e = S.pendingEvent; S.pendingEvent = null; setTimeout(() => startEvent(e), 300); }
       paintLocate(); setTheme(S.theme);
       if ('ResizeObserver' in window) new ResizeObserver(() => { if (S.boxOn) rotBox(true); else S.map && S.map.invalidateSize(); measureHead(); }).observe(el.root); if ('ResizeObserver' in window) { const ro = new ResizeObserver(() => measureHead()); ro.observe(el.navbar); ro.observe(el.root.querySelector('.mm-bottom')); }
       measureHead();
@@ -779,6 +780,7 @@
       dropRoute();
       if (S.destMarker) { S.destMarker.remove(); S.destMarker = null; }
       S.dest = null; el.dest.hidden = true; paintRtEmpty();
+      if (!S.evAdv) S.evq = null;                                          // etkinlik rotası yalnızca «sıradaki noktaya geç» ile korunur
     }
     function destDistText() { return S.me && S.dest ? 'Kuş uçuşu: ' + fmtDist(haversine(S.me.lat, S.me.lon, S.dest.lat, S.dest.lon)) + ' (yol mesafesi değildir)' : 'Mesafe için konumun bekleniyor…'; }
     function paintDest() {
@@ -875,6 +877,7 @@
       try { r = await requestRoute(false); }
       catch (err) { S.routeMsg = err.message || 'Rota alınamadı.'; clearRouteLayers(); S.route = null; }
       paintDest();
+      if (r && S.route === r && S.evq && S.evq.autoNav) { S.evq.autoNav = false; startNav(); return; }       // etkinlikte 2. noktadan itibaren navigasyon kesintisiz sürer
       if (r && S.route === r) requestAnimationFrame(refit);                 // rota sayfası ölçülünce güzergâhı kalan harita alanına sığdır
     }
     $('mm-navgo').addEventListener('click', async () => {
@@ -905,6 +908,24 @@
     }
     $('mm-spill').addEventListener('click', () => { S.spOpen = true; paintNavMode(); });
     $('mm-pcol').addEventListener('click', () => { S.spOpen = false; paintNavMode(); });
+    /* ---------- Etkinlik rotası: noktalar (başlangıç → mola/uğrak → varış) sırayla NORMAL navigasyona bağlanır (her ayak: konum → sıradaki nokta) ---------- */
+    const evLabel = (q, i) => { const n = q.pts[i], last = i === q.pts.length - 1; return (i === 0 ? 'Başlangıç' : last ? 'Varış' : n.kind === 'ugrak' ? 'Uğrak' : 'Mola') + ': ' + n.name; };
+    function evGo(i, autoNav) {
+      const q = S.evq; if (!q || i >= q.pts.length) return;
+      q.i = i; q.autoNav = !!autoNav; const n = q.pts[i];
+      setDest({ lat: n.lat, lon: n.lon, title: evLabel(q, i), subtitle: 'Etkinlik: ' + q.title + ' · nokta ' + (i + 1) + '/' + q.pts.length });
+      if (!autoNav) openRt(false);
+      autoRoute();
+    }
+    function startEvent(ev) {
+      if (!ev || !ev.start || !ev.dest) return;
+      if (!S.ready) { S.pendingEvent = ev; return; }
+      if (S.nav) { toast('Önce mevcut navigasyonu bitir.', 4000); return; }
+      const pts = [ev.start, ...(ev.stops || []), ev.dest]; S.evq = { title: ev.title || 'Etkinlik', pts, i: 0, autoNav: false };
+      let i = 0; if (S.me && haversine(S.me.lat, S.me.lon, ev.start.lat, ev.start.lon) < 500) i = 1;        // zaten başlangıçtaysan 2. noktadan başla
+      toast('Etkinlik rotası: ' + pts.length + ' nokta. Sırayla yol tarifi alacaksın.', 5000);
+      evGo(i, false);
+    }
     function startNav() {
       const r = S.route; if (!r || S.nav) return;
       S.nav = { turnKey: '', turnI: null, offSince: 0, lastReroute: Date.now(), backoff: 30000, reroutes: 0, busy: false, prev: null, movedM: 0, movingS: 0 };
@@ -940,7 +961,11 @@
       }
       $('mm-navrem').textContent = fmtDist(p.remaining);
       $('mm-naveta').textContent = '≈ ' + fmtEta(eta) + ' · Varış ' + hhmm(eta);
-      if (p.remaining < Math.max(40, f.acc * 1.5) && r.distance > 100) { toast('Hedefe ulaştın.', 6000); return clearDest(); }
+      if (p.remaining < Math.max(40, f.acc * 1.5) && r.distance > 100) {
+        const q = S.evq;
+        if (q && q.i + 1 < q.pts.length) { toast('Ulaştın: ' + q.pts[q.i].name + '. Sıradaki nokta için yol tarifi hazırlanıyor.', 6000); S.evAdv = true; clearDest(); S.evAdv = false; return evGo(q.i + 1, true); }
+        toast(q ? 'Etkinlik rotası tamamlandı: ' + q.title : 'Hedefe ulaştın.', 6000); return clearDest();
+      }
       if (f.acc > 50) return;                                          // zayıf konumla sapma kararı verme
       const now = Date.now();
       if (p.off > Math.max(80, f.acc * 2)) {
@@ -1328,7 +1353,7 @@
     return {
       activate() { S.active = true; if (S.ready) { S.map.invalidateSize(); measureHead(); startWatch(); } liveActivate(); if (S.g) S.g.activate(); },
       deactivate() { S.active = false; liveDeactivate(); if (S.g) S.g.deactivate(); if (!rideActive() && !S.nav && !gpsHeld()) stopWatch(); },
-      setRiders, flyToMe,
+      setRiders, flyToMe, startEvent,
       joinPrompt(code) { if (S.g) S.g.joinPrompt(code); else S.pendingJoin = code; },   // davet bağlantısı (?grup=KOD)
       // Ayarlar ekranı: tercihleri (ekran açık tut, harita teması, ortalama hız) yeniden okur / sensör sayfasını açar
       prefs() {

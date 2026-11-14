@@ -7,7 +7,7 @@ const card = (u, n) => ({ username: u, name: n, av: '', bike: 'Honda CB' });
 const ME = card('ben', 'Ben Test');
 const G = { id: 'a'.repeat(16), name: 'Hafta Sonu', desc: 'Pazar sürüşleri', leader: 'ben', role: 'leader', code: 'ABCD2345', createdAt: Date.now() - 86400000, gap: 1000, ride: null, route: null,
   members: [{ ...card('ben', 'Ben Test'), role: 'leader', sharing: false, joinedAt: 1 }, { ...card('veli', 'Veli Yılmaz'), role: 'member', sharing: true, joinedAt: 2 }, { ...card('kaan', 'Kaan Demir'), role: 'admin', sharing: false, joinedAt: 3 }] };
-let BLK = false, UNB = false, posts = [], seq = 0; const calls = [];
+let BLK = false, UNB = false, posts = [], seq = 0, EVS = []; const calls = [];
 const view = p => ({ ...p, mine: p.author.username === 'ben', canDelete: true });
 const srv = http.createServer((q, r) => {
   const u = new URL(q.url, 'http://x'), J = (o, s = 200) => { r.writeHead(s, { 'content-type': 'application/json' }); r.end(JSON.stringify(o)); };
@@ -39,6 +39,14 @@ const srv = http.createServer((q, r) => {
     mm = p.match(/\/posts\/(p\d+)\/comments$/); if (mm && m === 'POST') { const x = posts.find(y => y.id === mm[1]); const c = { id: 'c' + ++seq, author: ME, text: b.text, at: Date.now(), canDelete: true }; x.comments.push(c); x.commentCount++; return J({ comment: c, commentCount: x.commentCount }); }
     mm = p.match(/\/posts\/(p\d+)\/comments\/(c\d+)$/); if (mm && m === 'DELETE') { const x = posts.find(y => y.id === mm[1]); x.comments = x.comments.filter(c => c.id !== mm[2]); x.commentCount--; return J({ ok: true }); }
     mm = p.match(/\/posts\/(p\d+)$/); if (mm && m === 'DELETE') { posts = posts.filter(y => y.id !== mm[1]); return J({ ok: true }); }
+    if (p === '/api/geocode') return J({ results: [{ title: (u.searchParams.get('q') || '') + ' Merkez', subtitle: 'İstanbul', lat: 41.1, lon: 29.5 }, { title: (u.searchParams.get('q') || '') + ' Sahil', subtitle: 'İstanbul', lat: 41.2, lon: 29.6 }] });
+    if (p.startsWith(`/api/rgroups/${G.id}/events`)) {
+      const id = p.split('/')[5];
+      if (m === 'GET') return J({ events: EVS, canEdit: true });
+      if (m === 'POST') { const e = { id: 'e' + (EVS.length + 1), by: 'ben', createdAt: Date.now(), ...b }; EVS.push(e); return J({ event: e, events: EVS }); }
+      if (m === 'PUT') { EVS = EVS.map(e => (e.id === id ? { ...e, ...b } : e)); return J({ events: EVS }); }
+      if (m === 'DELETE') { EVS = EVS.filter(e => e.id !== id); return J({ ok: true, events: EVS }); }
+    }
     J({ error: 'yok' }, 404);
   });
 });
@@ -106,6 +114,28 @@ srv.listen(0, async () => {
   await pg.click('[aria-label="Gruplarım"]'); await pg.click('button:has-text("Profil")').catch(() => {}); await new Promise(r => setTimeout(r, 300));
   if (await pg.isVisible('[aria-label="Kapak Fotoğrafını Değiştir"]')) { await pg.click('[aria-label="Kapak Fotoğrafını Değiştir"]'); T(await pg.evaluate(() => window.__pm.k) === 'cover', 'profil: kapak düğmesi Photo menüsünü açar'); await pg.evaluate(() => window.__pm.c.save('data:image/jpeg;base64,/9j/4AAQ')); await new Promise(r => setTimeout(r, 250)); T(calls.some(c => /^COVER \d+$/.test(c)), 'profil kapağı /api/social/cover ucuna gider'); }
   else T(false, 'profil: kapak düğmesi bulunamadı');
+  // ---- Etkinlikler: oluşturma YALNIZ Sosyal › Gruplarım › grup içinde
+  await pg.context().grantPermissions(['geolocation']); await pg.context().setGeolocation({ latitude: 41.01, longitude: 29.02 });
+  await pg.evaluate(() => { window.__nav = null; window.openEventNav = ev => { window.__nav = ev; }; });
+  await pg.evaluate(id => window.dispatchEvent(new CustomEvent('ml:social-goto', { detail: { tab: 'groups', gid: id } })), G.id); await pg.waitForSelector('[role=tab]:has-text("Etkinlik")', { timeout: 4000 });
+  await pg.click('[role=tab]:has-text("Etkinlik")'); await pg.waitForSelector('text=Henüz Etkinlik Yok');
+  T(await pg.isVisible('button:has-text("+ Yeni Etkinlik")'), 'grup sayfasında «Etkinlik» sekmesi: boş liste + «Yeni Etkinlik» (lider)');
+  await pg.click('button:has-text("+ Yeni Etkinlik")'); await pg.fill('input[aria-label="Etkinlik adı"]', 'Şile Turu'); await pg.fill('input[aria-label="Tarih ve saat"]', '2099-01-01T09:00');
+  await pg.click('form button[type=submit]'); await new Promise(r => setTimeout(r, 150)); T(!calls.includes(`POST /api/rgroups/${G.id}/events`) && /Başlangıç yeri seçilmeli/.test(await pg.textContent('body')), 'başlangıç yeri seçilmeden kaydedilmez (uyarı gösterilir)');
+  const pick = async (label, q, i) => { const box = pg.locator('div:has(> div > span:text-is("' + label + '"))').first(); await box.locator('button:has-text("Ara")').first().click(); await pg.fill('input[aria-label="' + label + ' ara"]', q); await pg.press('input[aria-label="' + label + ' ara"]', 'Enter'); await pg.waitForSelector('button:has(b:has-text("' + q + ' ' + (i ? 'Sahil' : 'Merkez') + '"))'); await pg.click('button:has(b:has-text("' + q + ' ' + (i ? 'Sahil' : 'Merkez') + '"))'); };
+  await pick('Başlangıç yeri', 'Kadıköy', 0); T(/Kadıköy Merkez/.test(await pg.textContent('form')), 'arama sonucundan başlangıç yeri seçilir');
+  await pg.click('button:has-text("+ Mola / Uğrak Noktası Ekle")'); await pg.selectOption('select[aria-label="Tür"]', 'ugrak');
+  await pg.locator('button:has-text("Konumum")').nth(1).click(); await pg.waitForFunction(() => /Uğrak 1/.test(document.querySelector('form').textContent) && [...document.querySelectorAll('[data-ev-val]')].some(e => e.textContent === 'Konumum'), null, { timeout: 4000 });
+  T(true, 'uğrak türü seçilir, «Konumum» cihaz konumuyla nokta alır');
+  await pick('Varış noktası', 'Şile', 1); await pg.fill('input[aria-label="Not"]', 'Kask şart');
+  await pg.click('form button[type=submit]'); await pg.waitForSelector('[data-ev-card]');
+  T(calls.includes(`POST /api/rgroups/${G.id}/events`) && EVS.length === 1 && EVS[0].title === 'Şile Turu' && EVS[0].start.name === 'Kadıköy Merkez' && EVS[0].dest.name === 'Şile Sahil' && EVS[0].stops.length === 1 && EVS[0].stops[0].kind === 'ugrak' && Math.abs(EVS[0].stops[0].lat - 41.01) < 1e-6 && EVS[0].note === 'Kask şart' && EVS[0].at > Date.now(), 'kayıt isteği: başlangıç, uğrak (tür + konum), varış, not, tarih');
+  const card = await pg.textContent('[data-ev-card]'); T(/Kadıköy Merkez → Şile Sahil/.test(card) && /Uğrak/.test(card) && /Kask şart/.test(card), 'etkinlik kartı: güzergâh özeti, uğrak, not');
+  await pg.click('button:has-text("Navigasyonla Başla")'); T(await pg.evaluate(() => window.__nav && window.__nav.title === 'Şile Turu' && window.__nav.stops.length === 1 && window.__nav.dest.name === 'Şile Sahil'), '«Navigasyonla Başla»: etkinlik haritaya (normal navigasyona) devredilir');
+  await pg.click('[data-ev-card] button:has-text("Düzenle")'); T(await pg.inputValue('input[aria-label="Etkinlik adı"]') === 'Şile Turu' && await pg.inputValue('input[aria-label="Tarih ve saat"]') === '2099-01-01T09:00', 'düzenle: kayıtlı değerler forma dolar');
+  await pg.fill('input[aria-label="Etkinlik adı"]', 'Şile Turu 2'); await pg.click('form button[type=submit]'); await pg.waitForSelector('[data-ev-card]:has-text("Şile Turu 2")'); T(calls.includes(`PUT /api/rgroups/${G.id}/events/e1`), 'düzenleme PUT ile kaydedilir');
+  await pg.click('[data-ev-card] button:has-text("Sil")'); T(EVS.length === 1, 'Sil ilk dokunuşta onay ister (silmez)'); await pg.click('[data-ev-card] button:has-text("Silinsin mi?")'); await pg.waitForSelector('text=Henüz Etkinlik Yok'); T(EVS.length === 0, 'onaylayınca etkinlik silinir');
+  T(await pg.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'etkinlik ekranı 390 px: yatay taşma yok');
   // dışarıdan açma (harita → Sosyal)
   await pg.evaluate(() => window.dispatchEvent(new CustomEvent('ml:social-goto', { detail: { tab: 'groups', gid: null } })));
   T(errs.length === 0, 'sayfa hatası yok ' + errs.join('|'));

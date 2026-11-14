@@ -1002,6 +1002,131 @@ function GroupInfo({ g, act, patch, onLeft, toast }) {
   );
 }
 
+/* ---------- Grup etkinlikleri (plan): başlangıç, mola/uğrak noktaları, varış. Etkinlik oluşturma YALNIZ burada (Sosyal › Gruplarım › grup › Etkinlik).
+   «Navigasyonla Başla» haritayı açar ve noktaları sırayla normal yol tarifine bağlar (window.openEventNav, index.html → map.js startEvent). ---------- */
+const EV_MAX_STOPS = 8;
+const evWhen = ms => (ms ? new Date(ms).toLocaleString('tr-TR', { weekday: 'short', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : 'Tarih belirlenmedi');
+const evInput = ms => { if (!ms) return ''; const d = new Date(ms), p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()); };
+
+function PointPicker({ label, value, onChange, toast, children }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const [res, setRes] = useState(null);
+  const search = async () => {
+    if (q.trim().length < 3) return toast('En az 3 karakter yaz.');
+    setRes('wait');
+    try { const j = await api('/api/geocode?q=' + encodeURIComponent(q.trim())); setRes(j.results || []); } catch (x) { setRes(null); toast(x.message); }
+  };
+  const here = () => {
+    if (!navigator.geolocation) return toast('Bu cihazda konum yok.');
+    navigator.geolocation.getCurrentPosition(p => onChange({ name: 'Konumum', lat: p.coords.latitude, lon: p.coords.longitude }), () => toast('Konum alınamadı. Tarayıcıda konum izni ver.'), { enableHighAccuracy: true, timeout: 10000 });
+  };
+  return (
+    <div className="space-y-2 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-white/[.04] dark:ring-white/10">
+      <div className="flex items-baseline justify-between gap-3"><span className={cx('text-xs', MUTED)}>{label}</span><b className="min-w-0 truncate text-sm" data-ev-val>{value ? value.name : <i className={cx('font-normal', MUTED)}>Seçilmedi</i>}</b></div>
+      <div className="flex gap-2">
+        <button type="button" onClick={here} className={cx(GHOST, 'flex-1')}>Konumum</button>
+        <button type="button" onClick={() => { setOpen(o => !o); setRes(null); }} className={cx(GHOST, 'flex-1')}>{open ? 'Kapat' : 'Ara'}</button>
+      </div>
+      {children}
+      {open && (
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <input value={q} onChange={e => setQ(e.target.value.slice(0, 120))} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); search(); } }} placeholder="Yer ara (ör. Şile)" aria-label={label + ' ara'} className={FIELD} />
+            <button type="button" onClick={search} className={PRIMARY}>Ara</button>
+          </div>
+          {res === 'wait' && <p className={cx('text-sm', MUTED)}>Aranıyor…</p>}
+          {Array.isArray(res) && !res.length && <p className={cx('text-sm', MUTED)}>Sonuç bulunamadı.</p>}
+          {Array.isArray(res) && res.map((x, i) => (
+            <button key={i} type="button" onClick={() => { onChange({ name: String(x.title || '').slice(0, 60), lat: x.lat, lon: x.lon }); setOpen(false); setRes(null); }}
+                    className="block w-full rounded-lg px-2 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-white/10"><b className="block truncate">{x.title}</b><span className={cx('block truncate text-xs', MUTED)}>{x.subtitle}</span></button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EventForm({ gid, ev, onDone, onCancel, toast }) {
+  const [title, setTitle] = useState(ev ? ev.title : '');
+  const [at, setAt] = useState(ev ? evInput(ev.at) : '');
+  const [note, setNote] = useState(ev ? ev.note || '' : '');
+  const [start, setStart] = useState(ev ? ev.start : null);
+  const [dest, setDest] = useState(ev ? ev.dest : null);
+  const [stops, setStops] = useState(ev ? ev.stops.map(x => ({ ...x })) : []);
+  const [busy, setBusy] = useState(false);
+  const setStop = (i, patch) => setStops(a => a.map((x, k) => (k === i ? { ...x, ...patch } : x)));
+  const save = async e => {
+    e.preventDefault(); if (busy) return;
+    const ts = at ? new Date(at).getTime() : null;
+    if (title.trim().length < 2) return toast('Etkinlik adı en az 2 karakter olmalı.');
+    if (at && !isFinite(ts)) return toast('Tarih geçersiz.');
+    if (!start) return toast('Başlangıç yeri seçilmeli.');
+    if (!dest) return toast('Varış noktası seçilmeli.');
+    if (stops.some(x => !x.name)) return toast('Konumu seçilmemiş bir mola/uğrak var; seçin ya da kaldırın.');
+    setBusy(true);
+    try {
+      const body = { title: title.trim(), at: ts, note: note.trim(), start, dest, stops };
+      const j = await api(`/api/rgroups/${gid}/events${ev ? '/' + ev.id : ''}`, { method: ev ? 'PUT' : 'POST', body });
+      toast('Etkinlik kaydedildi.'); onDone(j.events || []);
+    } catch (x) { toast(x.message); setBusy(false); }
+  };
+  return (
+    <form onSubmit={save} className={cx(CARD, 'space-y-3 p-4')}>
+      <p className="font-semibold">{ev ? 'Etkinliği Düzenle' : 'Yeni Etkinlik'}</p>
+      <input value={title} onChange={e => setTitle(e.target.value.slice(0, 60))} placeholder="Etkinlik adı (ör. Şile Turu)" aria-label="Etkinlik adı" className={FIELD} />
+      <label className={cx('block text-xs', MUTED)}>Tarih ve saat (isteğe bağlı)<input type="datetime-local" value={at} onChange={e => setAt(e.target.value)} aria-label="Tarih ve saat" className={cx(FIELD, 'mt-1')} /></label>
+      <PointPicker label="Başlangıç yeri" value={start} onChange={setStart} toast={toast} />
+      {stops.map((x, i) => (
+        <PointPicker key={i} label={(x.kind === 'ugrak' ? 'Uğrak' : 'Mola') + ' ' + (i + 1)} value={x.name ? x : null} onChange={p => setStop(i, p)} toast={toast}>
+          <div className="flex gap-2">
+            <select value={x.kind} onChange={e => setStop(i, { kind: e.target.value })} aria-label="Tür" className={cx(FIELD, 'flex-1')}><option value="mola">Mola</option><option value="ugrak">Uğrak</option></select>
+            <button type="button" onClick={() => setStops(a => a.filter((_, k) => k !== i))} className={DANGER}>Kaldır</button>
+          </div>
+        </PointPicker>
+      ))}
+      {stops.length < EV_MAX_STOPS && <button type="button" onClick={() => setStops(a => [...a, { name: '', lat: 0, lon: 0, kind: 'mola' }])} className={cx(GHOST, 'w-full')}>+ Mola / Uğrak Noktası Ekle</button>}
+      <PointPicker label="Varış noktası" value={dest} onChange={setDest} toast={toast} />
+      <input value={note} onChange={e => setNote(e.target.value.slice(0, 200))} placeholder="Not (isteğe bağlı)" aria-label="Not" className={FIELD} />
+      <div className="flex gap-2"><button type="submit" disabled={busy} className={cx(PRIMARY, 'flex-1')}>{busy ? 'Kaydediliyor…' : 'Kaydet'}</button><button type="button" onClick={onCancel} className={GHOST}>Vazgeç</button></div>
+    </form>
+  );
+}
+
+function GroupEvents({ g, gid, version, toast }) {
+  const [list, setList] = useState(null);
+  const [canEdit, setCanEdit] = useState(false);
+  const [form, setForm] = useState(null);                 // null: liste · {} : yeni · etkinlik: düzenle
+  const [err, setErr] = useState('');
+  const load = useCallback(() => api(`/api/rgroups/${gid}/events`).then(j => { setList(j.events || []); setCanEdit(!!j.canEdit); setErr(''); }).catch(x => setErr(x.message)), [gid]);
+  useEffect(() => { load(); }, [load, version]);
+  if (err && !list) return <Empty icon="x" title="Etkinlikler Açılamadı" text={err} />;
+  if (!list) return <p className={cx('py-8 text-center text-sm', MUTED)}>Yükleniyor…</p>;
+  if (form) return <EventForm gid={gid} ev={form.id ? form : null} toast={toast} onCancel={() => setForm(null)} onDone={l => { setList(l); setForm(null); }} />;
+  const go = ev => { if (window.openEventNav) window.openEventNav(ev); else toast('Harita açılamadı.'); };
+  return (
+    <div className="space-y-3">
+      {canEdit && <button type="button" onClick={() => setForm({})} className={cx(PRIMARY, 'w-full')}>+ Yeni Etkinlik</button>}
+      {!list.length && <Empty icon="chat" title="Henüz Etkinlik Yok" text={canEdit ? 'Başlangıç, mola ve varış noktalarıyla bir tur planla; üyeler burada görür ve navigasyonla başlar.' : 'Grup lideri ya da yöneticisi etkinlik ekleyebilir.'} />}
+      {list.map(ev => (
+        <section key={ev.id} className={cx(CARD, 'space-y-2 p-4')} data-ev-card>
+          <div><h3 className="text-base font-bold">{ev.title}</h3><p className={cx('text-xs', MUTED)}>{evWhen(ev.at)} · @{ev.by}</p></div>
+          <p className="text-sm font-semibold">{ev.start.name} → {ev.dest.name}</p>
+          {ev.stops.length > 0 && <ol className="space-y-1 text-sm">{ev.stops.map((x, i) => <li key={i}><span className="mr-1.5 rounded bg-amber-400/20 px-1.5 py-0.5 text-[11px] font-bold text-amber-600 dark:text-amber-300">{x.kind === 'ugrak' ? 'Uğrak' : 'Mola'}</span>{x.name}</li>)}</ol>}
+          {ev.note && <p className={cx('text-sm [overflow-wrap:anywhere]', MUTED)}>{ev.note}</p>}
+          <button type="button" onClick={() => go(ev)} className={cx(PRIMARY, 'w-full')}>Navigasyonla Başla</button>
+          {canEdit && (
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setForm(ev)} className={cx(GHOST, 'flex-1')}>Düzenle</button>
+              <ConfirmButton className={cx(DANGER, 'flex-1')} confirmLabel="Silinsin mi?" onConfirm={() => api(`/api/rgroups/${gid}/events/${ev.id}`, { method: 'DELETE' }).then(j => setList(j.events || [])).catch(x => toast(x.message))}>Sil</ConfirmButton>
+            </div>
+          )}
+        </section>
+      ))}
+    </div>
+  );
+}
+
 function GroupPage({ self, gid, version, onBack, onOpenUser, toast }) {
   const [g, setG] = useState(null);
   const [err, setErr] = useState('');
@@ -1021,7 +1146,7 @@ function GroupPage({ self, gid, version, onBack, onOpenUser, toast }) {
   });
   if (err && !g) return <div className="space-y-3"><button type="button" onClick={onBack} className={GHOST}><Icon name="back" className="h-4 w-4" />Gruplarım</button><Empty icon="x" title="Grup Açılamadı" text={err} /></div>;
   if (!g) return <p className={cx('py-8 text-center text-sm', MUTED)}>Yükleniyor…</p>;
-  const subs = [['posts', 'Gönderiler'], ['members', 'Üyeler (' + g.members.length + ')'], ['info', 'Bilgi']];
+  const subs = [['posts', 'Gönderiler'], ['members', 'Üyeler (' + g.members.length + ')'], ['events', 'Etkinlik'], ['info', 'Bilgi']];
   return (
     <div className="space-y-3">
       <section className={cx(CARD, 'overflow-hidden')}>
@@ -1041,7 +1166,7 @@ function GroupPage({ self, gid, version, onBack, onOpenUser, toast }) {
           </div>
         </div>
       </section>
-      <div className="grid grid-cols-3 gap-1 rounded-xl bg-slate-200/70 p-1 dark:bg-white/[.07]" role="tablist">
+      <div className="grid grid-cols-4 gap-1 rounded-xl bg-slate-200/70 p-1 dark:bg-white/[.07]" role="tablist">
         {subs.map(([id, label]) => (
           <button key={id} type="button" role="tab" aria-selected={sub === id} onClick={() => setSub(id)}
                   className={cx('rounded-lg px-1 py-2 text-xs font-semibold min-[380px]:text-sm', sub === id ? 'bg-amber-400 text-[#031420]' : 'text-slate-600 dark:text-[#C9D0D6]')}>{label}</button>
@@ -1054,6 +1179,7 @@ function GroupPage({ self, gid, version, onBack, onOpenUser, toast }) {
         </div>
       )}
       {sub === 'members' && <GroupMembers g={g} onOpenUser={onOpenUser} act={(p, b) => act(p, b).catch(x => toast(x.message))} />}
+      {sub === 'events' && <GroupEvents g={g} gid={gid} version={version} toast={toast} />}
       {sub === 'info' && <GroupInfo g={g} act={act} patch={patch} onLeft={onBack} toast={toast} />}
     </div>
   );

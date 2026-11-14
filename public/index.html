@@ -555,6 +555,11 @@ function openSocial() {
   sc.onerror = () => { root.innerHTML = '<p class="p-6 text-center text-sm text-red-300">Sosyal bölüm yüklenemedi. Sayfayı yenileyip tekrar dene.</p>'; socialLoading = false; };
   document.head.appendChild(sc);
 }
+// Sosyal › Gruplarım › grup › Etkinlik: «Navigasyonla Başla» → haritayı açar, etkinlik noktalarını sırayla normal yol tarifine bağlar (map.js startEvent)
+window.openEventNav = ev => {
+  goTab('world'); let n = 0;
+  const t = setInterval(() => { if (mapH && mapH.startEvent) { clearInterval(t); mapH.startEvent(ev); } else if (++n > 80) clearInterval(t); }, 200);
+};
 // Haritadaki grup sayfasından Sosyal › Gruplarım'a geçiş (gid verilirse o grubun sayfası açılır)
 window.openSocialGroups = gid => {
   goTab('social');
