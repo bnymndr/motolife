@@ -14,3 +14,9 @@ Uçak modu aç/kapat ve gerçek tünel/köprü: oda düşünce `offline>reconnec
 ## 3. Pil ve ısı (30 dk, aynı senaryo, ekran sabit parlaklık)
 Senaryolar: (a) yalnız GPS, (b) grup + VAD sürekli, (c) grup + VAD görev döngüsü. Her birinde pil yüzdesi farkı, sıcaklık hissi/`thermal` (iOS/Android sistem ayarları), CPU (Chrome `chrome://inspect` → Performance / Safari Web Inspector → Timelines). `power-core.js` eşikleri (pil %20/%10, GPS aralıkları) buna göre ayarlanır.
 ## Sonuçları CLAUDE.md'ye yaz; ölçülmeyen değeri doldurma.
+
+## 4. İnterkom yedeği (WebRTC mesh, LiveKit yokken)
+1. Hostingte LIVEKIT_* boşken iki telefonla aynı gruba katıl; sayfada «doğrudan (P2P)» yazmalı. Bağlanma süresi, iki yönlü ses, konuşan adı.
+2. Biri mobil veri, biri Wi‑Fi: bağlanıyor mu? Bağlanmıyorsa TURN gerekir (`GV_TURN_*`) — sonucu not al.
+3. Üçüncü/dördüncü telefon: ses kalitesi ve pil. Aynı hesapla ikinci cihaz: eskisi kapanmalı.
+4. Ekran kilidi / arka plan: ses sürüyor mu (PWA sınırı).

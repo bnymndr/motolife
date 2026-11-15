@@ -312,6 +312,8 @@ require('./accountdel')({ app, io, users, userFromCookie, uname, checkPassword, 
 require('./weather')({ app, userFromCookie });
 require('./assist')({ app, userFromCookie });
 require('./livekit')({ app, userFromCookie, uname, rg: rgApi });
+// İnterkom yedeği: LiveKit yokken üyeler arası WebRTC (yalnız sinyalleşme)
+require('./meshvoice')({ app, io, userFromCookie, uname, rg: rgApi });
 
 // Harita servisleri: istemci yapılandırması, hedef arama, rota
 require('./maps')({ app, userFromCookie });

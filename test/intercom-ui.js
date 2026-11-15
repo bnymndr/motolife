@@ -7,9 +7,18 @@ const mt = fs.readFileSync(path.join(__dirname, 'map-ui.js'), 'utf8'); const i0 
 const FAKE_LK = `window.LivekitClient = { RoomEvent: { ActiveSpeakersChanged: 'as', Reconnecting: 'rc', Reconnected: 'rd', Disconnected: 'dc', TrackSubscribed: 'ts', TrackUnsubscribed: 'tu' },
   Room: class { constructor(o) { this.opts = o; this.h = {}; this.mic = []; this.localParticipant = { setMicrophoneEnabled: v => { this.mic.push(v); window.__lk.mic = v; } }; const pv = window.__lk || { connected: 0, disc: 0 }; window.__lk = { room: this, mic: null, connected: pv.connected, disc: pv.disc }; }
     on(e, fn) { this.h[e] = fn; return this; } async connect(u, t) { window.__lk.connected++; window.__lk.url = u; window.__lk.token = t; } async disconnect() { window.__lk.disc++; } } };`;
+const FAKE_MESH = `(() => { const H = {}; window.__sock = { em: [], on(e, f) { (H[e] = H[e] || []).push(f); return this; }, off(e, f) { H[e] = (H[e] || []).filter(x => x !== f); return this; },
+    emit(e, d, cb) { this.em.push([e, d]); if (e === 'gv:join') setTimeout(() => cb && cb({ ok: true, id: 'me', peers: [{ id: 'p1', name: 'Ayşe' }] }), 5); else if (typeof cb === 'function') cb({ ok: true }); }, fire(e, d) { (H[e] || []).slice().forEach(f => f(d)); } };
+  window.__rtc = { made: 0, closed: 0, tracks: 0 };
+  window.RTCPeerConnection = class { constructor(c) { window.__rtc.made++; this.cfg = c; this.localDescription = null; } addTrack() { window.__rtc.tracks++; } async createOffer() { return { type: 'offer', sdp: 'o' }; } async setLocalDescription(d) { this.localDescription = d; } close() { window.__rtc.closed++; } };
+  window.__trk = { enabled: true, stop() { window.__trk.stopped = true; } };
+  try { Object.defineProperty(navigator, 'mediaDevices', { value: { getUserMedia: async () => ({ getAudioTracks: () => [window.__trk], getTracks: () => [window.__trk] }) }, configurable: true }); } catch (e) {}
+})();`;
+const FAKE_YT = `window.YT = { Player: class { constructor(el, o) { window.__yt = { opts: o, calls: [] , vol: null }; this.o = o; setTimeout(() => o.events.onReady({ target: this }), 5); } playVideo() { window.__yt.calls.push('play'); this.o.events.onStateChange({ data: 1 }); } pauseVideo() { window.__yt.calls.push('pause'); this.o.events.onStateChange({ data: 2 }); } stopVideo() { window.__yt.calls.push('stop'); this.o.events.onStateChange({ data: -1 }); } setVolume(v) { window.__yt.vol = v; } loadVideoById(i) { window.__yt.calls.push('load:' + i); } destroy() {} } }; setTimeout(() => window.onYouTubeIframeAPIReady && window.onYouTubeIframeAPIReady(), 5);`;
 let tokenCalls = [], tokenStatus = 200;
 const srv = http.createServer((q, r) => { const u = new URL(q.url, 'http://x'); const J = (o, s = 200) => { r.writeHead(s, { 'content-type': 'application/json' }); r.end(JSON.stringify(o)); };
-  if (u.pathname === '/_host') { r.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return r.end('<!doctype html><meta charset=utf-8><style>:root{--accent:#EA8621;--accent-2:#F2A64E;--ink:#031420;--glow:234 134 33;--deep:#031420;--deep2:#0a2536;--deep3:#0a1a26;--panel:6 24 38}</style><meta name=viewport content="width=device-width,initial-scale=1"><link rel=stylesheet href=/map.css><body style="margin:0"><div id=r style="position:relative;width:390px;height:844px"></div><script src=/audio-core.js></script><script src=/media-core.js></script><script src=/comm-core.js></script><script src=/livekit-adapter.js></script><script src=/map.js></script><script src=/intercom.js></script>'); }
+  if (u.pathname === '/_host') { r.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return r.end('<!doctype html><meta charset=utf-8><style>:root{--accent:#EA8621;--accent-2:#F2A64E;--ink:#031420;--glow:234 134 33;--deep:#031420;--deep2:#0a2536;--deep3:#0a1a26;--panel:6 24 38}</style><meta name=viewport content="width=device-width,initial-scale=1"><link rel=stylesheet href=/map.css><body style="margin:0"><div id=r style="position:relative;width:390px;height:844px"></div><script src=/audio-core.js></script><script src=/media-core.js></script><script src=/comm-core.js></script><script src=/livekit-adapter.js></script><script src=/mesh-adapter.js></script><script src=/map.js></script><script src=/intercom.js></script>'); }
+  if (u.pathname === '/_radio') return J([{ name: 'Zeta FM', url_resolved: 'https://r.example/z' }, { name: 'ağaç Radyo', url_resolved: 'https://r.example/a' }, { name: 'Bozuk', url_resolved: 'http://r.example/b' }, { name: 'Alfa', url_resolved: 'https://r.example/alfa' }, { name: 'alfa ', url_resolved: 'https://r.example/alfa2' }]);
   if (u.pathname === '/api/maps/config') return J({ vecLight: '', vecDark: '', tileUrl: 'https://t/{z}/{x}/{y}.png', tileUrlDark: 'https://t/{z}/{x}/{y}.png', attribution: 'x' });
   if (u.pathname === '/api/rgroups') return J({ groups: [{ id: 'a'.repeat(16), name: 'Hafta Sonu Şile', count: 4 }, { id: 'b'.repeat(16), name: 'Pazar Turu', count: 2 }] });
   if (u.pathname === '/api/livekit/token') { let b = ''; q.on('data', c => (b += c)); q.on('end', () => { tokenCalls.push(JSON.parse(b || '{}')); tokenStatus === 200 ? J({ url: 'wss://lk.example', token: 'tok-1', room: 'ml-x', identity: 'u1' }) : J({ error: 'İnterkom yapılandırılmadı.' }, tokenStatus); }); return; }
@@ -18,9 +27,10 @@ const srv = http.createServer((q, r) => { const u = new URL(q.url, 'http://x'); 
 srv.listen(0, async () => {
   const base = 'http://127.0.0.1:' + srv.address().port, b = await chromium.launch(), errs = [];
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true }); const pg = await ctx.newPage(); pg.on('pageerror', e => errs.push(e.message));
+  await pg.route(/youtube\.com\/iframe_api/, r => r.fulfill({ status: 200, contentType: 'text/javascript', body: FAKE_YT }));
   await pg.route(/cdn\.jsdelivr\.net\/npm\/livekit-client/, r => r.fulfill({ status: 200, contentType: 'text/javascript', body: FAKE_LK }));
-  await pg.addInitScript(FAKE); await pg.goto(base + '/_host');
-  await pg.evaluate(() => { window.__mm = window.MotoMap.mount(document.getElementById('r'), { user: 'tester' }); window.__ic = window.Intercom.mount(document.getElementById('r'), { user: 'tester' }); window.__mm.activate(); });
+  await pg.addInitScript(FAKE); await pg.addInitScript(FAKE_MESH); await pg.goto(base + '/_host');
+  await pg.evaluate(() => { window.__mm = window.MotoMap.mount(document.getElementById('r'), { user: 'tester' }); window.__ic = window.Intercom.mount(document.getElementById('r'), { user: 'tester', socket: window.__sock, radioUrl: location.origin + '/_radio' }); window.__mm.activate(); });
   await pg.waitForFunction(() => document.getElementById('mm-load').hidden, null, { timeout: 8000 });
   const clk = sel => pg.evaluate(s => document.querySelector(s).click(), sel), vis = sel => pg.evaluate(s => { const e = document.querySelector(s); return !!e && !e.hidden && e.getBoundingClientRect().height > 0; }, sel);
   // ---- yerleşim
@@ -54,7 +64,7 @@ srv.listen(0, async () => {
   ok(await pg.evaluate(() => window.__lk.connected === 2), 'bağlantı düşünce otomatik yeniden bağlanır');
   // ---- müzik
   await clk('#mm-icbtn'); await pg.waitForTimeout(100); if (!(await vis('#mm-icsheet'))) await clk('#mm-icbtn');
-  await clk('.mm-ictabs [data-t=mu]'); ok(await vis('label[for=mm-icfiles]'), 'müzik sekmesi: dosya seç');
+  await clk('#mm-icmenu'); await clk('.mm-icdrop [data-t=mu]'); ok(await vis('label[for=mm-icfiles]'), 'müzik sekmesi: dosya seç');
   const wav = n => { const b = Buffer.alloc(44 + 16000, 1); b.write('RIFF', 0); b.writeUInt32LE(36 + 16000, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(8000, 24); b.writeUInt32LE(8000, 28); b.writeUInt16LE(1, 32); b.writeUInt16LE(8, 34); b.write('data', 36); b.writeUInt32LE(16000, 40); return { name: n, mimeType: 'audio/wav', buffer: b }; };
   await pg.setInputFiles('#mm-icfiles', [wav('Yol Şarkısı.wav'), wav('Gece Sürüşü.wav')]); await pg.waitForTimeout(500);
   ok((await pg.$$('.mm-iclist li')).length === 2 && /Yol Şarkısı/.test(await pg.textContent('#mm-icstrip')), 'dosyalar listelenir, şeritte parça adı');
@@ -65,15 +75,45 @@ srv.listen(0, async () => {
   await pg.evaluate(() => window.__ic.callStarted()); ok(await pg.evaluate(() => window.__ic.core.plan().channels.music.act === 'pause'), 'aramada müzik askıda'); await pg.evaluate(() => window.__ic.callEnded());
   await clk('#mm-icnext2'); ok(/Gece Sürüşü/.test(await pg.textContent('#mm-icstrip')), 'sonraki parça');
   // ---- ayrıl
-  await clk('.mm-ictabs [data-t=ic]'); await clk('#mm-icleave'); await pg.waitForTimeout(300);
+  await clk('#mm-icmenu'); await clk('.mm-icdrop [data-t=ic]'); await clk('#mm-icleave'); await pg.waitForTimeout(300);
   ok(await pg.evaluate(() => window.__lk.disc === 1 && window.__ic.core.state === 'IDLE') && !(await vis('#mm-icmic')), 'gruptan ayrılınca odadan çıkılır, mikrofon düğmesi kalkar');
   ok(await vis('#mm-icstrip') && /Müzik/.test(await pg.textContent('#mm-icstrip')), 'müzik şeridi kalır (grup yok, müzik var)');
   // ---- tek sürüş: yalnız müzik
   await pg.evaluate(() => document.getElementById('r').dispatchEvent(new CustomEvent('mm:ride', { detail: { on: true } }))); ok(await pg.evaluate(() => window.__ic.core.state === 'SOLO_RIDE' && window.__ic.core.plan().channels.intercom.act === 'off' && window.__ic.core.plan().channels.music.act === 'play'), 'tek sürüş: interkom kapalı, müzik açık');
   await pg.evaluate(() => document.getElementById('r').dispatchEvent(new CustomEvent('mm:ride', { detail: { on: false } }))); ok(await pg.evaluate(() => window.__ic.core.state === 'IDLE'), 'sürüş bitince IDLE');
-  // ---- hata: yapılandırma yok
-  tokenStatus = 503; await clk('#mm-icbtn'); await pg.waitForTimeout(100); if (!(await vis('#mm-icsheet'))) await clk('#mm-icbtn'); await clk('.mm-ictabs [data-t=ic]'); await clk('.mm-icgrp'); await pg.waitForTimeout(1200);
-  ok(await pg.evaluate(() => window.__ic.core.state !== 'GROUP_RIDE' || true) && /yapılandırılmadı/.test(await pg.evaluate(() => document.getElementById('mm-toast').textContent)), 'sunucu yapılandırılmadıysa kullanıcıya açık mesaj');
+  // ---- LiveKit yapılandırılmamış (503) → WebRTC mesh yedeğine otomatik geçiş
+  tokenStatus = 503; await clk('#mm-icbtn'); await pg.waitForTimeout(100); if (!(await vis('#mm-icsheet'))) await clk('#mm-icbtn'); await clk('#mm-icmenu'); await clk('.mm-icdrop [data-t=ic]'); await clk('.mm-icgrp'); await pg.waitForTimeout(800);
+  const ms = await pg.evaluate(() => ({ join: window.__sock.em.filter(x => x[0] === 'gv:join'), made: window.__rtc.made, lkc: window.__lk.connected, st: window.__ic.core.state, trk: window.__trk.enabled }));
+  ok(ms.join.length === 1 && ms.join[0][1].gid === 'a'.repeat(16) && ms.made === 1 && ms.lkc === 2 && ms.st === 'GROUP_RIDE', '503 → mesh: gv:join gönderildi, mevcut eşe bağlantı kuruldu, LiveKit denenmedi');
+  ok(ms.trk === true && !/yapılandırılmadı/.test(await pg.evaluate(() => document.getElementById('mm-toast').textContent)), 'mesh: hata yok, mikrofon açık (grup sürüşü)');
+  await clk('#mm-icbtn'); await pg.waitForTimeout(100); if (!(await vis('#mm-icsheet'))) await clk('#mm-icbtn');
+  ok(/doğrudan \(P2P\)/.test(await pg.textContent('#mm-icsheet')), 'sayfa: «doğrudan (P2P)» etiketi');
+  await pg.evaluate(() => window.__sock.fire('gv:taken', {})); await pg.waitForTimeout(300);
+  ok(await pg.evaluate(() => window.__ic.core.state !== 'GROUP_RIDE') && /Başka bir cihaz/.test(await pg.evaluate(() => document.getElementById('mm-toast').textContent)), 'başka cihazdan bağlanınca bu cihazda kapanır ve söyler');
+  // ---- yeni: açılır bölüm seçici, durdur, YouTube, internet radyosu
+  await clk('#mm-icbtn'); await pg.waitForTimeout(100); if (!(await vis('#mm-icsheet'))) await clk('#mm-icbtn');
+  ok(await pg.evaluate(() => document.querySelectorAll('#mm-icsheet .mm-icsel-b').length === 1 && !document.querySelector('.mm-icdrop')), 'bölüm seçici: tek satır, liste kapalı');
+  await clk('#mm-icmenu'); ok(await pg.evaluate(() => [...document.querySelectorAll('.mm-icdrop button')].map(b => b.textContent).join('|') === 'İnterkom|Müzik|İnternet Radyosu'), 'seçici açılınca: İnterkom | Müzik | İnternet Radyosu');
+  await clk('.mm-icdrop [data-t=ra]'); await pg.waitForTimeout(300);
+  ok(await pg.evaluate(() => document.querySelector('#mm-icmenu b').textContent === 'İnternet Radyosu'), 'seçilince tek satırda yalnız seçili isim görünür');
+  ok(/Kanal seç \(3\)/.test(await pg.textContent('#mm-icrmenu')), 'radyo: https olmayan ve aynı adlı kanallar elenir (3 kanal)');
+  await clk('#mm-icrmenu'); ok(await pg.evaluate(() => [...document.querySelectorAll('[data-ri]')].map(b => b.textContent).join('|') === 'ağaç Radyo|Alfa|Zeta FM'), 'radyo listesi A-Z (Türkçe sıralama) açılır liste');
+  await clk('[data-ri="2"]'); await pg.waitForTimeout(200);
+  ok(await pg.evaluate(() => document.querySelector('.mm-icdrop') === null) && /Zeta FM/.test(await pg.textContent('#mm-icstrip')) && await pg.evaluate(() => window.__ic.core.ctx.musicWanted === true), 'kanal seçilince liste kapanır, şeritte kanal adı, yayın istenir');
+  await clk('#mm-icstop'); await pg.waitForTimeout(100);
+  ok(await pg.evaluate(() => window.__ic.core.ctx.musicWanted === false) && !(await vis('#mm-icstop')), 'şeritteki ⏹ yayını durdurur (kaynak sıfırlanır)');
+  await clk('#mm-icmenu'); await clk('.mm-icdrop [data-t=mu]');
+  await pg.fill('#mm-icyt', 'https://youtu.be/dQw4w9WgXcQ?si=x'); await clk('#mm-icytgo'); await pg.waitForTimeout(300);
+  ok(await pg.evaluate(() => window.__yt && window.__yt.opts.videoId === 'dQw4w9WgXcQ' && window.__yt.calls.includes('play')) && /YouTube/.test(await pg.textContent('#mm-icstrip')), 'YouTube bağlantısı oynatıcıya verilir, şeritte görünür');
+  await pg.evaluate(() => window.__ic.callStarted()); await pg.waitForTimeout(600); ok(await pg.evaluate(() => window.__yt.calls.includes('pause')), 'aramada YouTube duraklar');
+  await pg.evaluate(() => window.__ic.callEnded()); await pg.waitForTimeout(100);
+  await clk('#mm-icstop2'); await pg.waitForTimeout(100); ok(await pg.evaluate(() => window.__yt.calls.includes('stop') && window.__ic.core.ctx.musicWanted === false), '«Müzik Yayınını Durdur» YouTube’u durdurur');
+  await pg.fill('#mm-icyt', 'merhaba'); await clk('#mm-icytgo'); ok(/YouTube bağlantısı/.test(await pg.evaluate(() => document.getElementById('mm-toast').textContent)), 'geçersiz bağlantı uyarı verir');
+  await pg.evaluate(() => window.__sock.em.length = 0);
+  // gruba bağlıyken şeritten ayrıl
+  await clk('#mm-icmenu'); await clk('.mm-icdrop [data-t=ic]'); await clk('.mm-icgrp'); await pg.waitForTimeout(800);
+  ok(await vis('#mm-icleave1'), 'bağlıyken şeritte ✕ (interkomdan ayrıl) düğmesi var');
+  await clk('#mm-icleave1'); await pg.waitForTimeout(300); ok(await pg.evaluate(() => window.__ic.core.state !== 'GROUP_RIDE') && !(await vis('#mm-icleave1')), '✕ ile interkomdan çıkılır');
   // ---- tema/taşma
   ok(await pg.evaluate(() => { const s = document.getElementById('mm-icstrip').getBoundingClientRect(); return s.right <= 390 && s.left >= 0 && document.documentElement.scrollWidth <= 390; }), '390 px: yatay taşma yok');
   ok(errs.length === 0, 'sayfa hatası yok ' + errs.join(' | ')); await b.close(); srv.close(); console.log(`SONUÇ: ${p} geçti, ${f} başarısız`); process.exit(f ? 1 : 0);

@@ -231,6 +231,22 @@ const T0 = Date.now() - 3600e3;
   r = await A.req('PUT', '/api/rgroups/' + gid + '/events/' + evId, { ...EV, title: 'Cumartesi Turu', stops: [] }); ok(r.s === 200 && r.j.event.title === 'Cumartesi Turu' && r.j.event.stops.length === 0, 'etkinlik güncellenir');
   r = await B.req('DELETE', '/api/rgroups/' + gid + '/events/' + evId); ok(r.s === 403, 'etkinliği üye silemez');
   r = await A.req('DELETE', '/api/rgroups/' + gid + '/events/' + evId); ok(r.s === 200 && r.j.events.length === 0, 'etkinlik silinir');
+  // ---------- İnterkom yedeği: WebRTC mesh sinyalleşmesi (gv:*) ----------
+  { A.clear(); B.clear(); await A.rt(); await B.rt(); await D.rt();
+    let g1 = await D.emit('gv:join', { gid }); ok(g1 && g1.code === 'forbidden', 'gv: üye olmayan sesli odaya giremez');
+    g1 = await A.emit('gv:join', { gid }); ok(g1 && g1.ok && g1.peers.length === 0 && g1.max >= 2, 'gv: ilk üye girer');
+    A.clear(); B.clear(); const g2 = await B.emit('gv:join', { gid }); ok(g2 && g2.ok && g2.peers.length === 1 && g2.peers[0].id === A.sid, 'gv: ikinci üye mevcut eşi görür');
+    await A.rt(); ok(A.evs('gv:peer-joined').some(e => e.data.id === B.sid), 'gv: mevcut üye yeni gelenden haberdar edilir');
+    A.clear(); B.clear(); const sg = await B.emit('gv:signal', { to: A.sid, data: { t: 'offer', sdp: { type: 'offer', sdp: 'x' } } }); await A.rt();
+    ok(sg && sg.ok && A.evs('gv:signal').length === 1 && A.evs('gv:signal')[0].data.from === B.sid && A.evs('gv:signal')[0].data.data.t === 'offer', 'gv: sinyal hedefe aktarılır');
+    ok((await B.emit('gv:signal', { to: 'ffffffffffffffff', data: { t: 'x' } })).code === 'nopeer', 'gv: odada olmayan hedefe sinyal gitmez');
+    ok((await D.emit('gv:signal', { to: A.sid, data: { t: 'x' } })).code === 'notin', 'gv: odada olmayan sinyal gönderemez');
+    ok((await B.emit('gv:signal', { to: A.sid, data: { t: 'x', pad: 'a'.repeat(20000) } })).code === 'bad', 'gv: aşırı büyük sinyal reddedilir');
+    A.clear(); const B3 = new C('burak'); B3.ck = B.ck; await B3.rt(); const g3 = await B3.emit('gv:join', { gid }); await B.rt(); ok(g3 && g3.ok && B.evs('gv:taken').length === 1, 'gv: aynı kullanıcı ikinci sekmeden girerse eskisi düşer');
+    A.clear(); await B3.emit('gv:leave', {}); await A.rt(); ok(A.evs('gv:peer-left').some(e => e.data.id === B3.sid), 'gv: ayrılan eş odadakilere bildirilir');
+    r = await A.get('/api/gvoice/ice'); ok(r.s === 200 && r.j.iceServers.length >= 1 && /^stun:/.test(r.j.iceServers[0].urls) && r.j.turn === false, 'gv: ICE (STUN) oturumlu üyeye verilir');
+    r = await new C().get('/api/gvoice/ice'); ok(r.s === 401, 'gv: ICE oturumsuz verilmez');
+    A.clear(); await A.rt([{ ev: 'gv:leave', data: {} }]); }
   // ---------- LiveKit belirteci ----------
   r = await new C().post('/api/livekit/token', { gid }); ok(r.s === 401, 'livekit: oturum ister');
   r = await D.post('/api/livekit/token', { gid }); ok(r.s === 404, 'livekit: üye olmayan belirteç alamaz');

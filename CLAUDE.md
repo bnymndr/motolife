@@ -477,3 +477,18 @@ Paralel: TURN ve bağlantı toparlanması, grup sürüşünden (7) önce.
 - Müzik: yalnız cihazdan dosya (çoklu), liste/önceki/sonraki; IDLE'da da çalar. YouTube/Radyo YOK (istenirse ayrı iş). iOS'ta <audio>.volume salt okunur → Web Audio kazancı (otomatik).
 - Sunucu: `livekit.js` + `php/api/livekit.php`: `POST /api/livekit/token {gid}` (oturum, yalnız grup üyesi, 10/dk, HS256 JWT elle imzalanır, `livekit-server-sdk` YOK, ömür 1 sa). Ortam/config: LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET (yoksa 503, arayüz «yapılandırılmadı» der). İstemci `livekit-client@2.5.7` yalnız gruba bağlanırken jsDelivr'den yüklenir (package.json değişmedi).
 - Testler: `test/intercom-ui.js` 27 (GERÇEK map.js/intercom.js Chromium'da, sahte LiveKit), `test/livekit.js` 9, `php-api` 282; diğerleri geçiyor. TEST EDİLMEDİ: gerçek LiveKit sunucusu, gerçek mikrofon/Bluetooth, iOS/Android cihaz, jsDelivr'deki livekit-client sürüm adresi, ekran kilidi. Eksik: STT (kaçırılan konuşma özeti arayüzü), GSM arama köprüsü (`Intercom.callStarted/callEnded` hazır), YouTube/Radyo.
+
+## İnterkom yedeği: WebRTC mesh (LiveKit yapılandırılmamışken de çalışır)
+- Neden: hostingte `LIVEKIT_*` yoktu → «İnterkom yapılandırılmadı». Kullanıcı: «çalışır hale getir hangisi olursa olsun».
+- `public/intercom.js join()`: önce `/api/livekit/token`; 200 → LiveKit (kütüphane yüklenemezse mesh'e düşer); 503 → `public/mesh-adapter.js` (`MeshAdapter.createMeshTransport({sock,gid,onFatal})`, comm-core transport sözleşmesi). `index.html` `socket`'i `Intercom.mount`'a verir ve `/mesh-adapter.js`'i yükler. Sayfada mesh iken «· doğrudan (P2P)» etiketi.
+- Sunucu: `meshvoice.js` (Node, socket.io `gv:join/gv:signal/gv:leave`, `GET /api/gvoice/ice`, GV_MAX varsayılan 6, aynı kullanıcı ikinci cihaz → eskisi `gv:taken`, gruptan çıkan → `gv:kicked`) ve `php/api/meshvoice.php` (aynı olaylar rt.php polling'i üzerinden; tablo `ml_gvp`, SCHEMA_VERSION 7, odadayken yoklama 800 ms). Eski bas-konuş/lider modu/söz hakkı GERİ GETİRİLMEDİ (mikrofon sessize alma comm-core'da).
+- Teklifi odaya SONRADAN katılan verir (glare yok); ICE adayı uzak tanımdan önce gelirse sıraya alınır; mikrofon KAPALI başlar.
+- Testler: `test/mesh.js` 36, `test/intercom-ui.js` 30 (503→mesh, taken), `php-api` 294. TEST EDİLMEDİ: gerçek iki telefon/gerçek ağ/TURN, ekran kilidinde ses, PHP polling gecikmesinin konuşma hissi (sinyal ≈0,8 sn; ses akışı P2P olduğundan etkilenmez ama bağlantı kurulumu gecikir).
+- SINIR: mesh ≤6 kişi; simetrik NAT/operatör ağında TURN yoksa eş bağlanamaz (o eş atlanır). Kalıcı çözüm için LiveKit ya da TURN yapılandır.
+
+## İnterkom/Müzik/Radyo menüsü (kullanıcı isteği)
+- Sorun: müzik/interkomdan çıkış yoktu. Çözüm: şeritte ⏹ (yayını durdur) ve bağlıyken ✕ (interkomdan ayrıl); sayfada «Müzik Yayınını Durdur».
+- Sayfa üstü: tek satırlık açılır seçici (`#mm-icmenu`) → İnterkom | Müzik | İnternet Radyosu; seçilince yalnız seçili ad görünür (eski sekmeler kaldırıldı, CSS `.mm-icsel/.mm-icdrop`).
+- Müzik menüsü: dosyadan seç (çoklu) + YouTube bağlantısı (IFrame API, gizli 200×200 oynatıcı, video/liste kimliği ayrıştırılır). Radyo menüsü: Radio Browser (radio-browser.info, ücretsiz açık dizin) Türkiye kanalları, yalnız https akış, aynı ad tekilleştirilir, tr-TR A-Z; satıra basınca açılır liste. `opts.radioUrl` ile test için değiştirilebilir.
+- Tek kaynak kuralı: `cur` ('file'|'radio'|'yt'|null); yeni kaynak eskisini durdurur. Hepsi AudioCore müzik kanalından geçer (kısma/arama duraklatması aynı).
+- Test: `test/intercom-ui.js` 43. TEST EDİLMEDİ: gerçek YouTube oynatma (embed yasağı olan videolar hata verir; ekran kilidinde YouTube çalmaz — YouTube koşulu), gerçek radyo akışları/dizin erişimi (CORS ve kanal ömrü), iOS'ta radyo, görsel/ekran görüntüsü kontrolü.
