@@ -304,18 +304,14 @@ io.use((socket, next) => {
 // Sosyal modül: profil, akış, arkadaşlık, canlı mesajlaşma
 const social = require('./social')({ app, io, users, userFromCookie, uname, dataDir: DATA_DIR });
 
-// Canlı sürücü konumu: açık rızalı paylaşım, yalnızca bellekte (Socket.IO)
-require('./live')({ io, uname, isFriend: social.isFriend, isBlocked: social.isBlocked });
-
 // Grup sürüşü: kalıcı gruplar, davet kodu, lider, canlı üye konumu ve sürüş kaydı (interkom gruplarından bağımsız)
 const rgApi = require('./ridegroups')({ app, express, io, users, userFromCookie, uname, dataDir: DATA_DIR, social });
 require('./accountdel')({ app, io, users, userFromCookie, uname, checkPassword, saveUsers, isLocked, addFail, social, rg: rgApi, dataDir: DATA_DIR });
 
-// Grup sesi: üyeler arası WebRTC (sinyalleşme, lider modu, bas-konuş söz hakkı)
-require('./groupvoice')({ app, io, userFromCookie, uname, rg: rgApi });
-
 // Hava durumu: sunucu vekili + önbellek + yedek sağlayıcı
 require('./weather')({ app, userFromCookie });
+require('./assist')({ app, userFromCookie });
+require('./livekit')({ app, userFromCookie, uname, rg: rgApi });
 
 // Harita servisleri: istemci yapılandırması, hedef arama, rota
 require('./maps')({ app, userFromCookie });

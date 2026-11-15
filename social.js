@@ -407,5 +407,5 @@ module.exports = function mountSocial({ app, io, users, userFromCookie, uname, d
     if (!rec || rec.uid !== uid || rec.post) return false;
     rec.post = 'g:' + ref; save(); return true;
   };
-  return { isFriend, isBlocked, removeUser, cardOf, claimImage, dropImage: id => { dropImage(id); save(); }, setImageGate: fn => { imageGate = fn; }, mood };   // canlı konum modülü (live.js) arkadaşlık yetkisini buradan sorar
+  return { isFriend, isBlocked, removeUser, cardOf, claimImage, dropImage: id => { dropImage(id); save(); }, setImageGate: fn => { imageGate = fn; }, mood };
 };

@@ -9,7 +9,7 @@ execFileSync('node', ['build-php.js', dist], { cwd: root, stdio: 'ignore' });
 const RC = require('../public/ride-core.js'), TC = require('../public/telemetry-core.js');
 const PORT = 8100 + Math.floor(Math.random() * 400), base = 'http://127.0.0.1:' + PORT;
 const srv = spawn('php', ['-S', '127.0.0.1:' + PORT, '-t', dist, path.join(root, 'php/dev-router.php')], {
-  env: { ...process.env, REG_LIMIT: '1000', PHP_CLI_SERVER_WORKERS: '4', DB_DRIVER: 'sqlite', DB_FILE: path.join(tmp, 't.sqlite'), SESSION_SECRET: 'x'.repeat(32), DEBUG: '1' }, stdio: 'ignore' });
+  env: { ...process.env, REG_LIMIT: '1000', PHP_CLI_SERVER_WORKERS: '4', DB_DRIVER: 'sqlite', DB_FILE: path.join(tmp, 't.sqlite'), SESSION_SECRET: 'x'.repeat(32), LIVEKIT_URL: 'wss://lk.example', LIVEKIT_API_KEY: 'APIkey1', LIVEKIT_API_SECRET: 'secret-lk-test', DEBUG: '1' }, stdio: 'ignore' });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const capSolve = q => { const m = String(q).match(/(\d+)\s*([+−×])\s*(\d+)/); const a = +m[1], b = +m[3]; return m[2] === '+' ? a + b : m[2] === '−' ? a - b : a * b; };
@@ -155,23 +155,6 @@ const T0 = Date.now() - 3600e3;
   r = await B.get('/api/social/img/' + imgId); ok(r.s === 404, 'gönderi silinince fotoğraf da silinir');
   r = await A.get('/api/social/avatar/ayse'); ok(r.s === 404, 'avatarsız kullanıcı 404');
 
-  // ---------- Canlı konum ----------
-  A.clear(); B.clear(); D.clear();
-  a = await A.emit('loc:share', { on: true, aud: 'friends' }); ok(a.error && /onay/i.test(a.error), 'loc:share: açık onay şart');
-  a = await A.emit('loc:share', { on: true, consent: true, aud: 'herkes' }); ok(a.error, 'loc:share: geçersiz kapsam');
-  a = await A.emit('loc:share', { on: true, consent: true, aud: 'friends' }); ok(a.ok && a.sharing, 'loc:share açılır');
-  await A.rt([{ ev: 'loc:update', data: { lat: 41.0, lon: 29.0, acc: 10, riding: true } }]);
-  a = await B.emit('loc:watch', { lat: 41.0, lon: 29.0, km: 50 }); ok(a.ok, 'loc:watch');
-  ok(B.evs('loc:riders').length >= 1 && B.evs('loc:riders').pop().data.some(x => x.u === 'ayse' && x.rel === 'friend' && x.lat === 41 && !x.approx), 'loc:riders: arkadaş tam konumla görünür');
-  a = await D.emit('loc:watch', { lat: 41.0, lon: 29.0, km: 50 }); ok(D.evs('loc:riders').pop().data.length === 0, 'loc:riders: yalnız-arkadaş paylaşımı yabancıya görünmez');
-  a = await A.emit('loc:share', { on: true, consent: true, aud: 'all' });
-  await A.rt([{ ev: 'loc:update', data: { lat: 41.00049, lon: 29.00051, acc: 10, riding: false } }]); await D.rt();
-  const row = D.evs('loc:riders').pop().data[0]; ok(row && row.approx === true && row.lat === 41 && row.lon === 29.001, 'loc:riders: yabancıya ≈100 m yuvarlanmış konum');
-  a = await D.emit('loc:watch', { off: true }); ok(a.ok, 'loc:watch kapatılır');
-  const A2 = new C('ayse2'); A2.ck = A.ck; await A2.rt(); a = await A2.emit('loc:share', { on: true, consent: true, aud: 'friends' }); await A.rt(); ok(A.evs('loc:taken').length === 1, 'loc:taken: paylaşım diğer sekmeye geçer');
-  A.clear(); await A2.emit('loc:share', { on: false }); a = await B.emit('loc:watch', { lat: 41, lon: 29, km: 50 }); ok(B.evs('loc:riders').pop().data.length === 0, 'paylaşım kapatılınca konum hemen kaybolur');
-  await B.emit('loc:watch', { off: true });
-
   // ---------- Grup sürüşü ----------
   r = await A.post('/api/rgroups', { name: 'x' }); ok(r.s === 400, 'grup: kısa ad reddedilir');
   r = await A.post('/api/rgroups', { name: 'Hafta Sonu Turu' }); ok(r.s === 200 && r.j.group.role === 'leader' && /^[A-Z2-9]{8}$/.test(r.j.group.code), 'grup oluşturulur, davet kodu üretilir'); const gid = r.j.group.id, code = r.j.group.code;
@@ -248,35 +231,15 @@ const T0 = Date.now() - 3600e3;
   r = await A.req('PUT', '/api/rgroups/' + gid + '/events/' + evId, { ...EV, title: 'Cumartesi Turu', stops: [] }); ok(r.s === 200 && r.j.event.title === 'Cumartesi Turu' && r.j.event.stops.length === 0, 'etkinlik güncellenir');
   r = await B.req('DELETE', '/api/rgroups/' + gid + '/events/' + evId); ok(r.s === 403, 'etkinliği üye silemez');
   r = await A.req('DELETE', '/api/rgroups/' + gid + '/events/' + evId); ok(r.s === 200 && r.j.events.length === 0, 'etkinlik silinir');
-  // ---------- Liderin müzik paylaşımı ----------
-  A.clear(); B.clear(); a = await B.emit('grp:music', { gid, src: { video: 'dQw4w9WgXcQ' } }); ok(a.error && /lider/i.test(a.error), 'müzik: yalnız lider paylaşır');
-  a = await D.emit('grp:music', { gid, src: { video: 'dQw4w9WgXcQ' } }); ok(a.error, 'müzik: üye olmayan reddedilir');
-  a = await A.emit('grp:music', { gid, src: { video: '<script>' } }); ok(a.error && /Geçersiz/.test(a.error), 'müzik: geçersiz kimlik reddedilir');
-  a = await A.emit('grp:music', { gid, src: { video: 'dQw4w9WgXcQ' }, playing: true }); ok(a.ok && a.shared === true, 'lider müziği etkinlikte paylaşır');
-  await B.rt(); const mu1 = (B.evs('grp:music').pop() || {}).data; ok(mu1 && mu1.music && mu1.music.video === 'dQw4w9WgXcQ' && mu1.music.playing === true && mu1.music.by === 'ayse', 'üyeye grp:music (video, çalıyor, paylaşan) gider');
-  B.clear(); await sleep(350); a = await A.emit('grp:music', { gid, cmd: 'next' }); ok(a.ok, 'lider sonraki parçaya geçer'); await B.rt(); const mu2 = (B.evs('grp:music').pop() || {}).data; ok(mu2 && mu2.cmd === 'next' && mu2.music.seq > mu1.music.seq, 'üyeye sonraki komutu ve yeni sıra no gider');
-  B.clear(); await sleep(350); a = await A.emit('grp:music', { gid, playing: false }); await B.rt(); ok(((B.evs('grp:music').pop() || {}).data || {}).music.playing === false, 'duraklatma üyelere yansır');
-  B.clear(); a = await B.emit('grp:watch', { gid }); await B.rt(); ok(((B.evs('grp:music').pop() || {}).data || {}).music.video === 'dQw4w9WgXcQ', 'sonradan izlemeye giren üye mevcut müziği alır');
-  B.clear(); await sleep(350); a = await A.emit('grp:music', { gid, src: null }); await B.rt(); ok(((B.evs('grp:music').pop() || {}).data || {}).music === null, 'lider paylaşımı bırakınca üyelere null gider');
-  await sleep(350); a = await A.emit('grp:music', { gid, src: { list: 'PLabcdefghij1234' } }); ok(a.ok, 'liste kimliği paylaşılabilir (sürüş bitiminde temizlenecek)');
-  // ---------- Grup sesi ----------
-  r = await A.get('/api/gvoice/ice'); ok(r.j.iceServers[0].urls.startsWith('stun:') && r.j.turn === false && r.j.max === 6, 'gvoice/ice: STUN, TURN yoksa false');
-  A.clear(); B.clear(); a = await D.emit('gv:join', { gid }); ok(a.code === 'forbidden', 'gv:join: üye olmayan reddedilir');
-  a = await A.emit('gv:join', { gid }); ok(a.ok && a.peers.length === 0 && a.mode === 'ptt' && a.leader === true && a.id === A.sid, 'gv:join: lider girer'); a = await B.emit('gv:join', { gid }); ok(a.ok && a.peers.length === 1 && a.peers[0].id === A.sid && a.leader === false, 'gv:join: üye girer, eş listesi gelir');
-  await A.rt(); ok(A.evs('gv:peer-joined').length === 1 && A.evs('gv:peer-joined')[0].data.id === B.sid, 'gv:peer-joined yayınlanır');
-  A.clear(); a = await B.emit('gv:signal', { to: A.sid, data: { type: 'offer', sdp: 'v=0' } }); ok(a.ok, 'gv:signal'); await A.rt(); ok(A.evs('gv:signal').length === 1 && A.evs('gv:signal')[0].data.from === B.sid && A.evs('gv:signal')[0].data.data.sdp === 'v=0', 'gv:signal hedefe ulaşır');
-  a = await B.emit('gv:signal', { to: 'ffffffffffffffff', data: { x: 1 } }); ok(a.code === 'nopeer', 'gv:signal: odada olmayan hedef'); a = await B.emit('gv:status', { mic: true }); ok(a.code === 'nofloor', 'gv:status: söz hakkı yokken mikrofon açılamaz');
-  a = await B.emit('gv:floor', { act: 'acquire' }); ok(a.granted === true, 'söz hakkı alınır'); a = await A.emit('gv:floor', { act: 'acquire' }); ok(a.granted === false && a.holder.id === B.sid, 'söz hakkı doluyken verilmez');
-  A.clear(); a = await B.emit('gv:status', { mic: true }); ok(a.ok, 'söz hakkı olan mikrofonu açar'); await A.rt(); ok(A.evs('gv:status').length === 1 && A.evs('gv:status')[0].data.mic === true, 'gv:status yayınlanır');
-  a = await B.emit('gv:mode', { mode: 'open' }); ok(a.code === 'leader', 'gv:mode: yalnız lider'); A.clear(); a = await A.emit('gv:revoke', {}); ok(a.ok, 'lider söz hakkını geri alır'); await B.rt(); ok(B.evs('gv:revoked').length === 1, 'gv:revoked hak sahibine gider');
-  a = await A.emit('gv:mode', { mode: 'open' }); ok(a.ok && a.mode === 'open', 'lider modu değiştirir'); a = await B.emit('gv:floor', { act: 'acquire' }); ok(a.error && a.code === 'mode', 'açık mikrofon modunda söz hakkı yok');
-  const gp = JSON.parse(sq("SELECT COUNT(*) c FROM ml_gvp"))[0].c; ok(+gp === 2, 'gv: iki eş kayıtlı');
-  B.clear(); a = await A.emit('gv:leave', {}); await B.rt(); ok(B.evs('gv:peer-left').length === 1, 'gv:peer-left yayınlanır');
-
+  // ---------- LiveKit belirteci ----------
+  r = await new C().post('/api/livekit/token', { gid }); ok(r.s === 401, 'livekit: oturum ister');
+  r = await D.post('/api/livekit/token', { gid }); ok(r.s === 404, 'livekit: üye olmayan belirteç alamaz');
+  r = await A.post('/api/livekit/token', { gid: 'zz' }); ok(r.s === 404, 'livekit: geçersiz grup 404');
+  r = await A.post('/api/livekit/token', { gid }); { const tk = r.j && r.j.token, pp = (tk || '').split('.'); const pl = pp.length === 3 ? JSON.parse(Buffer.from(pp[1], 'base64url')) : {};
+    ok(r.s === 200 && r.j.url === 'wss://lk.example' && r.j.room === 'ml-' + gid && pl.iss === 'APIkey1' && pl.video.room === 'ml-' + gid && pl.video.roomJoin === true && pl.exp - pl.nbf > 3000 && pp[2] === crypto.createHmac('sha256', 'secret-lk-test').update(pp[0] + '.' + pp[1]).digest('base64url') && !JSON.stringify(r.j).includes('secret-lk-test'), 'livekit: üyeye imzalı belirteç (oda=grup, HS256 doğrulanır, sır sızmaz)'); }
   // ---------- Sürüş kaydı (grup) ----------
   r = await B.post('/api/rgroups/' + gid + '/end'); ok(r.s === 403, 'sürüşü yalnız lider bitirir');
   B.clear(); r = await A.post('/api/rgroups/' + gid + '/end'); ok(r.s === 200 && r.j.group.ride === null, 'sürüş biter');
-  await B.rt(); ok(((B.evs('grp:music').pop() || {}).data || {}).music === null, 'sürüş bitince paylaşılan müzik temizlenir');
   r = await A.get('/api/rgroups/' + gid + '/rides'); ok(r.j.rides.length === 1 && r.j.rides[0].endedAt > 0 && r.j.rides[0].members.some(m => m.username === 'ayse' && m.fixes === 1), 'sürüş geçmişi: üye başına nokta sayısı'); const rideId = r.j.rides[0].id;
   r = await B.get('/api/rgroups/' + gid + '/rides/' + rideId); const lines = r.text.toString().trim().split('\n').map(JSON.parse);
   ok(r.s === 200 && /ndjson/.test(r.headers.get('content-type')) && lines[0].k === 'h' && lines[0].route.length === 3 && lines.some(l => l[0] === 'f' && l[2] === 'ayse') && lines.some(l => l[0] === 'e' && l[2] === 'end'), 'NDJSON kaydı: başlık + konumlar + olaylar');
@@ -327,6 +290,7 @@ const T0 = Date.now() - 3600e3;
 
   // ---------- Hava durumu / harita (ağ yok: yalnızca doğrulamalar) ----------
   r = await new C().get('/api/weather?lat=41&lon=29'); ok(r.s === 401, 'hava durumu oturum ister'); r = await A.get('/api/weather?lat=abc&lon=29'); ok(r.s === 400, 'hava durumu: geçersiz konum');
+  r = await new C().post('/api/assist/summarize', { lines: [{ who: 'a', text: 'x' }] }); ok(r.s === 401, 'asistan oturum ister'); r = await A.post('/api/assist/summarize', { lines: [{ who: 'a', text: 'x' }] }); ok(r.s === 503, 'asistan: anahtar yokken 503 (özellik kapalı)');
   r = await A.get('/api/weather?lat=95&lon=29'); ok(r.s === 400, 'hava durumu: aralık dışı');
   r = await A.get('/api/maps/config'); ok(r.s === 200 && /tile\.openstreetmap\.org/.test(r.j.tileUrl) && !r.j.tileUrlDark && /openfreemap\.org\/styles\/liberty/.test(r.j.vecLight) && /styles\/dark/.test(r.j.vecDark) && r.j.routing === true && r.j.route.provider === 'valhalla' && r.j.route.avoid.includes('highways') && !JSON.stringify(r.j).includes('apiKey'), 'maps/config: varsayılan karo + anahtarsız Valhalla, anahtar sızmaz');
   r = await A.get('/api/geocode?q=ab'); ok(r.s === 400, 'geocode: kısa sorgu'); r = await new C().get('/api/geocode?q=istanbul'); ok(r.s === 401, 'geocode oturum ister');
@@ -335,7 +299,7 @@ const T0 = Date.now() - 3600e3;
   // ---------- Bağlantı kopması / hesap silme ----------
   B.clear(); await B.rt(); D.clear(); await D.rt();
   r = await B.get('/api/social/friends');
-  A.clear(); B.clear(); await A.rt(); await A.post('/api/rt', { sid: A2.sid, bye: 1 }); r = await A.post('/api/rt', { sid: A.sid, bye: 1 }); await sleep(50); const rb = await B.rt(); ok(B.evs('social:presence').some(e => e.data.username === 'ayse' && e.data.online === false), 'bye: arkadaşa çevrimdışı bilgisi gider');
+  A.clear(); B.clear(); await A.rt(); r = await A.post('/api/rt', { sid: A.sid, bye: 1 }); await sleep(50); const rb = await B.rt(); ok(B.evs('social:presence').some(e => e.data.username === 'ayse' && e.data.online === false), 'bye: arkadaşa çevrimdışı bilgisi gider');
   r = await B.get('/api/social/friends'); ok(r.j.friends.find(f => f.username === 'ayse').online === false, 'friends: çevrimdışı görünür');
   const A3 = new C('ayse3'); A3.ck = A.ck; A3.clear(); B.clear(); await A3.rt(); await B.rt(); ok(B.evs('social:presence').some(e => e.data.username === 'ayse' && e.data.online === true), 'yeniden bağlanınca çevrimiçi bilgisi gider');
   r = await A3.rt(); r = await new C().req('POST', '/api/rt', { sid: A3.sid }); ok(r.s === 401, 'rt: oturumsuz 401 (istemci connect_error unauthorized üretir)');
@@ -395,12 +359,6 @@ const T0 = Date.now() - 3600e3;
     r = await E.post('/api/social/blocks', { username: 'ebru' }); ok(r.s === 400, 'PHP engel: kendini engelleyemez'); await E.post('/api/social/blocks', { username: 'gokay' }); r = await E.get('/api/social/blocks'); ok(r.j.blocks.length === 1, 'PHP engel: tekrar engelleme çoğaltmaz');
     r = await E.req('DELETE', '/api/social/blocks/gokay'); ok(r.s === 200 && r.j.rel === 'none', 'PHP engel: kaldırılır'); r = await E.req('DELETE', '/api/social/blocks/gokay'); ok(r.s === 404, 'PHP engel: ikinci kaldırma 404');
     r = await E.get('/api/social/search?q=gokay'); ok(r.j.users.length === 1 && r.j.users[0].rel === 'none', 'PHP engel: kaldırınca aramada çıkar'); r = await E.post('/api/social/requests', { username: 'gokay' }); ok(r.s === 200, 'PHP engel: kaldırınca istek atılabilir');
-    // canlı konum: engelli çift birbirini görmez (herkese açık paylaşım)
-    await E.emit('loc:share', { on: true, aud: 'all', consent: true }); await E.emit('loc:update', { lat: 41.0, lon: 29.0, acc: 10, riding: false });
-    const seen = async () => { G.clear(); await G.emit('loc:watch', { lat: 41.0, lon: 29.0, km: 50, fo: false }); await G.rt(); await G.rt(); return G.evs('loc:riders').some(e => JSON.stringify(e.data).indexOf('ebru') >= 0); };
-    ok(await seen(), 'PHP engel: kontrol — engel yokken canlı konum görünür');
-    await E.post('/api/social/blocks', { username: 'gokay' });
-    ok(!(await seen()), 'PHP engel: engelliyken canlı konumda birbirini görmez');
     // çevrimdışı harita listesi
     fs.mkdirSync(path.join(dist, 'offline'), { recursive: true }); fs.writeFileSync(path.join(dist, 'offline', '34.pmtiles'), Buffer.alloc(5000, 1)); fs.writeFileSync(path.join(dist, 'offline', 'x.txt'), 'a');
     r = await new C().get('/api/offline/manifest'); ok(r.s === 401, 'PHP harita listesi giriş ister');

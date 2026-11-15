@@ -264,7 +264,6 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
         endedBy: by ? uname(by) : null, reason: why || null, recFull: !!(r && r.full), route: g.route ? { len: g.route.len, v: g.route.v } : null,
         members: r ? [...r.members].map(([u, m]) => ({ username: u, fixes: m.n, firstAt: m.first, lastAt: m.last })) : [] }));
     } catch (e) { console.error('Sürüş özeti yazılamadı:', e.message); }
-    if (R.music) io.to('rg:' + g.id).emit('grp:music', { gid: g.id, music: null });
     g.ride = null;
     if (L) emitState(g, true);                                              // izleyiciler boş durumu görür
     recs.delete(g.id); liveG.delete(g.id);
@@ -509,8 +508,6 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
     fs.createReadStream(file).on('error', () => res.end()).pipe(res);
   });
 
-  const YT_ID = /^[A-Za-z0-9_-]{11}$/, YT_LIST = /^[A-Za-z0-9_-]{10,64}$/;
-  const musicView = m => ({ video: m.video, list: m.list, playing: m.playing, seq: m.seq, by: m.by });
   // ---------- Etkinlikler (grup içi plan: başlangıç, mola/uğrak noktaları, varış) ----------
   const MAX_EVENTS = 20, MAX_STOPS = 8;
   const cleanPt = (p, withKind) => {
@@ -567,31 +564,7 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
       if (tooFast('watch', 800)) return cb({ error: 'Çok sık deneme.' });
       socket.join('rg:' + g.id);
       socket.emit('grp:state', payload(g, computeState(g)));
-      socket.emit('grp:music', { gid: g.id, music: g.ride && g.ride.music ? musicView(g.ride.music) : null });
       cb({ ok: true, ride: !!g.ride });
-    });
-    // Müzik paylaşımı (yalnız lider, yalnız aktif sürüşte): YouTube video/liste kimliği + oynuyor/duraklat + sonraki/önceki. Ses üyelerin kendi cihazında çalar.
-    socket.on('grp:music', (p = {}, cb) => {
-      cb = ok(cb);
-      const g = memberOf(p && p.gid); if (!g) return cb({ error: 'Grup bulunamadı.' });
-      if (!g.ride) return cb({ error: 'Aktif grup sürüşü yok.' });
-      if (g.leader !== u.id) return cb({ error: 'Müziği yalnız grup lideri paylaşır.' });
-      if (tooFast('music', 300)) return cb({ error: 'Çok sık deneme.' });
-      const old = g.ride.music;
-      if (p.src === null) { if (old) { g.ride.music = null; io.to('rg:' + g.id).emit('grp:music', { gid: g.id, music: null }); } return cb({ ok: true, shared: false }); }
-      if (p.src && typeof p.src === 'object') {
-        const video = YT_ID.test(String(p.src.video || '')) ? String(p.src.video) : null, list = YT_LIST.test(String(p.src.list || '')) ? String(p.src.list) : null;
-        if (!video && !list) return cb({ error: 'Geçersiz YouTube bağlantısı.' });
-        g.ride.music = { video, list, playing: p.playing !== false, seq: ((old && old.seq) || 0) + 1, by: nameOf(u.id), at: Date.now() };
-        io.to('rg:' + g.id).emit('grp:music', { gid: g.id, music: musicView(g.ride.music) });
-        return cb({ ok: true, shared: true });
-      }
-      if (!old) return cb({ error: 'Paylaşılan müzik yok.' });
-      const cmd = p.cmd === 'next' || p.cmd === 'prev' ? p.cmd : null;
-      if (typeof p.playing === 'boolean') old.playing = p.playing; else if (!cmd) return cb({ error: 'Geçersiz komut.' });
-      old.seq++; old.at = Date.now();
-      io.to('rg:' + g.id).emit('grp:music', { gid: g.id, music: musicView(old), cmd: cmd || undefined });
-      cb({ ok: true, shared: true });
     });
     socket.on('grp:unwatch', (p = {}) => { const g = memberOf(p && p.gid); if (g) socket.leave('rg:' + g.id); });
 

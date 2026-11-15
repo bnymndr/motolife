@@ -35,22 +35,6 @@ const EV = { title: 'Pazar Turu', at: now + 86400000, start: { name: 'Kadıköy'
   r = await call('DELETE /api/rgroups/:id/events/:eid', 'u1', { id: GID, eid }); ok(r.s === 404, 'olmayan etkinlik 404');
   for (let i = 0; i < 18; i++) await call('POST /api/rgroups/:id/events', 'u1', P, EV);
   r = await call('POST /api/rgroups/:id/events', 'u1', P, EV); ok([409, 429].includes(r.s), 'etkinlik sayısı/hızı sınırlıdır (' + r.s + ')');
-  // ---- müzik
   const L = sock('u1'), M = sock('u3'), Y = sock('u4'); const wait = ms => new Promise(r => setTimeout(r, ms));
-  let a = await M.fire('grp:music', { gid: GID, src: { video: 'dQw4w9WgXcQ' } }); ok(a.error && /lider/i.test(a.error), 'müzik: üye paylaşamaz');
-  a = await sock('u2').fire('grp:music', { gid: GID, src: { video: 'dQw4w9WgXcQ' } }); ok(a.error && /lider/i.test(a.error), 'müzik: yönetici de paylaşamaz (yalnız lider)');
-  a = await Y.fire('grp:music', { gid: GID, src: { video: 'dQw4w9WgXcQ' } }); ok(a.error, 'müzik: üye olmayan reddedilir');
-  a = await L.fire('grp:music', { gid: GID, src: { video: 'a b' } }); ok(a.error && /Geçersiz/.test(a.error), 'müzik: geçersiz kimlik');
-  await wait(320); log.length = 0; a = await L.fire('grp:music', { gid: GID, src: { video: 'dQw4w9WgXcQ', list: 'PLabcdefghij1234' }, playing: true }); ok(a.ok && a.shared, 'lider müziği paylaşır');
-  let mu = log.find(l => l[0] === 'rg:' + GID && l[1] === 'grp:music'); ok(mu && mu[2].music.video === 'dQw4w9WgXcQ' && mu[2].music.list === 'PLabcdefghij1234' && mu[2].music.by === 'lider' && mu[2].music.seq === 1, 'odaya grp:music gider (video, liste, paylaşan, sıra 1)');
-  await wait(320); log.length = 0; await L.fire('grp:music', { gid: GID, cmd: 'next' }); mu = log.find(l => l[1] === 'grp:music'); ok(mu && mu[2].cmd === 'next' && mu[2].music.seq === 2, 'sonraki komutu');
-  await wait(320); log.length = 0; await L.fire('grp:music', { gid: GID, playing: false }); mu = log.find(l => l[1] === 'grp:music'); ok(mu && mu[2].music.playing === false && !mu[2].cmd, 'duraklat');
-  await wait(320); a = await L.fire('grp:music', { gid: GID, cmd: 'jump' }); ok(a.error, 'bilinmeyen komut reddedilir');
-  log.length = 0; const W = sock('u3'); await W.fire('grp:watch', { gid: GID }); mu = log.find(l => l[0] === W.id && l[1] === 'grp:music'); ok(mu && mu[2].music && mu[2].music.video === 'dQw4w9WgXcQ', 'izlemeye giren üye mevcut müziği alır');
-  await wait(320); log.length = 0; await L.fire('grp:music', { gid: GID, src: null }); mu = log.find(l => l[1] === 'grp:music'); ok(mu && mu[2].music === null, 'paylaşım bırakılınca null');
-  await wait(320); a = await L.fire('grp:music', { gid: GID, cmd: 'next' }); ok(a.error, 'paylaşım yokken komut reddedilir');
-  await wait(320); await L.fire('grp:music', { gid: GID, src: { video: 'dQw4w9WgXcQ' } }); log.length = 0; await call('POST /api/rgroups/:id/end', 'u1', P);
-  mu = log.find(l => l[1] === 'grp:music'); ok(mu && mu[2].music === null, 'sürüş bitince müzik temizlenir');
-  a = await L.fire('grp:music', { gid: GID, src: { video: 'dQw4w9WgXcQ' } }); ok(a.error && /Aktif/.test(a.error), 'sürüş yokken müzik paylaşılamaz');
   console.log(`\n${p} geçti, ${f} kaldı`); fs.rmSync(dir, { recursive: true, force: true }); process.exit(f ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

@@ -38,6 +38,7 @@ let routeCalls = [], geoMode = 'two', routing = true;
 const srv = http.createServer((q, r) => {
   const u = new URL(q.url, 'http://x'), J = (o, s = 200) => { r.writeHead(s, { 'content-type': 'application/json' }); r.end(JSON.stringify(o)); };
   if (u.pathname === '/api/maps/config') return J({ vecLight: VEC ? 'https://tiles.openfreemap.org/styles/liberty' : '', vecDark: VEC ? 'https://tiles.openfreemap.org/styles/dark' : '', tileUrl: 'T/{z}/{x}/{y}.png', tileUrlDark: '', tileAttr: 'OSM', tileMax: 19, routing, route: { provider: 'valhalla', profile: 'motorcycle', label: 'Motosiklet rotası', avoid: ['highways', 'tolls', 'ferries'], attr: 'Rota: Valhalla' } });
+  if (u.pathname === '/api/radio/click/' + u.pathname.split('/').pop() && q.method === 'POST') { global.__clicks = (global.__clicks || []).concat(u.pathname.split('/').pop()); return J({ ok: true }); }
   if (u.pathname === '/api/geocode') return J({ results: geoMode === 'one' ? [{ title: 'Tek Yer', subtitle: 'Tek, İstanbul', lat: 41.01, lon: 29.01 }] : [{ title: 'Kafe A', subtitle: 'A, İstanbul', lat: 41.01, lon: 29.01 }, { title: 'Kafe B', subtitle: 'B, İstanbul', lat: 41.02, lon: 29.02 }] });
   if (u.pathname === '/api/route') { routeCalls.push(u.search); if (global.__dynRoute) { const f2 = k => String(u.searchParams.get(k)).split(',').map(Number); return J({ ...ROUTE, coords: [f2('from'), f2('to')], steps: [], distance: 2000 }); } return J(ROUTE); }
   if (u.pathname.startsWith('/api/')) return J({}, 404);
@@ -81,50 +82,16 @@ srv.listen(0, async () => {
     await vp.click('#mm-mbtn'); await vp.click('button[data-th=light]'); await vp.click('button[data-th=dark]');
     ok(await vp.evaluate(() => /styles\/dark/.test(window.__style || '')), 'vektör: koyu temada Dark stili uygulanır');
     await ctx.close(); VEC = false; }
-  { // müzik şeridi: parça adı + denetimler; atıf yazısı en üstte ve çok küçük
-    const pg = await open();
-    ok(await pg.evaluate(() => document.getElementById('mm-now').hidden && document.getElementById('mm-mctl').hidden), 'müzik yokken şerit görünmez');
+  { const pg = await open();
     ok(await pg.evaluate(() => { const a = document.getElementById('mm-attr'); a.textContent = 'OpenFreeMap'; const r = a.getBoundingClientRect(); return r.top < 12 && parseFloat(getComputedStyle(a).fontSize) <= 9 && r.width > 300; }), 'harita atfı en üstte sabit ve çok küçük'); await pg.evaluate(() => { document.getElementById('mm-attr').textContent = ''; });
-    await pg.click('#mm-musbtn'); await pg.click('button[data-mt=dev]');
-    await pg.setInputFiles('#mm-files', [{ name: 'Yolların Kralı.mp3', mimeType: 'audio/mpeg', buffer: Buffer.from('ID3') }, { name: 'Gece Sürüşü.mp3', mimeType: 'audio/mpeg', buffer: Buffer.from('ID3') }]); await pg.waitForTimeout(300); await pg.click('#mm-mclose');
-    ok(await pg.evaluate(() => !document.getElementById('mm-now').hidden && !document.getElementById('mm-mctl').hidden && /Gece Sürüşü/.test(document.getElementById('mm-now-t').textContent)), 'müzik açılınca şerit çıkar, çalan parça solda yazılır');
-    ok(await pg.evaluate(() => { const n = document.getElementById('mm-now').getBoundingClientRect(), c = document.getElementById('mm-mctl').getBoundingClientRect(), b = document.querySelector('.mm-bottom').getBoundingClientRect(); return Math.abs(n.left - c.left) < 2 && Math.abs(n.right - c.right) < 2 && Math.abs(n.left - b.left) < 2 && c.height >= 52 && [...document.querySelectorAll('.mm-mk')].every(x => x.getBoundingClientRect().height >= 44); }), 'şerit tam genişlikte (iki yana yaslı), düğmeler ≥44 px');
-    await pg.click('#mm-knext'); await pg.waitForTimeout(100);
-    ok(await pg.evaluate(() => /Yolların Kralı/.test(document.getElementById('mm-now-t').textContent)), 'sonraki düğmesi parçayı değiştirir, yazı güncellenir');
-    const v0 = await pg.evaluate(() => Number(localStorage.getItem('ml_vol_music') || 100)); await pg.click('#mm-kvm'); const v1 = await pg.evaluate(() => Number(localStorage.getItem('ml_vol_music')));
-    await pg.click('#mm-kvp'); const v2 = await pg.evaluate(() => Number(localStorage.getItem('ml_vol_music')));
-    ok(v1 === Math.max(0, Math.round(v0 / 10) * 10 - 10) && v2 === Math.min(100, v1 + 10), 'ses −/+ 10\'ar adım ayarlar (' + v0 + '→' + v1 + '→' + v2 + ')');
-    await pg.evaluate(() => { const a = document.getElementById('mm-aud'); let paused = true; Object.defineProperty(a, 'paused', { get: () => paused, configurable: true }); a.play = () => { paused = false; a.dispatchEvent(new Event('play')); return Promise.resolve(); }; a.pause = () => { paused = true; a.dispatchEvent(new Event('pause')); }; });
-    await pg.click('#mm-kplay'); await pg.waitForTimeout(100); const l1 = await pg.textContent('#mm-kplay'); await pg.click('#mm-kplay'); await pg.waitForTimeout(100); const l2 = await pg.textContent('#mm-kplay');
-    ok(l1 !== l2, 'durdur/devam düğmesi simgeyi değiştirir (' + l1 + ' / ' + l2 + ')');
-    ok(await pg.evaluate(() => { const pr = document.querySelector('.mm-bottom').getBoundingClientRect(); return [...document.querySelectorAll('.mm-side > .mm-btn:not([hidden])')].every(b => { const r = b.getBoundingClientRect(); return !(r.right > pr.left && r.left < pr.right && r.bottom > pr.top && r.top < pr.bottom); }); }), 'müzik şeridi açıkken sağ düğmeler altta kalmaz');
-    await pg.evaluate(() => { document.getElementById('mm-aud').pause(); });  await pg.context().close(); }
-  { await pg.click('#mm-mbtn'); const d0 = await pg.evaluate(() => document.querySelector('.mm').dataset.hud + '/' + document.querySelector('.mm').dataset.gsz);
-    await pg.click('button[data-hud=bar]'); await pg.click('button[data-gsz=l]');
-    const d1 = await pg.evaluate(() => [document.querySelector('.mm').dataset.hud, document.querySelector('.mm').dataset.gsz, localStorage.getItem('mm_hud'), localStorage.getItem('mm_gsz'), document.querySelector('button[data-hud=bar]').getAttribute('aria-pressed')].join());
-    ok(d0 === 'full/s' && d1 === 'bar,l,bar,l,true', 'sürüş ekranı yerleşimi ve grup bilgi boyutu seçilir, saklanır (' + d0 + ' → ' + d1 + ')');
-    await pg.click('button[data-hud=full]'); await pg.click('button[data-gsz=s]'); await pg.click('#mm-mbtn'); }
+    await pg.context().close(); }
+  { await pg.click('#mm-mbtn'); const d0 = await pg.evaluate(() => document.querySelector('.mm').dataset.hud);
+    await pg.click('button[data-hud=bar]');
+    const d1 = await pg.evaluate(() => [document.querySelector('.mm').dataset.hud, localStorage.getItem('mm_hud'), document.querySelector('button[data-hud=bar]').getAttribute('aria-pressed')].join());
+    ok(d0 === 'full' && d1 === 'bar,bar,true', 'sürüş ekranı yerleşimi seçilir, saklanır (' + d0 + ' → ' + d1 + ')');
+    await pg.click('button[data-hud=full]'); await pg.click('#mm-mbtn'); }
   ok(await pg.evaluate(() => { const r = document.getElementById('mm-rt'); return r.hidden && !document.querySelector('.mm-top #mm-form') && !document.querySelector('.mm-top #mm-q'); }), 'ana harita ekranında arama kutusu yok; harita bütün halde');
-  ok(await pg.evaluate(() => [...document.querySelectorAll('.mm-side > .mm-btn:not([hidden])')].map(b => b.id).join() === 'mm-zin,mm-zout,mm-loc,mm-rtbtn,mm-musbtn,mm-mbtn'), 'sağ düğmeler: +, −, konum, ROTA, MÜZİK, ayarlar');
-  ok(await pg.evaluate(() => { const o = [...document.querySelectorAll('.mm-side > *')].map(b => b.id); return o.indexOf('mm-gbtn') < o.indexOf('mm-rtbtn') && o.indexOf('mm-rtbtn') < o.indexOf('mm-mbtn'); }), 'Rota düğmesi Grup ile Ayarlar düğmesi arasında');
-  // --- Müzik
-  const PY = await pg.evaluate(() => { const p = window.MotoMap._core.parseYouTube; return [p('https://youtu.be/dQw4w9WgXcQ?t=5'), p('https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLabcdefghijk'), p('music.youtube.com/watch?v=dQw4w9WgXcQ'), p('https://www.youtube.com/playlist?list=PLabcdefghijk'), p('https://www.youtube.com/shorts/dQw4w9WgXcQ'), p('https://evil.example/watch?v=dQw4w9WgXcQ'), p('javascript:alert(1)'), p('https://www.youtube.com/watch?v=<script>'), p('')]; });
-  ok(PY[0].video === 'dQw4w9WgXcQ' && PY[1].video === 'dQw4w9WgXcQ' && PY[1].list === 'PLabcdefghijk' && PY[2].video === 'dQw4w9WgXcQ' && PY[3].video === null && PY[3].list === 'PLabcdefghijk' && PY[4].video === 'dQw4w9WgXcQ' && PY.slice(5).every(x => x === null), 'YouTube bağlantı çözümleyici: video/liste/kısa/müzik; yabancı site ve bozuk giriş reddedilir');
-  await pg.click('#mm-musbtn'); await pg.waitForTimeout(350); ok(await pg.isVisible('#mm-music') && await pg.getAttribute('#mm-musbtn', 'aria-expanded') === 'true', 'müzik notası düğmesi müzik sayfasını açar');
-  await pg.fill('#mm-yturl', 'https://example.com/x'); await pg.click('#mm-ytform button'); ok((await pg.$$('#mm-ytbox iframe')).length === 0 && /tanıyamadım/.test(await pg.textContent('#mm-ytnote')), 'geçersiz bağlantı oynatılmaz, uyarı verir');
-  await pg.fill('#mm-yturl', 'https://youtu.be/dQw4w9WgXcQ'); await pg.click('#mm-ytform button');
-  ok(await pg.evaluate(() => { const f = document.querySelector('#mm-ytbox iframe'); return !!f && /^https:\/\/www\.youtube-nocookie\.com\/embed\/dQw4w9WgXcQ\?autoplay=1/.test(f.src); }), 'YouTube oynatıcı yalnızca doğrulanmış kimlikten kurulan nocookie adresiyle yerleştirilir');
-  await pg.click('#mm-mclose'); ok(await pg.evaluate(() => !!document.querySelector('#mm-ytbox iframe') && document.getElementById('mm-music').classList.contains('off')) && await pg.evaluate(() => document.getElementById('mm-musbtn').classList.contains('on')), 'sayfa kapanınca yayın sürer (iframe durur değil), düğme «çalıyor» vurgulu');
-  await pg.click('#mm-musbtn'); await pg.click('#mm-ytstop'); ok((await pg.$$('#mm-ytbox iframe')).length === 0, 'yayını durdur iframe\'i kaldırır');
-  await pg.click('[data-mt="dev"]'); ok(await pg.isVisible('#mm-files', { timeout: 100 }).catch(() => false) === false && await pg.isVisible('label[for="mm-files"]') && await pg.isVisible('label[for="mm-dir"]'), 'Cihazdan sekmesi: dosya seç + klasör seç');
-  const silentWav = () => { const n = 8000 * 30, b = Buffer.alloc(44 + n, 128); b.write('RIFF', 0); b.writeUInt32LE(36 + n, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(8000, 24); b.writeUInt32LE(8000, 28); b.writeUInt16LE(1, 32); b.writeUInt16LE(8, 34); b.write('data', 36); b.writeUInt32LE(n, 40); return b; };
-  const wav = n => ({ name: n, mimeType: 'audio/wav', buffer: silentWav() });
-  await pg.setInputFiles('#mm-files', [wav('02 Yol.wav'), wav('01 Motor.wav'), { name: 'notlar.txt', mimeType: 'text/plain', buffer: Buffer.from('x') }]); await pg.waitForTimeout(200);
-  ok(await pg.evaluate(() => [...document.querySelectorAll('#mm-mulist button')].map(b => b.textContent).join('|') === '01 Motor|02 Yol' && /^blob:/.test(document.getElementById('mm-aud').src) && /1 \/ 2 · 01 Motor/.test(document.getElementById('mm-munow').textContent)), 'cihaz müziği: yalnız ses dosyaları, ada göre sıralı, blob adresiyle çalar');
-  await pg.click('#mm-mnext'); ok(/2 \/ 2 · 02 Yol/.test(await pg.textContent('#mm-munow')), 'sonraki parça');
-  await pg.screenshot({ path: '/tmp/map-music.png' });
-  await pg.click('#mm-mulist [data-ti="0"]'); ok(/1 \/ 2/.test(await pg.textContent('#mm-munow')), 'listeden parça seç');
-  await pg.click('#mm-mclose');
+  ok(await pg.evaluate(() => [...document.querySelectorAll('.mm-side > .mm-btn:not([hidden])')].map(b => b.id).join() === 'mm-zin,mm-zout,mm-loc,mm-rtbtn,mm-mbtn'), 'sağ düğmeler: +, −, konum, ROTA, MÜZİK, ayarlar');
   await pg.click('#mm-rtbtn'); await pg.waitForTimeout(150);
   ok(await pg.isVisible('#mm-rt') && await pg.isVisible('#mm-q') && await pg.evaluate(() => document.activeElement.id === 'mm-q'), 'Rota düğmesi: sayfa açılır, arama kutusu odakta');
   ok(await pg.evaluate(() => { const r = document.getElementById('mm-rt').getBoundingClientRect(); return r.top <= 1 && r.bottom < innerHeight * 0.6 && r.width >= innerWidth - 1; }), 'rota sayfası üstte, ekranın en çok %58\'i; altta harita açıkta');
@@ -280,6 +247,22 @@ srv.listen(0, async () => {
     await fixN(41.0, 29.0); await ep.evaluate(e => window.__mm.startEvent(e), EV); await ep.waitForSelector('#mm-evov [data-ov="ok"]:not([disabled])', { timeout: 5000 }); await ep.click('#mm-evov [data-ov="ok"]'); await ep.waitForTimeout(500);
     ok(/Mola: Ömerli/.test(await ep.textContent('#mm-dtitle')), 'başlangıç yerindeyken ilk hedef doğrudan «Mola: Ömerli»');
     global.__dynRoute = false; await ep.context().close(); }
+  // ---- Sürüşte (navigasyon olmadan) harita gidiş yönüne döner; sürüş bitince düzleşir
+  {
+    const rp = await open(); await rp.evaluate(() => window.__fix(41, 29, 5, 8, 90)); await rp.waitForTimeout(300);
+    const tf = () => rp.evaluate(() => document.querySelector('#mm-map, .mm-map, [id=mm-map]') ? document.querySelector('#mm-map').style.transform : '');
+    ok(!/rotate\(-?[1-9]/.test(await tf()), 'sürüş öncesi harita düz (kuzey yukarı)');
+    await rp.click('#mm-start'); await rp.waitForSelector('#mm-ride:not([hidden])', { timeout: 4000 });
+    for (let k = 0; k < 5; k++) { await rp.evaluate(k => window.__fix(41 + 0.0002 * k, 29 + 0.0002 * k, 5, 9, 90), k); await rp.waitForTimeout(120); }
+    ok(/rotate\(-90/.test(await tf()), 'tek başına sürüşte (navigasyonsuz) harita gidiş yönüne döner: ' + await tf());
+    for (let k = 0; k < 8; k++) { await rp.evaluate(k => window.__fix(41.002 - 0.0002 * k, 29.002, 5, 9, 180), k); await rp.waitForTimeout(120); }
+    ok(/rotate\(-1[5-8]\d/.test(await tf()), 'yön değişince harita yeni gidiş yönüne döner: ' + await tf());
+    await rp.evaluate(() => document.getElementById('mm-stop').click()); await rp.evaluate(() => document.querySelector('#mm-modal [data-act=end]').click()); await rp.waitForSelector('#mm-modal .mm-sum3', { timeout: 4000 });
+    ok(await rp.evaluate(() => !!document.getElementById('mm-perf')), 'sürüş bitince özet kartında «performans» satırı ve Sürüş Analizi düğmesi var' + ' ');
+    await rp.evaluate(() => window.__fix(41.003, 29.003, 5, 0)); await rp.waitForTimeout(200);
+    ok(!/rotate\(-?[1-9]/.test(await tf()), 'sürüş bitince harita düzleşir (kuzey yukarı)');
+    await rp.context().close();
+  }
   // ---- Etkinlik düzenlenince (mola yeri/sırası değişince) navigasyon otomatik güncellenir
   {
     global.__dynRoute = true; const ep2 = await open();
@@ -299,19 +282,5 @@ srv.listen(0, async () => {
     ok(/Mola: Kumköy/.test(await ep2.textContent('#mm-navto')), 'eklenen yeni mola sırada yer alır');
     global.__dynRoute = false; await ep2.context().close();
   }
-  // ---- Lider müzik paylaşımı: map.js ↔ group-ride.js bağlantısı (group-ride.js burada SAHTE; gerçek YouTube sesi/iframe içeriği test EDİLMEDİ)
-  { const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true }), g = await ctx.newPage(); g.on('pageerror', e => errs.push(e.message)); await g.addInitScript(FAKE);
-    await g.addInitScript(() => { window.__gm = []; window.GroupRide = { mount: c => { window.__gctx = c; return { musicLocal: o => window.__gm.push(o), markers: () => [], activate() {}, deactivate() {}, onFix() {}, sharing: () => false, stop() {}, joinPrompt() {}, open() {} }; } }; });
-    await g.goto(base + '/_host'); await g.evaluate(() => { window.__mm = window.MotoMap.mount(document.getElementById('r'), { user: 'tester', socket: { on() {}, emit() {}, connected: true } }); window.__mm.activate(); }); await g.waitForFunction(() => !document.getElementById('mm-load').hidden === false, null, { timeout: 8000 });
-    await g.click('#mm-musbtn'); await g.waitForTimeout(300); await g.fill('#mm-yturl', 'https://youtu.be/dQw4w9WgXcQ'); await g.click('#mm-ytform button'); await g.waitForTimeout(200);
-    ok(await g.evaluate(() => window.__gm.some(o => o.t === 'play' && o.id.video === 'dQw4w9WgXcQ')), 'YouTube çalınca grup bağlantısına «play» bildirilir (lider seçim penceresi için)');
-    await g.evaluate(() => { document.getElementById('mm-kplay').click(); document.getElementById('mm-knext').click(); document.getElementById('mm-kprev').click(); });
-    ok(await g.evaluate(() => window.__gm.some(o => o.t === 'toggle' && o.playing === false) && window.__gm.some(o => o.t === 'cmd' && o.cmd === 'next') && window.__gm.some(o => o.t === 'cmd' && o.cmd === 'prev')), 'şerit düğmeleri: durdur/sonraki/önceki bildirilir');
-    await g.evaluate(() => { window.__gm.length = 0; window.__gctx.yt.play({ video: 'aaaaaaaaaaa', list: null }, true); });
-    ok(await g.evaluate(() => /embed\/aaaaaaaaaaa/.test(document.querySelector('#mm-ytbox iframe').src) && window.__gm.length === 0), 'uzaktan (üye) çalma: iframe değişir, yankı olarak bildirim GİTMEZ');
-    await g.evaluate(() => window.__gctx.yt.stop()); ok(await g.evaluate(() => !document.querySelector('#mm-ytbox iframe') && window.__gm.length === 0), 'uzaktan durdurma: iframe kalkar, bildirim gitmez');
-    await g.fill('#mm-yturl', 'https://youtu.be/dQw4w9WgXcQ'); await g.click('#mm-ytform button'); await g.evaluate(() => { window.__gm.length = 0; document.getElementById('mm-ytstop').click(); });
-    ok(await g.evaluate(() => window.__gm.some(o => o.t === 'stop')), 'kullanıcı durdurunca grup bağlantısına «stop» bildirilir');
-    await ctx.close(); }
   await b.close(); srv.close(); console.log(`SONUÇ: ${p} geçti, ${f} başarısız`); process.exit(f ? 1 : 0);
 });
