@@ -43,3 +43,4 @@ Ayarlar › Konum ve Gizlilik › **Çevrimdışı Haritalar**, kullanıcıları
 SINIR: şu an paketler indirilir/saklanır/silinir; harita ÇİZİMİ (çevrimdışı gösterim) ve çevrimdışı rota henüz yok.
 
 - **İnterkom (LiveKit):** `config.php` içinde `LIVEKIT_URL` (wss://…), `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` doldurulmazsa interkom kapalıdır (503). Anahtarlar yalnız sunucuda durur; tarayıcıya yalnız 1 saatlik, tek odaya özel belirteç gider. Node sürümünde aynı adlarla ortam değişkeni.
+- **İnterkom yedeği (hesap gerektirmez):** LiveKit alanları boşsa interkom otomatik olarak üyeler arası doğrudan WebRTC (mesh, en çok 6 kişi) ile çalışır; sunucu yalnız sinyal aktarır (ses sunucudan geçmez). Bazı operatör ağlarında doğrudan bağlantı kurulamaz; bunun için isteğe bağlı TURN: `GV_TURN_URLS` (virgülle), `GV_TURN_USER`, `GV_TURN_CREDENTIAL`, oda sınırı `GV_MAX` (2–8). İlk istekte tablo `ml_gvp` otomatik oluşur (şema sürümü 7); elle kuruyorsan `veritabani.sql` içindedir.

@@ -584,9 +584,9 @@ function openMap() {
   const sc = document.createElement('script');
   sc.src = '/map.js';
   sc.onload = async () => {
-    for (const u of ['/audio-core.js', '/media-core.js', '/comm-core.js', '/livekit-adapter.js', '/intercom.js']) await loadJs(u);
+    for (const u of ['/audio-core.js', '/media-core.js', '/comm-core.js', '/livekit-adapter.js', '/mesh-adapter.js', '/intercom.js']) await loadJs(u);
     root.innerHTML = ''; mapH = window.MotoMap.mount(root, { user: me && me.username, onAnalyze: id => goAnalysis(h => h.openRide(id)), onAnalyzeGroup: gid => goAnalysis(h => h.openGroupList(gid)) });
-    try { icH = window.Intercom && window.Intercom.mount(root, { user: me && me.username }); } catch (e) { console.error(e); }
+    try { icH = window.Intercom && window.Intercom.mount(root, { user: me && me.username, socket }); } catch (e) { console.error(e); }
     mapLoading = false; mapH.activate();
   };
   sc.onerror = () => { root.innerHTML = '<p class="p-6 text-center text-sm text-red-300">Harita yüklenemedi. Sayfayı yenileyip tekrar dene.</p>'; mapLoading = false; sc.remove(); };

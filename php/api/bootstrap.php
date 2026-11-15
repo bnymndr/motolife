@@ -52,7 +52,7 @@ function val(string $sql, array $p = []) { $r = q($sql, $p)->fetch(PDO::FETCH_NU
 function ins_ignore(): string { return sqlite_mode() ? 'INSERT OR IGNORE' : 'INSERT IGNORE'; }
 function lob($v): string { if (is_resource($v)) return (string)stream_get_contents($v); return $v === null ? '' : (string)$v; }
 
-const SCHEMA_VERSION = '6';
+const SCHEMA_VERSION = '7';
 function ensure_schema(PDO $pdo): void {
     static $done = false;
     if ($done) return; $done = true;
@@ -95,12 +95,13 @@ function ensure_schema(PDO $pdo): void {
             rt_d DOUBLE NULL, rt_along DOUBLE NULL, rt_i INT NULL, fl VARCHAR(10) NULL, pend_f VARCHAR(10) NULL, pend_n INT NOT NULL DEFAULT 0, pend_m DOUBLE NOT NULL DEFAULT 0, PRIMARY KEY (gid, uid)',
         'ml_rts' => 'sid CHAR(16) PRIMARY KEY, uid CHAR(24) NOT NULL, last BIGINT NOT NULL, created BIGINT NOT NULL',
         'ml_rtr' => 'sid CHAR(16) NOT NULL, room VARCHAR(60) NOT NULL, skey TEXT NULL, PRIMARY KEY (sid, room)',
+        'ml_gvp' => 'sid CHAR(16) PRIMARY KEY, gid CHAR(16) NOT NULL, uid CHAR(24) NOT NULL, name VARCHAR(40) NOT NULL',
         'ml_rte' => "id $ai, sid CHAR(16) NOT NULL, ev VARCHAR(40) NOT NULL, payload MEDIUMTEXT NOT NULL, at BIGINT NOT NULL",
     ];
     foreach ($t as $n => $cols) $pdo->exec("CREATE TABLE IF NOT EXISTS $n ($cols)$eng");
     try { $pdo->exec("ALTER TABLE ml_rgm ADD COLUMN role VARCHAR(8) NOT NULL DEFAULT ''"); } catch (Throwable $e) {}   // eski kurulumlar için (v5); yeni kurulumda sütun zaten var
     $idx = ['ml_posts(uid, at)', 'ml_posts(at)', 'ml_comments(post)', 'ml_images(uid)', 'ml_friends(b)', 'ml_requests(from_uid)', 'ml_requests(to_uid)', 'ml_msgs(pair, at)',
-        'ml_rgm(uid)', 'ml_rgrides(gid)', 'ml_rgrec(rideid)', 'ml_rglive(sid)', 'ml_rts(uid)', 'ml_rtr(room)', 'ml_rte(sid)', 'ml_rides(uid, started)', 'ml_kv(exp)', 'ml_gp(gid, at)', 'ml_gpc(post)'];
+        'ml_rgm(uid)', 'ml_rgrides(gid)', 'ml_rgrec(rideid)', 'ml_rglive(sid)', 'ml_rts(uid)', 'ml_rtr(room)', 'ml_rte(sid)', 'ml_rides(uid, started)', 'ml_kv(exp)', 'ml_gp(gid, at)', 'ml_gpc(post)', 'ml_gvp(gid)'];
     foreach ($idx as $i => $def) { try { $pdo->exec('CREATE INDEX mlx' . $i . ' ON ' . $def); } catch (Throwable $e) {} }
     $pdo->prepare('REPLACE INTO ml_kv (k, v, exp) VALUES (?, ?, 0)')->execute(['schema', SCHEMA_VERSION]);
 }

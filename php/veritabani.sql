@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS ml_rgstat (rideid CHAR(16) NOT NULL, uname VARCHAR(40
 CREATE TABLE IF NOT EXISTS ml_rglive (gid CHAR(16) NOT NULL, uid CHAR(24) NOT NULL, sid CHAR(16) NOT NULL, lat DOUBLE NULL, lon DOUBLE NULL, acc INT NULL, spd DOUBLE NULL, est DOUBLE NULL, at BIGINT NOT NULL DEFAULT 0, rt_d DOUBLE NULL, rt_along DOUBLE NULL, rt_i INT NULL, fl VARCHAR(10) NULL, pend_f VARCHAR(10) NULL, pend_n INT NOT NULL DEFAULT 0, pend_m DOUBLE NOT NULL DEFAULT 0, PRIMARY KEY (gid, uid)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE IF NOT EXISTS ml_rts (sid CHAR(16) PRIMARY KEY, uid CHAR(24) NOT NULL, last BIGINT NOT NULL, created BIGINT NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE IF NOT EXISTS ml_rtr (sid CHAR(16) NOT NULL, room VARCHAR(60) NOT NULL, skey TEXT NULL, PRIMARY KEY (sid, room)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS ml_gvp (sid CHAR(16) PRIMARY KEY, gid CHAR(16) NOT NULL, uid CHAR(24) NOT NULL, name VARCHAR(40) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE IF NOT EXISTS ml_rte (id BIGINT AUTO_INCREMENT PRIMARY KEY, sid CHAR(16) NOT NULL, ev VARCHAR(40) NOT NULL, payload MEDIUMTEXT NOT NULL, at BIGINT NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 -- (zaten varsa 'Duplicate key name' hatası verir; yok sayılabilir)
 CREATE INDEX mlx0 ON ml_posts(uid, at);
@@ -68,7 +69,8 @@ CREATE INDEX mlx17 ON ml_kv(exp);
 CREATE INDEX mlx18 ON ml_gp(gid, at);
 -- (zaten varsa 'Duplicate key name' hatası verir; yok sayılabilir)
 CREATE INDEX mlx19 ON ml_gpc(post);
+CREATE INDEX mlx20 ON ml_gvp(gid);
 
-REPLACE INTO ml_kv (k, v, exp) VALUES ('schema', '4', 0);
+REPLACE INTO ml_kv (k, v, exp) VALUES ('schema', '7', 0);
 
 -- Eski kurulumu yükseltiyorsan (v5): ALTER TABLE ml_rgm ADD COLUMN role VARCHAR(8) NOT NULL DEFAULT '';  (uygulama ilk istekte bunu kendisi de dener)

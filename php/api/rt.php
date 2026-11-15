@@ -37,6 +37,7 @@ function rt_disconnect(string $sid): void {
     q('DELETE FROM ml_rts WHERE sid = ?', [$sid]);                  // önce silinir: aşağıdaki işlemler bu oturuma olay yazmaz
     if ($u) {
         rg_disconnect($sid, $u);
+        gv_remove_peer($sid, 'disconnect');
     }
     q('DELETE FROM ml_rtr WHERE sid = ?', [$sid]);
     q('DELETE FROM ml_rte WHERE sid = ?', [$sid]);
@@ -60,6 +61,9 @@ function rt_dispatch(array $S, array $u, string $ev, $d): array {
         case 'grp:unwatch': grp_unwatch($S, $u, $d); return ['ok' => true];
         case 'grp:share': return grp_share($S, $u, $d);
         case 'grp:update': grp_update($S, $u, $d); return ['ok' => true];
+        case 'gv:join': return gv_join($S, $u, $d);
+        case 'gv:signal': return gv_signal($S, $u, $d);
+        case 'gv:leave': gv_remove_peer($S['sid'], 'left'); return ['ok' => true];
     }
     return ['error' => 'Bilinmeyen olay.'];
 }
@@ -89,9 +93,10 @@ function h_rt(): never {
     // Sunucu taraflı "periyodik" işler bu oturum için burada yapılır (arka plan süreci yok)
     $S = one('SELECT * FROM ml_rts WHERE sid = ?', [$sid]) ?? $S;
     $rooms = all('SELECT room, skey FROM ml_rtr WHERE sid = ?', [$sid]);
-    $inRg = false;
+    $inRg = false; $inGv = false;
     foreach ($rooms as $r) {
         if (str_starts_with($r['room'], 'rg:')) { $inRg = true; grp_push($sid, substr($r['room'], 3), $r['skey']); }
+        elseif (str_starts_with($r['room'], 'gv:')) { $inGv = true; gv_tick(substr($r['room'], 3)); }
     }
 
     $after = is_int($b['after'] ?? null) ? $b['after'] : 0;
@@ -101,10 +106,10 @@ function h_rt(): never {
     foreach ($rows as $r) $evs[] = '{"id":' . $r['id'] . ',"ev":' . rt_json($r['ev']) . ',"data":' . $r['payload'] . '}';
 
     $sharing = (bool)val('SELECT 1 FROM ml_rglive WHERE sid = ? LIMIT 1', [$sid]);
-    $next = $inRg ? 1500 : ($sharing ? 3000 : 4500);
+    $next = $inGv ? 800 : ($inRg ? 1500 : ($sharing ? 3000 : 4500));
     if (($worked || $evs) && $next > 2000) $next = 2000;
     http_response_code(200);
     header('Content-Type: application/json; charset=utf-8');
-    echo '{"sid":"' . $sid . '","fresh":' . ($fresh ? 'true' : 'false') . ',"events":[' . implode(',', $evs) . '],"acks":' . ($acks ? rt_json($acks) : '{}') . ',"next":' . $next . ',"keep":' . (($inRg || $sharing) ? 'true' : 'false') . '}';
+    echo '{"sid":"' . $sid . '","fresh":' . ($fresh ? 'true' : 'false') . ',"events":[' . implode(',', $evs) . '],"acks":' . ($acks ? rt_json($acks) : '{}') . ',"next":' . $next . ',"keep":' . (($inRg || $inGv || $sharing) ? 'true' : 'false') . '}';
     exit;
 }
