@@ -212,16 +212,15 @@ function rg_end_ride(array $g, ?array $by, ?string $why): void {
     $sum = json_encode(['v' => 1, 'rideId' => $rid, 'groupId' => $g['id'], 'name' => $g['name'], 'startedAt' => (int)$g['ride_started'], 'endedAt' => $t, 'endedBy' => $by ? uname($by) : null,
         'reason' => $why, 'recFull' => (bool)$g['rec_full'], 'route' => (int)$g['route_v'] > 0 ? ['len' => (int)$g['route_len'], 'v' => (int)$g['route_v']] : null, 'members' => $members], JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
     q('INSERT INTO ml_rgrides (id, gid, started, ended, sum) VALUES (?, ?, ?, ?, ?)', [$rid, $g['id'], (int)$g['ride_started'], $t, $sum]);
-    if (rg_music_get($g['id'])) { q('DELETE FROM ml_kv WHERE k = ?', ['rgmus:' . $g['id']]); rt_to_room('rg:' . $g['id'], 'grp:music', ['gid' => $g['id'], 'music' => null]); }
     q('UPDATE ml_rg SET ride_id = NULL, ride_started = 0, ride_by = NULL, ride_idle = 0 WHERE id = ?', [$g['id']]);
     q('DELETE FROM ml_rgstat WHERE rideid = ?', [$rid]);
     foreach (all('SELECT id FROM ml_rgrides WHERE gid = ? ORDER BY started DESC LIMIT 1000 OFFSET 50', [$g['id']]) as $old) { q('DELETE FROM ml_rgrec WHERE rideid = ?', [$old['id']]); q('DELETE FROM ml_rgrides WHERE id = ?', [$old['id']]); }
     rg_notify($g, 'ride-end');
 }
+function lv_num($v): ?float { return (is_int($v) || is_float($v)) && is_finite((float)$v) ? (float)$v : null; }
 function rg_destroy(array $g, string $kind): void {
     if ($g['ride_id']) { rg_end_ride($g, null, 'grup silindi'); $g = rg_group($g['id']) ?? $g; }
     rg_notify($g, $kind);
-    gv_destroy_group($g['id']);
     rt_leave_all('rg:' . $g['id']);
     foreach (all('SELECT id FROM ml_rgrides WHERE gid = ?', [$g['id']]) as $r) q('DELETE FROM ml_rgrec WHERE rideid = ?', [$r['id']]);
     rg_gpost_drop(array_column(all('SELECT id FROM ml_gp WHERE gid = ?', [$g['id']]), 'id'));
@@ -234,7 +233,6 @@ function rg_remove_member(array $g, string $uid, string $kind): void {
     rt_to_user($uid, 'grp:changed', ['gid' => $g['id'], 'kind' => 'removed']);
     rg_stop_share($g['id'], $uid, $kind);
     rt_leave_user($uid, 'rg:' . $g['id']);
-    gv_kick_user($g['id'], $uid);
     rg_ev($g['id'], $kind, rg_name($uid));
     q('DELETE FROM ml_rgm WHERE gid = ? AND uid = ?', [$g['id'], $uid]);
     rg_gpost_drop(array_column(all('SELECT id FROM ml_gp WHERE gid = ? AND uid = ?', [$g['id'], $uid]), 'id'));
@@ -258,7 +256,6 @@ function grp_watch(array $S, array $u, array $p): array {
     $s = rg_compute_state($g);
     q('UPDATE ml_rtr SET skey = ? WHERE sid = ? AND room = ?', [$s['key'], $S['sid'], 'rg:' . $g['id']]);
     rt_to_sid($S['sid'], 'grp:state', rg_payload($g, $s));
-    rt_to_sid($S['sid'], 'grp:music', ['gid' => $g['id'], 'music' => $g['ride_id'] ? rg_music_view(rg_music_get($g['id'])) : null]);
     return ['ok' => true, 'ride' => (bool)$g['ride_id']];
 }
 function grp_unwatch(array $S, array $u, array $p): void { $g = rg_member_group($p['gid'] ?? '', $u); if ($g) rt_leave($S['sid'], 'rg:' . $g['id']); }
@@ -307,8 +304,8 @@ function rg_ctx(string $id, $need = false): array {   // $need: true = yalnız l
     if ($need === 'staff' && !rg_is_staff($g, $u['id'])) fail(403, 'Bu işlem için grup lideri ya da yöneticisi olmalısın.');
     return [$u, $g];
 }
-// ---------- Etkinlikler (grup içi plan) + liderin müzik paylaşımı ----------
-// Etkinlikler ml_kv içinde JSON (anahtar rgev:<grup>); şema değişikliği YOK. Müzik durumu rgmus:<grup> (12 sa).
+// ---------- Etkinlikler (grup içi plan) ----------
+// Etkinlikler ml_kv içinde JSON (anahtar rgev:<grup>); şema değişikliği YOK.
 const RG_MAX_EVENTS = 20, RG_MAX_STOPS = 8;
 function rg_pt($p, bool $kind = false): ?array {
     if (!is_array($p)) return null;
@@ -358,31 +355,6 @@ function h_rg_event_delete(string $id, string $eid): never {
     [$u, $g] = rg_ctx($id, 'staff'); $a = rg_events_load($g['id']); $n = count($a);
     $a = array_values(array_filter($a, fn($x) => $x['id'] !== $eid)); if (count($a) === $n) fail(404, 'Etkinlik bulunamadı.');
     rg_events_save($g['id'], $a); rg_notify($g, 'events'); out(['ok' => true, 'events' => rg_event_list($g['id'])]);
-}
-function rg_music_get(string $gid): ?array { $m = json_decode(kv_get('rgmus:' . $gid) ?? 'null', true); return is_array($m) ? $m : null; }
-function rg_music_view(?array $m): ?array { return $m ? ['video' => $m['video'], 'list' => $m['list'], 'playing' => (bool)$m['playing'], 'seq' => (int)$m['seq'], 'by' => $m['by']] : null; }
-function grp_music(array $S, array $u, array $p): array {
-    $g = rg_member_group($p['gid'] ?? '', $u); if (!$g) return ['error' => 'Grup bulunamadı.'];
-    if (!$g['ride_id']) return ['error' => 'Aktif grup sürüşü yok.'];
-    if ($g['leader'] !== $u['id']) return ['error' => 'Müziği yalnız grup lideri paylaşır.'];
-    if (rl('gmus:' . $u['id'], 6, 1000)) return ['error' => 'Çok sık deneme.'];
-    $old = rg_music_get($g['id']); $room = 'rg:' . $g['id'];
-    if (array_key_exists('src', $p) && $p['src'] === null) { if ($old) { q('DELETE FROM ml_kv WHERE k = ?', ['rgmus:' . $g['id']]); rt_to_room($room, 'grp:music', ['gid' => $g['id'], 'music' => null]); } return ['ok' => true, 'shared' => false]; }
-    if (is_array($p['src'] ?? null)) {
-        $v = (string)($p['src']['video'] ?? ''); $l = (string)($p['src']['list'] ?? '');
-        $video = preg_match('/^[A-Za-z0-9_-]{11}$/', $v) ? $v : null; $list = preg_match('/^[A-Za-z0-9_-]{10,64}$/', $l) ? $l : null;
-        if (!$video && !$list) return ['error' => 'Geçersiz YouTube bağlantısı.'];
-        $m = ['video' => $video, 'list' => $list, 'playing' => ($p['playing'] ?? true) !== false, 'seq' => (int)($old['seq'] ?? 0) + 1, 'by' => rg_name($u['id'])];
-        kv_set('rgmus:' . $g['id'], json_encode($m), 12 * 3600000); rt_to_room($room, 'grp:music', ['gid' => $g['id'], 'music' => rg_music_view($m)]);
-        return ['ok' => true, 'shared' => true];
-    }
-    if (!$old) return ['error' => 'Paylaşılan müzik yok.'];
-    $cmd = in_array($p['cmd'] ?? null, ['next', 'prev'], true) ? $p['cmd'] : null;
-    if (is_bool($p['playing'] ?? null)) $old['playing'] = $p['playing']; elseif (!$cmd) return ['error' => 'Geçersiz komut.'];
-    $old['seq'] = (int)$old['seq'] + 1; kv_set('rgmus:' . $g['id'], json_encode($old), 12 * 3600000);
-    $pl = ['gid' => $g['id'], 'music' => rg_music_view($old)]; if ($cmd) $pl['cmd'] = $cmd;
-    rt_to_room($room, 'grp:music', $pl);
-    return ['ok' => true, 'shared' => true];
 }
 function rg_member_by_name(array $g, $n): ?array { foreach (rg_members($g['id']) as $m) if (lower(rg_name($m['uid'])) === lower((string)$n)) return $m; return null; }
 function h_rg_list(): never {

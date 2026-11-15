@@ -249,21 +249,29 @@
       if (!res) return '';
       const s = res.summary;
       if (res.none) return '<div class="mm-tsum"><b>Sensör Verisi</b><p class="warn">Bu sürüşte sensör verisi gelmedi (izin verilmemiş ya da cihaz desteklemiyor). Yalnızca GPS kaydı var.</p></div>';
-      const row = (k, v) => `<div class="mm-trow"><span>${k}</span><span>${v}</span></div>`, st = (x, r) => badge(x.state, r);
-      const ev = (o, n) => (o.n ? o.n + ' (' + (o.imu ? o.imu + ' ivmeölçer' : '') + (o.imu && o.gps ? ', ' : '') + (o.gps ? o.gps + ' GPS' : '') + ')' + (o.sev[2] || o.sev[1] ? ' · sert+: ' + (o.sev[1] + o.sev[2]) : '') : '0');
-      return `<div class="mm-tsum"><b>Sensör Verisi</b>
-        ${row('Ani Frenleme', ev(s.events.brake))}${row('Ani Hızlanma', ev(s.events.accel))}
-        ${row('Boylamsal İvme', s.aLon.state === 'unavailable' || s.aLon.state === 'unsupported' ? st(s.aLon, s.reasons.aLon) : st(s.aLon) + ' <small>' + fmt1(s.aLon.min) + ' … +' + fmt1(s.aLon.max) + ' m/s²</small>')}
-        ${row('Yanal İvme', s.aLat.state === 'measured' ? st(s.aLat) + ' <small>en çok ' + fmt1(s.aLat.absMax) + ' m/s²</small>' : st(s.aLat, s.reasons.aLat))}
-        ${row('Yatış Açısı', s.lean.state === 'estimated' ? st(s.lean) + ' <small>sol ≈' + (s.lean.leftMax == null ? '—' : Math.round(s.lean.leftMax)) + '° · sağ ≈' + (s.lean.rightMax == null ? '—' : Math.round(s.lean.rightMax)) + '° (tahmini, ' + s.lean.secs + ' sn)</small>' : st(s.lean, s.reasons.lean))}
-        ${s.sync && s.sync.lagMs != null ? row('GPS–Sensör Eşleşmesi', 'gecikme ≈' + Math.round(s.sync.lagMs) + ' ms <small>(r=' + fmt2(s.sync.corr) + ')</small>') : ''}
-        <p class="mm-note">Yatış değerleri tahmindir; gerçek yatış ölçümüyle doğrulanmadı. Ani fren/hızlanma eşikleri gerçek sürüşle ayarlanmadı.</p></div>`;
+      const row = (k, v) => `<div class="mm-trow"><span>${k}</span><span>${v}</span></div>`, st = (x, r) => badge(x.state, r), gt = v => (v == null ? '—' : fmt2(Math.abs(v) / 9.81) + ' g');
+      const ev = (o, what) => (o.n ? o.n + ' kez' + (o.sev[2] || o.sev[1] ? ' <small>(' + (o.sev[1] + o.sev[2]) + ' tanesi sert)</small>' : '') : '0 <small>' + what + '</small>');
+      return `<div class="mm-tsum"><b>Sürüş Performansı (Ayrıntı)</b>
+        ${row('Ani frenleme', ev(s.events.brake, 'hız aniden düşmedi'))}${row('Ani hızlanma', ev(s.events.accel, 'gaza sert basılmadı'))}
+        ${row('İleri-geri kuvvet', s.aLon.state === 'unavailable' || s.aLon.state === 'unsupported' ? st(s.aLon, s.reasons.aLon) : st(s.aLon) + ' <small>en sert frenleme ' + gt(s.aLon.min) + ' · hızlanma ' + gt(s.aLon.max) + '</small>')}
+        ${row('Virajda yana kuvvet', s.aLat.state === 'measured' ? st(s.aLat) + ' <small>en çok ' + gt(s.aLat.absMax) + '</small>' : st(s.aLat, s.reasons.aLat))}
+        ${row('Yatış açısı (tahmin)', s.lean.state === 'estimated' ? st(s.lean) + ' <small>sola ≈' + (s.lean.leftMax == null ? '—' : Math.round(s.lean.leftMax)) + '° · sağa ≈' + (s.lean.rightMax == null ? '—' : Math.round(s.lean.rightMax)) + '°</small>' : st(s.lean, s.reasons.lean))}
+        <p class="mm-note">g: yer çekimi kadar kuvvet. Yatış değerleri tahmindir. Ayrıntılar Sürüş Analizi'nde.</p></div>`;
+    }
+    // Özet kartı için tek cümlelik, herkesin anlayacağı performans yorumu
+    function perfHtml(res) {
+      const head = '';
+      if (!res || res.none) return head + '<p>Sensör verisi alınamadı; yalnızca GPS özeti var.</p>';
+      const s = res.summary, nb = s.events.brake.n, na = s.events.accel.n, sert = s.events.brake.sev[1] + s.events.brake.sev[2] + (s.events.accel.sev[1] || 0);
+      const main = nb + na === 0 ? 'Sakin ve düzgün bir sürüştü: ani frenleme ya da hızlanma olmadı.' : (nb ? nb + ' kez ani frenleme' : '') + (nb && na ? ', ' : '') + (na ? na + ' kez ani hızlanma' : '') + (sert ? ' (' + sert + ' tanesi sert)' : '') + '.';
+      const lean = s.lean && s.lean.state === 'estimated' && (s.lean.leftMax != null || s.lean.rightMax != null) ? ' En çok yatış ≈' + Math.round(Math.max(s.lean.leftMax || 0, s.lean.rightMax || 0)) + '° (tahmini).' : '';
+      return head + '<p>' + esc(main + lean) + '</p>';
     }
     hud.addEventListener('click', openSheet);
     { const lt = $('mm-lean'); if (lt) lt.addEventListener('click', openSheet); }
     window.addEventListener('ml-cal-changed', () => { if (!T.recording) { T.cal = loadCal(); paint(); } });      // Ayarlar › Kalibrasyon'dan yapılan kalibrasyonu al
     paint();
-    return { begin, pause, resume, end, discard, sweep, onFix, openSheet, closeSheet, summaryHtml, enabled: () => T.enabled, recording: () => T.recording, _T: T };
+    return { begin, pause, resume, end, discard, sweep, onFix, openSheet, closeSheet, summaryHtml, perfHtml, enabled: () => T.enabled, recording: () => T.recording, _T: T };
   }
   window.Telemetry = { mount };
 })();

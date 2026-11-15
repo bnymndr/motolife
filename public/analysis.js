@@ -301,14 +301,17 @@ const accentC = () => { try { return getComputedStyle(document.documentElement).
       }
       const st = T.status, row = (k, s, r, extra) => `<div class="an-trow"><span>${k}</span><span>${badge(s, r)}${extra ? ' <small>' + extra + '</small>' : ''}</span></div>`, rs = st.reasons || {};
       const evs = st.events;
-      return `<section class="an-sec"><h2>Sensör Verisi</h2>${row('Boylamsal İvme', st.aLon.state, st.aLon.state === 'measured' ? null : rs.aLon, st.aLon.state === 'measured' ? fmt.ms2(st.aLon.min) + ' … +' + fmt.ms2(st.aLon.max) : '')}
-        ${row('Yanal İvme', st.aLat.state, st.aLat.state === 'measured' ? null : rs.aLat, st.aLat.state === 'measured' ? 'en çok ' + fmt.ms2(st.aLat.absMax) : '')}
-        ${row('Yatış Açısı', st.lean.state, st.lean.state === 'estimated' ? null : rs.lean, st.lean.state === 'estimated' ? 'sol ≈' + (st.lean.leftMax == null ? '—' : Math.round(st.lean.leftMax)) + '° · sağ ≈' + (st.lean.rightMax == null ? '—' : Math.round(st.lean.rightMax)) + '° · ' + st.lean.secs + ' sn' : '')}
-        ${row('Dönüş Hızı', st.yaw.state)}
-        <div class="an-trow"><span>Ani Frenleme</span><span><b>${evs.brake.n}</b> <small>${evs.brake.imu ? evs.brake.imu + ' ivmeölçer' : ''}${evs.brake.imu && evs.brake.gps ? ' · ' : ''}${evs.brake.gps ? evs.brake.gps + ' GPS hız farkı' : ''}${evs.brake.n ? ' · sert+: ' + (evs.brake.sev[1] + evs.brake.sev[2]) : ''}</small></span></div>
-        <div class="an-trow"><span>Ani Hızlanma</span><span><b>${evs.accel.n}</b> <small>${evs.accel.imu ? evs.accel.imu + ' ivmeölçer' : ''}${evs.accel.imu && evs.accel.gps ? ' · ' : ''}${evs.accel.gps ? evs.accel.gps + ' GPS hız farkı' : ''}</small></span></div>
-        ${st.sync && st.sync.lagMs != null ? `<div class="an-trow"><span>GPS–Sensör Eşleşmesi</span><span>gecikme ≈${Math.round(st.sync.lagMs)} ms <small>(r=${n1(st.sync.corr, 2)})</small></span></div>` : ''}
-        <p class="an-note">Yatış değerleri <b>tahmindir</b> (GPS hızı × jiroskop dönüş hızı modeli); gerçek yatış ölçümüyle doğrulanmadı. Yalnızca sensörler tutarlıyken yazılır, aksi halde «veri yok» görünür. Ani fren/hızlanma eşikleri gerçek sürüşle ayarlanmadı.</p></section>`;
+      const gtxt = x => fmt.g(x), nb = evs.brake.n, na = evs.accel.n, sertB = evs.brake.sev[1] + evs.brake.sev[2], sertA = evs.accel.sev[1] || 0;
+      const verdict = nb + na === 0 ? 'Sakin ve düzgün bir sürüş: ani frenleme ya da ani hızlanma olmadı.' : `${nb ? nb + ' kez ani frenleme' : ''}${nb && na ? ', ' : ''}${na ? na + ' kez ani hızlanma' : ''} oldu${sertB + sertA ? ' (' + (sertB + sertA) + ' tanesi sert)' : ''}. Fren ve gazı daha yumuşak kullanmak lastiği, yakıtı ve güvenliği korur.`;
+      return `<section class="an-sec"><h2>Sürüş Performansı</h2><p class="an-verdict">${esc(verdict)}</p>
+        <div class="an-trow"><span>Ani frenleme<br><small>Hızın kısa sürede çok düştüğü anlar</small></span><span><b>${nb}</b> kez${nb ? ' <small>' + (sertB ? sertB + ' tanesi sert' : 'hepsi orta şiddette') + '</small>' : ''}</span></div>
+        <div class="an-trow"><span>Ani hızlanma<br><small>Gaza sert basılan anlar</small></span><span><b>${na}</b> kez${na && sertA ? ' <small>' + sertA + ' tanesi sert</small>' : ''}</span></div>
+        ${row('İleri-geri kuvvet<br><small>Hızlanırken ve frenlerken hissedilen kuvvet</small>', st.aLon.state, st.aLon.state === 'measured' ? null : rs.aLon, st.aLon.state === 'measured' ? 'en sert frenleme ' + gtxt(st.aLon.min) + ' · en sert hızlanma ' + gtxt(st.aLon.max) : '')}
+        ${row('Virajda yana kuvvet<br><small>Viraj dönerken sağa/sola hissedilen kuvvet</small>', st.aLat.state, st.aLat.state === 'measured' ? null : rs.aLat, st.aLat.state === 'measured' ? 'en çok ' + gtxt(st.aLat.absMax) : '')}
+        ${row('Yatış açısı<br><small>Motorun virajda ne kadar yattığı (tahmin)</small>', st.lean.state, st.lean.state === 'estimated' ? null : rs.lean, st.lean.state === 'estimated' ? 'sola en çok ≈' + (st.lean.leftMax == null ? '—' : Math.round(st.lean.leftMax)) + '° · sağa ≈' + (st.lean.rightMax == null ? '—' : Math.round(st.lean.rightMax)) + '°' : '')}
+        ${row('Dönüş hızı<br><small>Virajı ne kadar çabuk döndüğün</small>', st.yaw.state)}
+        ${st.sync && st.sync.lagMs != null ? `<div class="an-trow"><span>Ölçüm uyumu <small>(teknik)</small></span><span>GPS ile sensör arası ≈${Math.round(st.sync.lagMs)} ms fark <small>(düşük olması iyidir)</small></span></div>` : ''}
+        <p class="an-note"><b>g nedir?</b> 1 g, yer çekimi kadar kuvvettir (vücudunun ağırlığı gibi). Ani frenleme ≈0,36 g ve üzeri, sert ≈0,56 g, çok sert ≈0,76 g sayılır. Yatış değerleri <b>tahmindir</b>; gerçek ölçümle doğrulanmadı. Eşikler henüz gerçek sürüşlerle ince ayar yapılmadı, sonuçlara yaklaşık değer olarak bak.</p></section>`;
     }
     function qualityCard(S) {
       const q = S.quality, sm = S.sum, notes = [];

@@ -36,9 +36,7 @@ function rt_disconnect(string $sid): void {
     $u = user_by_id($S['uid']);
     q('DELETE FROM ml_rts WHERE sid = ?', [$sid]);                  // önce silinir: aşağıdaki işlemler bu oturuma olay yazmaz
     if ($u) {
-        live_stop_by_sid($sid, $u);
         rg_disconnect($sid, $u);
-        gv_remove_peer($sid, 'disconnect');
     }
     q('DELETE FROM ml_rtr WHERE sid = ?', [$sid]);
     q('DELETE FROM ml_rte WHERE sid = ?', [$sid]);
@@ -58,21 +56,10 @@ function rt_dispatch(array $S, array $u, string $ev, $d): array {
         case 'dm:send': return dm_send($u, (string)($d['to'] ?? ''), $d['text'] ?? '', $d['cid'] ?? null);
         case 'dm:typing': dm_typing($u, (string)($d['to'] ?? ''), !empty($d['typing'])); return ['ok' => true];
         case 'dm:read': return dm_read_ev($u, (string)($d['with'] ?? ''));
-        case 'loc:share': return loc_share($S, $u, $d);
-        case 'loc:update': loc_update($S, $u, $d); return ['ok' => true];
-        case 'loc:watch': return loc_watch($S, $d);
         case 'grp:watch': return grp_watch($S, $u, $d);
         case 'grp:unwatch': grp_unwatch($S, $u, $d); return ['ok' => true];
         case 'grp:share': return grp_share($S, $u, $d);
         case 'grp:update': grp_update($S, $u, $d); return ['ok' => true];
-        case 'grp:music': return grp_music($S, $u, $d);
-        case 'gv:join': return gv_join($S, $u, $d);
-        case 'gv:signal': return gv_signal($S, $u, $d);
-        case 'gv:leave': gv_remove_peer($S['sid'], 'left'); return ['ok' => true];
-        case 'gv:mode': return gv_mode($S, $u, $d);
-        case 'gv:status': return gv_status($S, $u, $d);
-        case 'gv:floor': return gv_floor($S, $u, $d);
-        case 'gv:revoke': return gv_revoke($S, $u);
     }
     return ['error' => 'Bilinmeyen olay.'];
 }
@@ -101,12 +88,10 @@ function h_rt(): never {
 
     // Sunucu taraflı "periyodik" işler bu oturum için burada yapılır (arka plan süreci yok)
     $S = one('SELECT * FROM ml_rts WHERE sid = ?', [$sid]) ?? $S;
-    if ($S['w_lat'] !== null) loc_push($S, false);
     $rooms = all('SELECT room, skey FROM ml_rtr WHERE sid = ?', [$sid]);
-    $inRg = false; $inGv = false;
+    $inRg = false;
     foreach ($rooms as $r) {
         if (str_starts_with($r['room'], 'rg:')) { $inRg = true; grp_push($sid, substr($r['room'], 3), $r['skey']); }
-        elseif (str_starts_with($r['room'], 'gv:')) { $inGv = true; gv_tick(substr($r['room'], 3)); }
     }
 
     $after = is_int($b['after'] ?? null) ? $b['after'] : 0;
@@ -115,11 +100,11 @@ function h_rt(): never {
     $evs = [];
     foreach ($rows as $r) $evs[] = '{"id":' . $r['id'] . ',"ev":' . rt_json($r['ev']) . ',"data":' . $r['payload'] . '}';
 
-    $sharing = (bool)val('SELECT 1 FROM ml_live WHERE sid = ? LIMIT 1', [$sid]) || (bool)val('SELECT 1 FROM ml_rglive WHERE sid = ? LIMIT 1', [$sid]);
-    $next = $inGv ? 800 : ($inRg ? 1500 : (($S['w_lat'] !== null || $sharing) ? 3000 : 4500));
+    $sharing = (bool)val('SELECT 1 FROM ml_rglive WHERE sid = ? LIMIT 1', [$sid]);
+    $next = $inRg ? 1500 : ($sharing ? 3000 : 4500);
     if (($worked || $evs) && $next > 2000) $next = 2000;
     http_response_code(200);
     header('Content-Type: application/json; charset=utf-8');
-    echo '{"sid":"' . $sid . '","fresh":' . ($fresh ? 'true' : 'false') . ',"events":[' . implode(',', $evs) . '],"acks":' . ($acks ? rt_json($acks) : '{}') . ',"next":' . $next . ',"keep":' . (($inGv || $inRg || $sharing) ? 'true' : 'false') . '}';
+    echo '{"sid":"' . $sid . '","fresh":' . ($fresh ? 'true' : 'false') . ',"events":[' . implode(',', $evs) . '],"acks":' . ($acks ? rt_json($acks) : '{}') . ',"next":' . $next . ',"keep":' . (($inRg || $sharing) ? 'true' : 'false') . '}';
     exit;
 }

@@ -152,9 +152,9 @@
       notif: () => box(`<div class="flex min-h-[56px] items-center justify-between gap-3 px-4"><span>Tarayıcı Bildirimi<small class="block text-xs text-zinc-400">Durum: ${permTxt()}</small></span>${'Notification' in window && Notification.permission === 'default' ? `<button type="button" data-act="notifperm" class="btn-sm min-h-[44px]">İzin İste</button>` : ''}</div>`
         + sw('Bakım Hatırlatıcıları', 'ml_maint', '1', 'My Moto’da zamanı gelen bakım, sigorta ve muayene ana sayfada görünür')
         + sw('Titreşimli Grup Uyarıları', 'ml_vib', '1', navigator.vibrate ? 'Geride kaldın / uzaklaştın uyarılarında titreşir' : 'Bu cihaz titreşimi desteklemiyor (ör. iPhone)', !navigator.vibrate)) + note('Notification' in window && Notification.permission === 'denied' ? 'Bildirim engelli: tarayıcının site ayarlarından açabilirsin.' : 'Uygulama kapalıyken bildirim (push) gönderilmez; uyarılar uygulama açıkken gelir.'),
-      privacy: () => `<div class="space-y-3"><p class="rounded-2xl bg-white/[.055] p-4 text-sm text-zinc-300">Canlı konum paylaşımı her açılışta <b>kapalı</b> başlar. Açarken kapsamı (arkadaşlar / herkes) için onay istenir. Grup sürüşünde konum, her sürüşte ayrıca onayınla paylaşılır ve sürüş bitince durur.</p>`
+      privacy: () => `<div class="space-y-3">`
         + box(row('blocks', 'Engellenen Kullanıcılar', 'Arkadaşlık isteği ve mesaj gönderemezler') + row('offmaps', 'Çevrimdışı Haritalar', 'İl il ya da tüm Türkiye, internetsiz kullanım'))
-        + btn('resetcons', 'Konum Paylaşım Onaylarını Sıfırla') + `<div data-slot="perm"></div></div>`,
+        + `<div data-slot="perm"></div></div>`,
       blocks: () => `<p class="rounded-2xl bg-white/[.055] p-4 text-sm text-zinc-300">Engellediğin kişi sana arkadaşlık isteği ve mesaj gönderemez, seni aramada ve haritada göremez; arkadaşlık ve mesajlar silinir. Birini engellemek için profiline gidip <b>Engelle</b>'ye dokun.</p><div data-slot="blocks" class="space-y-2"><p class="px-1 text-sm text-zinc-400">Yükleniyor…</p></div>`,
       offmaps: () => `<div data-slot="offmaps"></div>`,
       moto: () => { const m = me(), D = root.MyMoto && root.MyMoto.read ? root.MyMoto.read(m.username) : { owner: '', km: null, dates: {} }, fld = (k, t, inner) => `<label class="block text-xs text-zinc-400">${t}${inner}</label>`,
@@ -259,7 +259,6 @@
       const b = e.target.closest('[data-act]'); if (!b) return; const a = b.dataset.act;
       if (a === 'logout') h.ask('Çıkış Yapılsın mı?', h.logout);
       else if (a === 'notifperm') { try { await Notification.requestPermission(); } catch {} show('notif'); }
-      else if (a === 'resetcons') { LS.del('mm_cons_friends'); LS.del('mm_cons_all'); msg('Onaylar sıfırlandı. Bir sonraki paylaşımda yeniden sorulur.'); }
       else if (a === 'blocksretry') blocksLoad();
       else if (a === 'unblock') {
         b.disabled = true;

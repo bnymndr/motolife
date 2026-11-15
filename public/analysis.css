@@ -83,3 +83,4 @@
 .an-confirm p{margin:0 0 10px}.an-confirm div{display:flex;gap:8px}
 .an .an-confirm button{flex:1;min-height:46px;border-radius:12px;background:rgba(255,255,255,.1);color:#F4EFE6;font-weight:600;border:0}
 .an .an-confirm button.go{background:#E8675D;color:#031420}
+.an-verdict{margin:0 0 8px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.06);font-size:14px;line-height:1.45}

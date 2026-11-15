@@ -2,9 +2,7 @@
 /* Harita ve Navigasyon ekranı.
    index.html ilk açılışta /map.css ve bu dosyayı yükler → window.MotoMap.mount(kök, {}) → activate()/deactivate().
    Harita: Leaflet 1.9.4 (cdnjs, sabit sürüm). Karo adresi, arama ve rota sunucudan (maps.js) gelir.
-   Dışa açık API:  MotoMap.mount(root) → { activate, deactivate, setRiders(liste), flyToMe }
-   Diğer sürücüler: setRiders([{ id, name, lat, lon, speed (m/sn, ops.), leader (ops.), cls (ops.), tip (ops.) }]).
-   Canlı sürücüler + konum paylaşımı: mount(root, { user, socket }) ile verilen Socket.IO bağlantısı üzerinden (sunucu: live.js); socket verilmezse özellik kapalıdır. */
+   Dışa açık API:  MotoMap.mount(root, { user, ... }) → { activate, deactivate, flyToMe, startEvent, prefs, openSensors } */
 (function () {
   /* ================= Çekirdek: tarayıcıdan bağımsız hesaplar (Node ile test edilir) ================= */
   const toRad = d => d * Math.PI / 180;
@@ -103,20 +101,7 @@
     return { i, step: steps[i], dist: Math.max(0, steps[i].at - along) };
   }
 
-  // YouTube bağlantısından yalnızca doğrulanmış video/liste kimliği çıkarır (iframe adresi bu kimliklerden kurulur; ham metin asla kullanılmaz)
-  function parseYouTube(str) {
-    let u; try { u = new URL(String(str || '').trim().replace(/^(?!https?:\/\/)/i, 'https://')); } catch { return null; }
-    const host = u.hostname.replace(/^(www\.|m\.|music\.)/, ''), ID = /^[\w-]{11}$/, LIST = /^[\w-]{10,64}$/;
-    let video = null; const list = LIST.test(u.searchParams.get('list') || '') ? u.searchParams.get('list') : null;
-    if (host === 'youtu.be') video = u.pathname.split('/')[1];
-    else if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
-      const p = u.pathname.split('/').filter(Boolean);
-      if (p[0] === 'watch') video = u.searchParams.get('v'); else if (['shorts', 'embed', 'live', 'v'].includes(p[0])) video = p[1];
-    } else return null;
-    video = ID.test(video || '') ? video : null;
-    return video || list ? { video, list } : null;
-  }
-  const Core = { parseYouTube, haversine, fmtDist, fmtClock, fmtEta, RouteTracker, estimateEta, Smoother, nextStep };
+  const Core = { haversine, fmtDist, fmtClock, fmtEta, RouteTracker, estimateEta, Smoother, nextStep };
   if (typeof module !== 'undefined' && module.exports) module.exports = Core;
   if (typeof window === 'undefined') return;
 
@@ -132,8 +117,11 @@
     search: ic('<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>'),
     plus: ic('<path d="M12 5v14M5 12h14"/>'),
     minus: ic('<path d="M5 12h14"/>'),
-    locate: ic('<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>'),
+    headset: ic('<path d="M4 14v-2a8 8 0 0116 0v2"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/><path d="M19 20c0 1.5-2 2-5 2"/>'),
+    mic: ic('<rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/>'),
+    micoff: ic('<path d="M3 3l18 18"/><path d="M9 9v2a3 3 0 005 2M15 10V6a3 3 0 00-5.6-1.5"/><path d="M5 11a7 7 0 0011 5M12 18v3"/>'),
     music: ic('<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>'),
+    locate: ic('<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>'),
     back: ic('<path d="M15 5l-7 7 7 7"/>'),
     route: ic('<circle cx="6" cy="18" r="2.4"/><circle cx="18" cy="6" r="2.4"/><path d="M8.4 18H14a3.5 3.5 0 0 0 0-7h-4a3.5 3.5 0 0 1 0-7h5.6"/>'),
     menu: ic('<path d="M4 7h16M4 12h16M4 17h16"/>'),
@@ -141,7 +129,6 @@
     play: '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>',
     nav: ic('<path d="M3 11l18-8-8 18-2-8-8-2z"/>'),
     chev: ic('<path d="M6 9l6 6 6-6"/>'),
-    group: ic('<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17.5" cy="9" r="2.5"/><path d="M17 14.2c2.4.3 4 2.2 4 4.8"/>')
   };
   const arrow = (deg, w) => `<svg viewBox="0 0 24 24" width="${w || 26}" height="${w || 26}" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g transform="rotate(${deg} 12 12)"><path d="M12 20V5M6 11l6-6 6 6"/></g></svg>`;
   const svg24 = (d, w) => `<svg viewBox="0 0 24 24" width="${w || 26}" height="${w || 26}" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
@@ -204,9 +191,6 @@
       </div>
       <div class="mm-chiprow">
         <div class="mm-chip" id="mm-gps" data-s="warn">GPS aranıyor…</div>
-        <div class="mm-chip" id="mm-sharechip" data-s="ok" hidden></div>
-        <div class="mm-chip" id="mm-cnt" hidden></div>
-        <div class="mm-chip mm-gchip" id="mm-gchip" role="button" tabindex="0" hidden></div>
       </div>
     </div>
 
@@ -214,27 +198,13 @@
       <button type="button" class="mm-btn" id="mm-zin" aria-label="Yakınlaştır">${ICON.plus}</button>
       <button type="button" class="mm-btn" id="mm-zout" aria-label="Uzaklaştır">${ICON.minus}</button>
       <button type="button" class="mm-btn" id="mm-loc" aria-label="Konumuma Dön">${ICON.locate}</button>
-      <button type="button" class="mm-btn mm-gbtn" id="mm-gbtn" aria-label="Grup Sürüşü" hidden>${ICON.group}</button>
       <button type="button" class="mm-btn" id="mm-rtbtn" aria-label="Ara ve Rota Oluştur">${ICON.route}</button>
-      <button type="button" class="mm-btn" id="mm-musbtn" aria-label="Müzik" aria-expanded="false">${ICON.music}</button>
       <button type="button" class="mm-btn" id="mm-mbtn" aria-label="Harita Ayarları" aria-expanded="false">${ICON.menu}</button>
       <div class="mm-menu" id="mm-menu" hidden>
         <div class="mm-mrow"><span>Harita Teması</span>
           <div class="mm-seg"><button type="button" data-th="dark">Koyu</button><button type="button" data-th="light">Açık</button></div></div>
         <label class="mm-mrow"><span>Sürüşte Ekranı Açık Tut</span><input type="checkbox" id="mm-wake"></label>
         <div class="mm-mrow"><span>Sürüş Ekranı</span><div class="mm-seg mm-segs" id="mm-hudseg"><button type="button" data-hud="full">Tam</button><button type="button" data-hud="bar">Şerit</button><button type="button" data-hud="speed">Hız</button><button type="button" data-hud="card">Kart</button></div></div>
-        <div class="mm-mrow"><span>Grup Bilgi Boyutu</span><div class="mm-seg mm-segs" id="mm-gszseg"><button type="button" data-gsz="s">Küçük</button><button type="button" data-gsz="l">Büyük</button></div></div>
-        <div id="mm-live" hidden>
-          <p class="mm-sec">Diğer Sürücüler</p>
-          <label class="mm-mrow"><span>Haritada Göster</span><input type="checkbox" id="mm-vshow"></label>
-          <div class="mm-mrow"><span>Görüntüleme Mesafesi</span>
-            <select id="mm-vkm" class="mm-sel" aria-label="Görüntüleme Mesafesi"><option value="5">5 km</option><option value="10">10 km</option><option value="25">25 km</option><option value="50">50 km</option><option value="100">100 km</option><option value="250">250 km</option></select></div>
-          <label class="mm-mrow"><span>Yalnızca Arkadaşlar</span><input type="checkbox" id="mm-vfo"></label>
-          <p class="mm-sec">Konum Paylaşımı</p>
-          <label class="mm-mrow"><span>Konumumu Paylaş</span><input type="checkbox" id="mm-share"></label>
-          <div class="mm-mrow"><span>Kimler Görsün</span><div class="mm-seg mm-segs"><button type="button" data-aud="friends">Arkadaşlar</button><button type="button" data-aud="all">Herkes</button></div></div>
-          <p class="mm-note" id="mm-sharenote"></p>
-        </div>
         <div class="mm-mrow"><span>Sensörler (yatış, ivme)</span><button type="button" class="mm-mini" id="mm-tbtn">Kapalı</button></div>
         <div class="mm-mrow mm-saved"><span id="mm-savedtxt">Kayıtlı Sürüş: —</span><button type="button" class="mm-mini" id="mm-syncbtn" hidden>Eşitle</button></div>
         <p class="mm-note" id="mm-synchint" hidden></p>
@@ -278,15 +248,6 @@
 
     <div class="mm-attr" id="mm-attr"></div>
     <div class="mm-bottom">
-      <div class="mm-now" id="mm-now" hidden aria-live="off"><span id="mm-now-t"></span></div>
-      <div class="mm-mctl" id="mm-mctl" hidden role="group" aria-label="Müzik Kontrolleri">
-        <button type="button" class="mm-mk" id="mm-kprev" aria-label="Önceki Parça">⏮</button>
-        <button type="button" class="mm-mk mm-kp" id="mm-kplay" aria-label="Duraklat">⏸</button>
-        <button type="button" class="mm-mk" id="mm-knext" aria-label="Sonraki Parça">⏭</button>
-        <i class="mm-ksep"></i>
-        <button type="button" class="mm-mk mm-kv" id="mm-kvm" aria-label="Sesi Kıs">−</button>
-        <button type="button" class="mm-mk mm-kv" id="mm-kvp" aria-label="Sesi Aç">+</button>
-      </div>
       <div class="mm-panel" id="mm-panel">
         <button type="button" class="mm-pcol" id="mm-pcol" hidden aria-label="Paneli Küçült">${ICON.chev}<span>Küçült</span></button>
         <button type="button" class="mm-start" id="mm-start">${ICON.play}<span>Sürüşü Başlat</span></button>
@@ -313,27 +274,6 @@
         </div>
       </div>
     </div>
-    <div class="mm-gsheet mm-musheet off" id="mm-music" role="dialog" aria-label="Müzik">
-      <div class="mm-gh"><span>Müzik</span><button type="button" class="mm-gx" id="mm-mclose" aria-label="Kapat">✕</button></div>
-      <div class="mm-mutabs" role="tablist"><button type="button" data-mt="yt" aria-pressed="true">YouTube</button><button type="button" data-mt="dev" aria-pressed="false">Cihazdan</button></div>
-      <div class="mm-muvol"><label for="mm-muvol">Müzik Sesi <output id="mm-muvolo"></output></label><input id="mm-muvol" type="range" min="0" max="100" step="1" aria-label="Müzik Sesi"></div>
-      <div class="mm-mupane" data-pane="yt">
-        <form class="mm-muform" id="mm-ytform" autocomplete="off"><input id="mm-yturl" type="url" inputmode="url" placeholder="YouTube video ya da liste bağlantısı yapıştır" aria-label="YouTube Bağlantısı" maxlength="300"><button type="submit" class="mm-mb primary">Oynat</button></form>
-        <p class="mm-note" id="mm-ytnote">Bağlantıyı YouTube'dan «Paylaş › Bağlantıyı kopyala» ile al. Video bu sayfada oynar; ekran kilitlenirse ya da başka uygulamaya geçersen YouTube yayını durabilir.</p>
-        <div class="mm-ytbox" id="mm-ytbox"></div>
-        <button type="button" class="mm-mb danger mm-gwide" id="mm-ytstop" hidden>Yayını Durdur</button>
-      </div>
-      <div class="mm-mupane" data-pane="dev" hidden>
-        <div class="mm-mufiles"><label class="mm-mb primary" for="mm-files">Müzik Dosyası Seç</label><label class="mm-mb" for="mm-dir">Klasör Seç</label></div>
-        <input type="file" id="mm-files" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.opus,.flac" multiple hidden><input type="file" id="mm-dir" webkitdirectory multiple hidden>
-        <p class="mm-note" id="mm-munote">Cihazındaki müzik dosyalarını ya da bir klasörü seç. Dosyalar cihazından çıkmaz, sunucuya gönderilmez; sayfa yenilenince listeyi yeniden seçmen gerekir.</p>
-        <div class="mm-munow" id="mm-munow"></div>
-        <audio id="mm-aud" controls preload="metadata" playsinline></audio>
-        <div class="mm-mubtns"><button type="button" class="mm-mb" id="mm-mprev" aria-label="Önceki">⏮</button><button type="button" class="mm-mb" id="mm-mnext" aria-label="Sonraki">⏭</button></div>
-        <ol class="mm-mulist" id="mm-mulist"></ol>
-      </div>
-    </div>
-    <div class="mm-gsheet" id="mm-gsheet" hidden></div>
     <div class="mm-gsheet" id="mm-tsheet" hidden></div>
     <div class="mm-gsheet" id="mm-ssheet" hidden></div>
     <div class="mm-modal" id="mm-modal" hidden></div>
@@ -344,11 +284,11 @@
     const $ = id => host.querySelector('#' + id);
     const el = { root: $('mm'), map: $('mm-map'), load: $('mm-load'), loadMsg: $('mm-load-msg'), retry: $('mm-retry'),
       form: $('mm-form'), q: $('mm-q'), go: $('mm-go'), head: $('mm-head'), navbar: $('mm-navbar'), results: $('mm-results'), rt: $('mm-rt'), rtbody: $('mm-rtbody'), gps: $('mm-gps'),
-      menu: $('mm-menu'), mbtn: $('mm-mbtn'), toast: $('mm-toast'), attr: $('mm-attr'), dest: $('mm-dest'), start: $('mm-start'), ride: $('mm-ride'), modal: $('mm-modal'), sharechip: $('mm-sharechip'), cnt: $('mm-cnt') };
+      menu: $('mm-menu'), mbtn: $('mm-mbtn'), toast: $('mm-toast'), attr: $('mm-attr'), dest: $('mm-dest'), start: $('mm-start'), ride: $('mm-ride'), modal: $('mm-modal') };
 
     const S = { cfg: null, map: null, ready: false, active: false, watch: null, me: null, hadFix: false, follow: true,
       meMarker: null, accCircle: null, smooth: new Smoother(), raw: null, fixAt: 0, hadGood: false, hdv: null, staleT: 0, pendingRoute: false, dest: null, destMarker: null, route: null, routeLines: [], nav: null,
-      ride: null, riding: false, trail: null, tick: null, wl: null, hiddenAt: 0, riders: null, toastT: 0, theme: store.get('mm_theme', 'dark'),
+      ride: null, riding: false, trail: null, tick: null, wl: null, hiddenAt: 0, toastT: 0, theme: store.get('mm_theme', 'dark'),
       keepAwake: store.get('mm_wake', '1') === '1',
       user: (opts && opts.user) || 'anon', rec: null, trailGroup: null, trailSeg: null, trailBreak: true, sumId: null, persistWarned: false, avgMode: store.get('mm_avg', 'mov'), syncTimer: 0 };
 
@@ -403,7 +343,6 @@
         S.tiles.on('tileerror', () => { if (good || ++bad < 4) return; if (i >= FB.length) { if (!S.tileMsg) { S.tileMsg = 1; el.load.hidden = false; el.load.textContent = 'Harita karoları yüklenemedi. Reklam engelleyici/VPN veya internet bağlantısını kontrol et.'; } return; } bad = 0; S.fbUrl = FB[i][0]; el.attr.innerHTML = FB[i][1]; i++; delete el.root.dataset.nd; S.tiles.setUrl(S.fbUrl); }); }
       tryVector(cfg);
       el.attr.innerHTML = (cfg.tileAttr || '') + (cfg.route && cfg.route.attr ? ' · ' + cfg.route.attr : '');
-      S.riders = L.layerGroup().addTo(S.map);
       S.map.on('dragstart', () => { S.follow = false; paintLocate(); paintRot(); });
       el.map.addEventListener('pointerdown', flattenForTouch, true);
       el.load.hidden = true;
@@ -444,8 +383,11 @@
       while (i < t.c.length - 1 && t.cum[i] < along + 40) i++;
       return bearingTo(S.me.lat, S.me.lon, t.c[i][0], t.c[i][1]);
     }
+    const rotOn = () => !!S.nav || rideOpen();     // navigasyon, sürüş (tek/grup/etkinlik) ya da grup konum paylaşımı: harita gidiş yönüne döner
     function paintRot() {
-      if (!S.nav || !S.me || !S.map) return;
+      if (!S.map) return;
+      if (!rotOn()) { if (S.boxOn) { rotBox(false); const mk = S.meMarker && S.meMarker.getElement && S.meMarker.getElement(), bx = mk && mk.querySelector('.mm-me'); if (bx) bx.classList.remove('up'); } return; }
+      if (!S.me) return;
       if (!S.boxOn) rotBox(true);
       const m = S.meMarker && S.meMarker.getElement && S.meMarker.getElement(), box = m && m.querySelector('.mm-me'), rot = m && m.querySelector('.rot');
       if (!S.follow) { if (S.rotCur) { S.rotCur = 0; setRot(0, true); } return; }
@@ -455,9 +397,9 @@
       if (box) box.classList.add('hd', 'up'); if (rot) rot.style.transform = `rotate(${h}deg)`;
     }
     function flattenForTouch() {          // dokunuş başlayınca düz görünüm; bırakılınca takip sürüyorsa yeniden döner
-      if (!S.nav || !S.boxOn || !S.rotCur) return;
+      if (!rotOn() || !S.boxOn || !S.rotCur) return;
       S.rotCur = 0; setRot(0, true);
-      const back = () => { document.removeEventListener('pointerup', back, true); document.removeEventListener('pointercancel', back, true); setTimeout(() => { if (S.nav && S.follow) paintRot(); }, 60); };
+      const back = () => { document.removeEventListener('pointerup', back, true); document.removeEventListener('pointercancel', back, true); setTimeout(() => { if (rotOn() && S.follow) paintRot(); }, 60); };
       document.addEventListener('pointerup', back, true); document.addEventListener('pointercancel', back, true);
     }
 
@@ -513,7 +455,7 @@
       clearInterval(S.staleT); S.staleT = 0;
     }
     function onGeoErr(e) {
-      if (e.code === 1) { if (S.g && S.g.sharing()) S.g.stop(true, 'Konum izni olmadığı için grup paylaşımı kapatıldı.'); if (sock && S.lv.on) { stopShare(true); toast('Konum izni olmadığı için paylaşım kapatıldı.', 7000); } chip('Konum izni kapalı', 'bad'); toast('Konum izni verilmedi. Telefon/tarayıcı ayarlarından bu site için konumu aç.', 7000); stopWatch(); }
+      if (e.code === 1) { chip('Konum izni kapalı', 'bad'); toast('Konum izni verilmedi. Telefon/tarayıcı ayarlarından bu site için konumu aç.', 7000); stopWatch(); }
       else if (e.code === 2) chip('GPS sinyali yok', 'bad');
       else chip('GPS aranıyor…', 'warn');
     }
@@ -522,7 +464,7 @@
       const f = { lat: c.latitude, lon: c.longitude, acc: c.accuracy, t: pos.timestamp || Date.now(),
         speed: c.speed != null && isFinite(c.speed) && c.speed >= 0 ? c.speed : null,
         heading: c.heading != null && isFinite(c.heading) ? c.heading : null };
-      S.raw = f; S.fixAt = Date.now();
+      S.raw = f; S.fixAt = Date.now(); emit('mm:speed', { kmh: f.speed == null ? null : f.speed * 3.6 });
       const sm = S.smooth.push(f);                                      // ekran/rota için düzeltilmiş konum; null = bu nokta reddedildi
       if (sm) S.me = { ...f, lat: sm.lat, lon: sm.lon };
       chip(f.acc <= 50 ? `GPS ±${Math.round(f.acc)} m` : `Zayıf sinyal ±${Math.round(f.acc)} m`, f.acc <= 20 ? 'ok' : f.acc <= 50 ? 'warn' : 'bad');
@@ -538,7 +480,6 @@
       if (sm && S.nav) updateNav(S.me);
       if (S.nav) paintPill();
       if (sm && S.pendingRoute && S.dest && !S.route && !S.routeBusy) { S.pendingRoute = false; previewRoute(); }
-      if (sock) { if (S.lv.on) sendLoc(f, false); if (S.active) sendWatch(false); if (S.g) S.g.onFix(f); }
       if (S.tele) S.tele.onFix(f);
       if (S.dest && !S.route) $('mm-dline').textContent = destDistText();
     }
@@ -547,156 +488,6 @@
       if (!S.me) { toast(el.gps.dataset.s === 'bad' ? el.gps.textContent + '. Konum alınamadı.' : 'Konum henüz bulunamadı, GPS aranıyor…'); startWatch(); return; }
       S.follow = true; paintLocate();
       S.map.setView([S.me.lat, S.me.lon], Math.max(S.map.getZoom(), 16), { animate: true }); paintRot();
-    }
-
-    /* ---------- Diğer sürücüler (altyapı) ---------- */
-    function setRiders(list) {
-      if (!S.ready) return;
-      const L = window.L; S.riders.clearLayers();
-      (Array.isArray(list) ? list : []).forEach(r => {
-        if (!r || !isFinite(r.lat) || !isFinite(r.lon)) return;
-        const name = String(r.name || '?'), init = esc(name.trim().charAt(0).toLocaleUpperCase('tr') || '?');
-        const mk = L.marker([r.lat, r.lon], { keyboard: false, icon: L.divIcon({ className: 'mm-icon', iconSize: [34, 34], iconAnchor: [17, 17],
-          html: `<div class="mm-rider${r.leader ? ' lead' : ''}${r.cls ? ' ' + esc(r.cls) : ''}"><span>${init}</span>${r.badge != null ? '<i class="mm-rbadge">' + esc(r.badge) + '</i>' : ''}</div>` }) });
-        const sp = kmh(r.speed);
-        mk.bindTooltip(r.tip ? esc(r.tip) : esc(name) + (sp != null ? ' · ' + Math.round(sp) + ' km/h' : ''), { direction: 'top', offset: [0, -16] });
-        S.riders.addLayer(mk);
-      });
-    }
-
-    /* ---------- Canlı sürücüler + açık rızalı konum paylaşımı (Socket.IO; sunucu: live.js) ----------
-       Paylaşım her sayfa açılışında kapalı başlar. Gönderim seyrek: hareketteyken ≥10 sn ve ≥25 m, durağanken 45 sn'de bir, sürüş durumu değişince hemen.
-       Görüntüleme: sunucu, izleyiciye yalnızca yetkili ve taze sürücüleri, seçilen mesafe içinde, değişince gönderir; harita ekranı açıkken çalışır. */
-    const sock = opts && opts.socket;
-    const KM_OPTS = [5, 10, 25, 50, 100, 250], LIVE_MS = 90000, STALE_MS = 45000, MOVE_MS = 10000, MOVE_M = 25, BEAT_MS = 45000;
-    S.lv = { show: store.get('mm_vshow', '1') === '1', km: KM_OPTS.includes(Number(store.get('mm_vkm', '25'))) ? Number(store.get('mm_vkm', '25')) : 25,
-      fo: store.get('mm_vfo', '0') === '1', aud: store.get('mm_aud', 'friends') === 'all' ? 'all' : 'friends',
-      on: false, sent: null, watchKey: '', data: [], timer: 0, wt: 0 };
-    const consentKey = a => 'mm_cons_' + a;
-    const audName = a => (a === 'all' ? 'Herkes' : 'Arkadaşlar');
-    function paintLive() {
-      if (!sock) return;
-      const v = S.lv, who = v.aud === 'all' ? 'tüm sürücüler' : 'yalnızca arkadaşların';
-      $('mm-vshow').checked = v.show; $('mm-vkm').value = String(v.km); $('mm-vfo').checked = v.fo; $('mm-share').checked = v.on;
-      $('mm-vkm').disabled = $('mm-vfo').disabled = !v.show;
-      el.menu.querySelectorAll('[data-aud]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.aud === v.aud)));
-      $('mm-sharenote').textContent = v.on
-        ? (sock.connected ? 'Paylaşım açık: konumunu ' + who + ' görüyor. Kapatınca ya da uygulamayı kapatınca hemen kaybolur.' : 'Paylaşım açık ama sunucuya bağlı değilsin; bağlantı gelince devam eder.')
-        : 'Kapalı: konumun kimseye gösterilmez.' + (v.aud === 'all' ? ' Açarsan arkadaş olmayanlar yaklaşık (≈100 m) konumunu görür.' : '');
-      el.sharechip.hidden = !v.on;
-      if (v.on) { el.sharechip.textContent = 'Konumun paylaşılıyor · ' + audName(v.aud); el.sharechip.dataset.s = sock.connected ? 'ok' : 'warn'; }
-      if (!v.show) el.cnt.hidden = true;
-    }
-    function renderRiders() {
-      if (!S.ready) return;
-      const v = S.lv, now = Date.now();
-      v.data = v.data.filter(r => now - r.at <= LIVE_MS);               // eski konum canlı gösterilmez
-      const list = v.show ? v.data.map(r => {
-        const age = Math.max(0, Math.round((now - r.at) / 1000)), stale = age * 1000 > STALE_MS;
-        const tip = r.u + ' · ' + (r.riding ? 'Sürüşte' : 'Sürüşte değil') + ' · ' + (age < 10 ? 'şimdi' : age + ' sn önce') + ' · ' + String(r.km).replace('.', ',') + ' km' + (r.approx ? ' · yaklaşık konum' : '');
-        return { id: r.u, name: r.u, lat: r.lat, lon: r.lon, cls: 'rel-' + r.rel + (r.riding ? ' riding' : '') + (stale ? ' stale' : ''), tip };
-      }) : [];
-      const grp = S.g ? S.g.markers() : [], gset = new Set(grp.map(m => m.name));
-      const near = list.filter(r => !gset.has(r.name));
-      setRiders(grp.concat(near));
-      if (v.show) {
-        const n = near.length, m = v.data.filter(r => r.riding).length;
-        el.cnt.textContent = n ? 'Çevrede ' + n + ' sürücü' + (m ? ' · ' + m + ' sürüşte' : '') : 'Çevrede paylaşan sürücü yok';
-        el.cnt.dataset.s = n ? 'ok' : ''; el.cnt.hidden = false;
-      } else el.cnt.hidden = true;
-    }
-    function sendWatch(force) {
-      const v = S.lv;
-      if (!sock || !S.active || !sock.connected) return;
-      if (!v.show) { if (v.watchKey) { sock.emit('loc:watch', { off: true }); v.watchKey = ''; } return; }
-      if (!S.me) return;
-      const lat = Math.round(S.me.lat * 100) / 100, lon = Math.round(S.me.lon * 100) / 100;   // merkez ≈1 km yuvarlanır
-      const key = [lat, lon, v.km, v.fo ? 1 : 0].join(',');
-      if (!force && key === v.watchKey) return;
-      v.watchKey = key;
-      sock.timeout(5000).emit('loc:watch', { lat, lon, km: v.km, fo: v.fo }, (err, r) => { if (err || !r || !r.ok) v.watchKey = ''; });   // başarısızsa sonraki konumda tekrar denenir
-    }
-    function watchSoon() { clearTimeout(S.lv.wt); S.lv.wt = setTimeout(() => sendWatch(false), 600); }
-    function sendLoc(f, force) {
-      const v = S.lv;
-      if (!v.on || !sock.connected || !f || f.acc > 100) return;           // zayıf GPS paylaşılmaz
-      const now = Date.now(), riding = rideOpen(), s = v.sent;
-      if (!force && s) {
-        const dt = now - s.at;
-        if (!(riding !== s.riding || dt >= BEAT_MS || (dt >= MOVE_MS && haversine(s.lat, s.lon, f.lat, f.lon) >= MOVE_M))) return;
-      }
-      v.sent = { lat: f.lat, lon: f.lon, at: now, riding };
-      sock.volatile.emit('loc:update', { lat: Math.round(f.lat * 1e5) / 1e5, lon: Math.round(f.lon * 1e5) / 1e5, acc: Math.round(f.acc), riding });
-    }
-    function shareEmit(aud, done) {
-      sock.timeout(6000).emit('loc:share', { on: true, aud, consent: true }, (err, r) => {
-        if (err || !r || !r.ok) { toast((r && r.error) || 'Paylaşım açılamadı, sunucu yanıt vermedi.'); S.lv.on = false; S.lv.sent = null; paintLive(); return; }
-        S.lv.on = true; S.lv.aud = aud; paintLive(); if (done) done();
-      });
-    }
-    function startShare() {
-      shareEmit(S.lv.aud, () => { S.lv.sent = null; startWatch(); if (S.me) sendLoc(S.me, true); });   // paylaşım boyunca GPS açık kalır
-    }
-    function stopShare(tell) {
-      const v = S.lv; v.on = false; v.sent = null;
-      if (tell && sock.connected) sock.emit('loc:share', { on: false });
-      paintLive();
-      if (!S.active && !rideActive() && !S.nav && !gpsHeld()) stopWatch();
-    }
-    function askConsent(aud) {
-      paintLive();
-      modal('<h3>Konumun Paylaşılsın mı?</h3><p>' + (aud === 'all'
-        ? 'Konumun, uygulamayı kullanan <b>tüm sürücülere</b> gösterilir. Arkadaşların tam konumunu, diğerleri yaklaşık (≈100 m) konumunu görür.'
-        : 'Konumun yalnızca <b>arkadaşlarına</b> gösterilir.') +
-        '</p><p>Sürüşte olup olmadığın da görünür. Paylaşım yalnızca uygulama açıkken sürer; istediğin an kapatabilirsin, kapatınca konumun hemen kaybolur. Konumun kalıcı olarak saklanmaz.</p>' +
-        '<div class="mm-mbtns"><button type="button" class="mm-mb" data-act="live-no">Vazgeç</button><button type="button" class="mm-mb primary" data-act="live-yes" data-aud="' + aud + '" data-focus>Paylaşımı Aç</button></div>');
-    }
-    function liveConsented(aud) {
-      store.set(consentKey(aud), '1'); store.set('mm_aud', aud); S.lv.aud = aud;
-      if (S.lv.on) shareEmit(aud, () => { S.lv.sent = null; if (S.me) sendLoc(S.me, true); }); else startShare();
-    }
-    function onShareToggle(want) {
-      const v = S.lv;
-      if (!want) return stopShare(true);
-      if (!sock.connected) { toast('Sunucuya bağlı değilsin; paylaşım açılamadı.'); return paintLive(); }
-      if (store.get(consentKey(v.aud), '0') !== '1') return askConsent(v.aud);
-      startShare();
-    }
-    function onAudience(a) {
-      const v = S.lv; if (v.aud === a) return;
-      if (v.on && a === 'all' && store.get(consentKey('all'), '0') !== '1') return askConsent('all');
-      v.aud = a; store.set('mm_aud', a);
-      if (v.on) shareEmit(a, null);
-      paintLive();
-    }
-    function gpsHeld() { return !!((sock && S.lv && S.lv.on) || (S.g && S.g.sharing())); }   // canlı konum veya grup paylaşımı açıkken GPS izleme sürer
-    function liveActivate() {
-      if (!sock) return;
-      clearInterval(S.lv.timer); S.lv.timer = setInterval(renderRiders, 15000);   // yerelde eskiyen konumları düşür/soluklaştır
-      sendWatch(true);
-    }
-    function liveDeactivate() {
-      if (!sock) return;
-      clearInterval(S.lv.timer); S.lv.timer = 0; clearTimeout(S.lv.wt);
-      if (S.lv.watchKey && sock.connected) sock.emit('loc:watch', { off: true });     // ekran kapalıyken sunucu bize konum yollamaz
-      S.lv.watchKey = ''; S.lv.data = []; if (S.ready) setRiders([]);
-    }
-    if (sock) {
-      $('mm-live').hidden = false;
-      sock.on('loc:riders', list => {
-        if (!S.active || !S.lv.show) return;
-        const now = Date.now();
-        S.lv.data = (Array.isArray(list) ? list : []).filter(r => r && typeof r.u === 'string' && isFinite(r.lat) && isFinite(r.lon)).map(r => ({ ...r, at: now - (Number(r.age) || 0) * 1000 }));
-        renderRiders();
-      });
-      sock.on('connect', () => { S.lv.watchKey = ''; if (S.lv.on) shareEmit(S.lv.aud, () => { S.lv.sent = null; if (S.me) sendLoc(S.me, true); }); sendWatch(true); paintLive(); });
-      sock.on('disconnect', paintLive);
-      sock.on('loc:taken', () => { stopShare(false); toast('Konum paylaşımı başka bir sekmede açıldı; burada kapatıldı.', 6000); });
-      $('mm-vshow').addEventListener('change', e => { S.lv.show = e.target.checked; store.set('mm_vshow', S.lv.show ? '1' : '0'); if (!S.lv.show) { sendWatch(false); S.lv.data = []; } renderRiders(); paintLive(); if (S.lv.show) sendWatch(true); });
-      $('mm-vkm').addEventListener('change', e => { S.lv.km = Number(e.target.value); store.set('mm_vkm', String(S.lv.km)); watchSoon(); });
-      $('mm-vfo').addEventListener('change', e => { S.lv.fo = e.target.checked; store.set('mm_vfo', S.lv.fo ? '1' : '0'); watchSoon(); });
-      $('mm-share').addEventListener('change', e => onShareToggle(e.target.checked));
-      paintLive();
     }
 
     /* ---------- Arama ---------- */
@@ -835,9 +626,9 @@
     function dropRoute() {
       clearTimeout(S.routeTimer); S.reqId++; S.routeBusy = false; S.routeMsg = ''; S.pendingRoute = false; closeSteps(); $('mm-turn').hidden = true;
       clearRouteLayers(); S.route = null;
-      if (S.nav) { S.nav = null; el.navbar.hidden = true; S.spOpen = false; rotBox(false); paintNavMode(); paintLocate(); }
+      if (S.nav) { S.nav = null; el.navbar.hidden = true; S.spOpen = false; if (!rotOn()) rotBox(false); paintNavMode(); paintLocate(); }
       $('mm-form').hidden = false; measureHead();
-      if (!S.active && !rideActive() && !gpsHeld()) stopWatch();
+      if (!S.active && !rideActive()) stopWatch();
     }
 
     // Tek yetkili rota isteği: gereksiz çağrıları burada engelliyoruz
@@ -1043,7 +834,8 @@
       if (p.remaining < Math.max(40, f.acc * 1.5) && r.distance > 100) {
         const q = S.evq;
         if (q && q.i + 1 < q.pts.length) { q.done = q.done || new Set(); q.done.add(evKey(q.pts[q.i])); toast('Ulaştın: ' + q.pts[q.i].name + '. Sıradaki nokta için yol tarifi hazırlanıyor.', 6000); S.evAdv = true; clearDest(); S.evAdv = false; return evGo(q.i + 1, true); }
-        toast(q ? 'Etkinlik rotası tamamlandı: ' + q.title : 'Hedefe ulaştın.', 6000); return clearDest();
+        const fin = () => { if (rideOpen() && el.modal.hidden) modal('<h3>' + (q ? 'Etkinlik Tamamlandı' : 'Hedefe Ulaştın') + '</h3><p>Sürüşü bitirip performans raporunu görmek ister misin?</p><div class="mm-mbtns"><button type="button" class="mm-mb" data-act="cancel">Sürmeye Devam</button><button type="button" class="mm-mb primary" data-act="end" data-focus>Sürüşü Bitir</button></div>'); };
+        toast(q ? 'Etkinlik rotası tamamlandı: ' + q.title : 'Hedefe ulaştın.', 6000); clearDest(); return fin();
       }
       if (f.acc > 50) return;                                          // zayıf konumla sapma kararı verme
       const now = Date.now();
@@ -1106,8 +898,9 @@
       return rec;
     }
 
+    const emit = (n, d) => { try { host.dispatchEvent(new CustomEvent(n, { detail: d })); } catch {} };   // interkom/müzik modülü için (gevşek bağ)
     function showRidePanel() {
-      el.start.hidden = true; el.ride.hidden = false;
+      el.start.hidden = true; el.ride.hidden = false; emit('mm:ride', { on: true });
       if (!S.tick) S.tick = setInterval(paintRide, 1000);
       acquireWake(); startWatch(); paintRide();
     }
@@ -1121,14 +914,14 @@
       newTrail(); persistMeta();
       if (S.raw && Date.now() - S.fixAt < 5000) recordFix(S.raw);       // GPS tazeyse ilk noktayı hemen al
       S.follow = true; paintLocate();
-      if (S.me) S.map.setView([S.me.lat, S.me.lon], Math.max(S.map.getZoom(), 16));
+      if (S.me) { S.map.setView([S.me.lat, S.me.lon], Math.max(S.map.getZoom(), 16)); paintRot(); }
       showRidePanel();
       if (el.gps.dataset.s === 'bad') toast('GPS sinyali zayıf ya da yok; konum geldikçe kayıt başlar.');
     }
     function pauseRide() {
       if (!rideActive()) return;
       S.rec.pause(Date.now()); S.trailBreak = true; persistMeta(); releaseWake(); paintRide(); if (S.tele) S.tele.pause();
-      if (!S.active && !S.nav && !gpsHeld()) stopWatch();
+      if (!S.active && !S.nav) stopWatch();
     }
     function resumeRide() {
       if (!S.rec || S.rec.status !== 'paused') return;
@@ -1216,12 +1009,12 @@
       const can = opts && opts.onAnalyze && mode === 'saved';
       modal('<h3>Sürüş Özeti</h3><div class="mm-sum mm-sum3">' +
         row('Mesafe', fmtDist(sm.distM)) + row('Süre', dur(sm.durationS)) + row('Ort. Hız', kh(sm.avgMovingKmh)) + '</div>' +
+        (mode === 'saved' ? '<div class="mm-perf" id="mm-perf"><p>Performans raporu hazırlanıyor…</p></div>' : '') +
         notes.map(n => `<p class="warn">${esc(n)}</p>`).join('') +
         '<details class="mm-more"><summary>Daha fazla</summary><div class="mm-sum">' +
         row('Hareket', dur(sm.movingS)) + row('Duruş', dur(sm.stoppedS)) + row('Ort. Hız (toplam)', kh(sm.avgTotalKmh)) + row('Maks. Hız', kh(sm.maxKmh)) +
         row('Duraklatma', sm.pausedS >= 1 ? sm.pauseCount + ' × ' + dur(sm.pausedS) : '—') + row('Rota noktası', sm.points) + '</div><div id="mm-telsum"></div></details>' +
         `<p class="mm-sync" id="mm-syncst" data-s="local">${savedLine()}</p>` +
-        (can ? '<p class="mm-hint">Rota, hız grafiği ve sensör ayrıntıları Sürüş Analizi\'nde.</p>' : '') +
         '<div class="mm-mbtns">' + (can ? '<button type="button" class="mm-mb" data-act="analyze">Sürüş Analizi</button>' : '') + '<button type="button" class="mm-mb primary" data-act="close" data-focus>Tamam</button></div>');
       S.sumRide = id;
     }
@@ -1230,15 +1023,16 @@
       clearInterval(S.tick); S.tick = null; releaseWake();
       r.end(at || Date.now());
       const sm = r.summary(r.endedAt), id = r.id, hasData = r.track.length > 0;
-      S.rec = null; el.ride.hidden = true; el.start.hidden = false;
-      if (!S.active && !S.nav && !gpsHeld()) stopWatch();
+      S.rec = null; el.ride.hidden = true; el.start.hidden = false; emit('mm:ride', { on: false });
+      if (!S.active && !S.nav) stopWatch();
       if (r.track.length > 1) S.map.fitBounds(r.track, { paddingTopLeft: [40, 100], paddingBottomRight: [40, 330], maxZoom: 17 });
-      S.follow = false; paintLocate(); S.sumId = id;
+      S.follow = false; paintLocate(); S.sumId = id; paintRot();
       if (!hasData) { if (S.tele) S.tele.discard(); RS().remove(id).catch(() => {}); showSummary(sm, id, 'empty'); S.sumId = null; refreshCounts(); return; }
       showSummary(sm, id, 'saved');
       RS().saveMeta(metaOf(r)).then(() => syncNow(), persistFail);   // önce cihaza yaz, sonra gönder
       if (S.tele) S.tele.end(id, r.endedAt).then(res => {            // sensör verisi: eş kayıt olarak cihaza yazılır, sürüş sunucuya gidince gönderilir
         const box = el.modal.querySelector('#mm-telsum'); if (res && box) box.innerHTML = S.tele.summaryHtml(res);
+        const pf = el.modal.querySelector('#mm-perf'); if (pf) pf.innerHTML = S.tele.perfHtml ? S.tele.perfHtml(res) : '';
         return syncNow();
       }).catch(() => {});
     }
@@ -1279,105 +1073,12 @@
     $('mm-loc').addEventListener('click', flyToMe);
     $('mm-ctr').addEventListener('click', flyToMe);
 
-    /* ---------- Müzik: YouTube bağlantısı ya da cihazdaki müzik dosyaları (sürüş boyunca; yeni sunucu/depolama yok) ---------- */
-    const MU = { tab: 'yt', tracks: [], i: -1, urls: [] }, mu = $('mm-music'), aud = $('mm-aud');
-    const AUDIO_RE = /\.(mp3|m4a|aac|wav|ogg|oga|opus|flac|weba|webm|mp4)$/i;
-    const muBusy = () => !!$('mm-ytbox').firstChild || (!aud.paused && !aud.ended);
-    // Müzik sesi: konuşma sesinden AYRI (ml_vol_music). Grup sesi paneli de aynı değeri ayarlar; birisi konuşurken müzik kısılabilir (ml_duck).
-    const MV = { v: Math.max(0, Math.min(100, Number(store.get('ml_vol_music', '100')) || 0)), duck: false };
-    const muEff = () => (MV.v / 100) * (MV.duck && store.get('ml_duck', '1') !== '0' ? 0.3 : 1);
-    function ytVol() { const f = $('mm-ytbox').firstChild; if (f && f.contentWindow) { try { f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [Math.round(muEff() * 100)] }), '*'); } catch {} } }
-    function muVol() { try { aud.volume = muEff(); } catch {} ytVol(); const r = $('mm-muvol'); if (r) { r.value = String(MV.v); $('mm-muvolo').textContent = '%' + Math.round(MV.v); } }
-    $('mm-muvol').addEventListener('input', e => { MV.v = Number(e.target.value); store.set('ml_vol_music', String(MV.v)); muVol(); });
-    window.addEventListener('ml:music-volume', e => { MV.v = Math.max(0, Math.min(100, Number(e.detail && e.detail.v) || 0)); muVol(); });
-    window.addEventListener('ml:voice-activity', e => { MV.duck = !!(e.detail && e.detail.active); muVol(); });
-    aud.addEventListener('play', muVol);
-    function muPaint() { muStrip(); const b = $('mm-musbtn'); b.classList.toggle('on', muBusy() && mu.classList.contains('off')); b.setAttribute('aria-expanded', String(!mu.classList.contains('off'))); }
-    function muOpen(o) { mu.classList.toggle('off', !o); muPaint(); if (o) { el.menu.hidden = true; showResults(''); } }
-    function muTab(t) {
-      MU.tab = t; mu.querySelectorAll('[data-mt]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mt === t)));
-      mu.querySelectorAll('[data-pane]').forEach(p => { p.hidden = p.dataset.pane !== t; });
-    }
-    /* Sürüş ekranı müzik şeridi: parça adı (akan yazı) + önceki / durdur-devam / sonraki / ses −+ */
-    const MS = { ytPlaying: true, ytTitle: '', last: '' };
-    const ytCmd = (fn, args) => { const f = $('mm-ytbox').firstChild; if (f && f.contentWindow) { try { f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: fn, args: args || [] }), '*'); } catch {} } };
-    function muTitle() { if ($('mm-ytbox').firstChild) return MS.ytTitle || 'YouTube'; const t = MU.tracks[MU.i]; return t ? t.name : ''; }
-    function muStrip() {
-      const on = !!$('mm-ytbox').firstChild || MU.tracks.length > 0, now = $('mm-now'), ctl = $('mm-mctl');
-      now.hidden = ctl.hidden = !on; if (!on) { MS.last = ''; return; }
-      const playing = $('mm-ytbox').firstChild ? MS.ytPlaying : !aud.paused && !aud.ended, k = $('mm-kplay');
-      k.textContent = playing ? '⏸' : '▶'; k.setAttribute('aria-label', playing ? 'Duraklat' : 'Devam Et');
-      const t = muTitle(); if (t === MS.last) return; MS.last = t;
-      const sp = $('mm-now-t'); sp.className = ''; sp.textContent = '♫ ' + t;
-      requestAnimationFrame(() => { if (sp.scrollWidth > now.clientWidth - 24) { sp.textContent = '♫ ' + t + '   •   ♫ ' + t + '   •   '; sp.className = 'run'; sp.style.setProperty('--dur', Math.max(8, Math.round(t.length * 0.45)) + 's'); } });
-    }
-    $('mm-kplay').addEventListener('click', () => { if ($('mm-ytbox').firstChild) { MS.ytPlaying = !MS.ytPlaying; ytCmd(MS.ytPlaying ? 'playVideo' : 'pauseVideo'); muStrip(); gHook({ t: 'toggle', playing: MS.ytPlaying }); } else if (aud.paused) aud.play().catch(() => {}); else aud.pause(); });
-    $('mm-kprev').addEventListener('click', () => { if ($('mm-ytbox').firstChild) { ytCmd('previousVideo'); gHook({ t: 'cmd', cmd: 'prev' }); } else muPlay(MU.i - 1); });
-    $('mm-knext').addEventListener('click', () => { if ($('mm-ytbox').firstChild) { ytCmd('nextVideo'); gHook({ t: 'cmd', cmd: 'next' }); } else muPlay(MU.i + 1); });
-    const kvol = d => { MV.v = Math.max(0, Math.min(100, Math.round(MV.v / 10) * 10 + d)); store.set('ml_vol_music', String(MV.v)); muVol(); toast('Müzik sesi %' + MV.v, 900); };
-    $('mm-kvm').addEventListener('click', () => kvol(-10)); $('mm-kvp').addEventListener('click', () => kvol(10));
-    window.addEventListener('message', e => { const f = $('mm-ytbox').firstChild; if (!f || e.source !== f.contentWindow) return; let d; try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch { return; } const i = d && d.info; if (!i) return;
-      if (i.videoData && i.videoData.title && i.videoData.title !== MS.ytTitle) { MS.ytTitle = i.videoData.title; MS.last = ''; }
-      if (typeof i.playerState === 'number') MS.ytPlaying = i.playerState === 1 || i.playerState === 3; muStrip(); });
-    const gHook = o => { try { if (S.g && S.g.musicLocal) S.g.musicLocal(o); } catch {} };       // grup lideri müzik paylaşımı (group-ride.js)
-    function ytStop(remote) { const was = !!$('mm-ytbox').firstChild; MS.ytTitle = ''; MS.ytPlaying = true; $('mm-ytbox').innerHTML = ''; $('mm-ytstop').hidden = true; muPaint(); if (remote !== true && was) gHook({ t: 'stop' }); }
-    function ytPlay(str, remote) {
-      const id = typeof str === 'string' ? Core.parseYouTube(str) : str, note = $('mm-ytnote');
-      if (!id) { note.textContent = 'Bu bağlantıyı tanıyamadım. Bir YouTube video ya da liste bağlantısı yapıştır.'; note.classList.add('warn'); return; }
-      note.classList.remove('warn');
-      aud.pause();
-      const src = id.video ? 'https://www.youtube-nocookie.com/embed/' + id.video + '?autoplay=1&playsinline=1&rel=0&enablejsapi=1' + (id.list ? '&list=' + id.list : '')
-        : 'https://www.youtube-nocookie.com/embed/videoseries?autoplay=1&playsinline=1&rel=0&enablejsapi=1&list=' + id.list;
-      const f = document.createElement('iframe');
-      f.src = src; f.title = 'YouTube Oynatıcı'; f.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture'); f.setAttribute('allowfullscreen', ''); f.referrerPolicy = 'strict-origin-when-cross-origin';
-      f.addEventListener('load', () => { ytVol(); setTimeout(ytVol, 1500); try { f.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1 }), '*'); } catch {} });                 // oynatıcı hazır olunca kayıtlı müzik sesi uygulanır
-      MS.ytTitle = ''; MS.ytPlaying = true; $('mm-ytbox').innerHTML = ''; $('mm-ytbox').appendChild(f); $('mm-ytstop').hidden = false;
-      note.textContent = 'Oynatılıyor. Durdurmak için aşağıdaki düğmeyi ya da videonun kendi düğmesini kullan.';
-      if (typeof str === 'string') store.set('mm_yt', String(str).trim().slice(0, 300)); muPaint();
-      if (remote !== true) gHook({ t: 'play', id: { video: id.video || null, list: id.list || null } });
-    }
-    muVol();
-    $('mm-ytform').addEventListener('submit', e => { e.preventDefault(); ytPlay($('mm-yturl').value); });
-    $('mm-ytstop').addEventListener('click', () => ytStop());
-    $('mm-yturl').value = store.get('mm_yt', '');
-    function muNow() {
-      const t = MU.tracks[MU.i]; $('mm-munow').textContent = t ? (MU.i + 1) + ' / ' + MU.tracks.length + ' · ' + t.name : '';
-      $('mm-mulist').querySelectorAll('li').forEach((li, i) => li.classList.toggle('cur', i === MU.i)); muStrip();
-      if ('mediaSession' in navigator && t) { try { navigator.mediaSession.metadata = new MediaMetadata({ title: t.name, artist: 'Moto Life' }); } catch {} }
-    }
-    function muPlay(i) {
-      if (!MU.tracks.length) return; MU.i = (i + MU.tracks.length) % MU.tracks.length;
-      ytStop(); aud.src = MU.tracks[MU.i].url; muNow();
-      const p = aud.play(); if (p && p.catch) p.catch(() => { $('mm-munote').textContent = 'Bu dosya bu cihazda çalınamadı (biçim desteklenmiyor olabilir). Sonrakine geçebilirsin.'; });
-    }
-    function muLoad(fileList) {
-      const files = [...fileList].filter(f => (f.type && f.type.startsWith('audio/')) || AUDIO_RE.test(f.name)).slice(0, 300);
-      const note = $('mm-munote');
-      if (!files.length) { note.textContent = 'Seçimde müzik dosyası bulunamadı (mp3, m4a, aac, wav, ogg, flac).'; return; }
-      MU.urls.forEach(u => URL.revokeObjectURL(u)); aud.pause(); aud.removeAttribute('src');
-      files.sort((a, b) => (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name, 'tr', { numeric: true }));
-      MU.tracks = files.map(f => ({ name: f.name.replace(/\.[^.]+$/, ''), url: URL.createObjectURL(f) })); MU.urls = MU.tracks.map(t => t.url);
-      $('mm-mulist').innerHTML = MU.tracks.map((t, i) => `<li><button type="button" data-ti="${i}">${esc(t.name)}</button></li>`).join('');
-      note.textContent = MU.tracks.length + ' parça yüklendi. Dosyalar cihazından çıkmaz.'; muPlay(0);
-    }
-    $('mm-files').addEventListener('change', e => { muLoad(e.target.files); e.target.value = ''; });
-    $('mm-dir').addEventListener('change', e => { muLoad(e.target.files); e.target.value = ''; });
-    $('mm-mulist').addEventListener('click', e => { const b = e.target.closest('[data-ti]'); if (b) muPlay(Number(b.dataset.ti)); });
-    $('mm-mprev').addEventListener('click', () => muPlay(MU.i - 1)); $('mm-mnext').addEventListener('click', () => muPlay(MU.i + 1));
-    aud.addEventListener('ended', () => muPlay(MU.i + 1)); aud.addEventListener('play', muPaint); aud.addEventListener('pause', muPaint);
-    aud.addEventListener('error', () => { if (MU.tracks.length > 1 && aud.src) setTimeout(() => muPlay(MU.i + 1), 600); });
-    if ('mediaSession' in navigator) { try { navigator.mediaSession.setActionHandler('previoustrack', () => muPlay(MU.i - 1)); navigator.mediaSession.setActionHandler('nexttrack', () => muPlay(MU.i + 1)); } catch {} }
-    mu.querySelectorAll('[data-mt]').forEach(b => b.addEventListener('click', () => muTab(b.dataset.mt)));
-    $('mm-musbtn').addEventListener('click', e => { e.stopPropagation(); muOpen(mu.classList.contains('off')); });
-    $('mm-mclose').addEventListener('click', () => muOpen(false));
-
     el.mbtn.addEventListener('click', e => { e.stopPropagation(); const o = el.menu.hidden; el.menu.hidden = !o; el.mbtn.setAttribute('aria-expanded', String(o)); });
     /* Sürüş ekranı yerleşimi (tam / ince şerit / yalnız hız / köşe kartı) ve grup bilgi boyutu: kullanıcı seçer, tarayıcıda saklanır */
     function setHud(v) { v = ['full', 'bar', 'speed', 'card'].includes(v) ? v : 'full'; el.root.dataset.hud = v; store.set('mm_hud', v); el.menu.querySelectorAll('[data-hud]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.hud === v))); }
-    function setGsz(v) { v = v === 'l' ? 'l' : 's'; el.root.dataset.gsz = v; store.set('mm_gsz', v); el.menu.querySelectorAll('[data-gsz]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.gsz === v))); }
-    el.menu.addEventListener('click', e => { const h = e.target.closest('[data-hud]'), g = e.target.closest('[data-gsz]'); if (h) setHud(h.dataset.hud); if (g) setGsz(g.dataset.gsz); });
-    setHud(store.get('mm_hud', 'full')); setGsz(store.get('mm_gsz', 's'));
-    el.menu.addEventListener('click', e => { e.stopPropagation(); const t = e.target.closest('[data-th]'); if (t) setTheme(t.dataset.th); const a = e.target.closest('[data-aud]'); if (a && sock) onAudience(a.dataset.aud); });
+    el.menu.addEventListener('click', e => { const h = e.target.closest('[data-hud]'); if (h) setHud(h.dataset.hud); });
+    setHud(store.get('mm_hud', 'full'));
+    el.menu.addEventListener('click', e => { e.stopPropagation(); const t = e.target.closest('[data-th]'); if (t) setTheme(t.dataset.th); });
     $('mm-wake').checked = S.keepAwake;
     $('mm-wake').addEventListener('change', e => { S.keepAwake = e.target.checked; store.set('mm_wake', S.keepAwake ? '1' : '0'); if (rideActive()) (S.keepAwake ? acquireWake() : releaseWake()); });
     if (!('wakeLock' in navigator)) { $('mm-wake').disabled = true; $('mm-wake').checked = false; $('mm-wakenote').textContent = 'Bu tarayıcı ekranı açık tutmayı desteklemiyor. Sürüş boyunca ekranı kendin açık tut; ekran kilitlenirse konum alınamayabilir.'; }
@@ -1386,30 +1087,6 @@
     setTheme(S.theme);
 
     /* ---------- Başlatma ---------- */
-    /* ---------- Grup sürüşü (public/group-ride.js, sunucu: ridegroups.js) ----------
-       Ayrı dosyada yüklenir; harita, GPS ve «diğer sürücüler» hattı bu dosyadan ctx ile paylaşılır. Soket yoksa kapalıdır. */
-    function initGroup() {
-      if (!sock || S.g) return;
-      const start = () => {
-        S.g = window.GroupRide.mount({
-          sock, user: S.user, $, esc, toast, modal, closeModal, store, haversine, modalEl: el.modal,
-          yt: { play: (id, playing) => { ytPlay(id, true); if (playing === false) setTimeout(() => { ytCmd('pauseVideo'); MS.ytPlaying = false; muStrip(); }, 2000); }, stop: () => ytStop(true), cmd: c => { if (c === 'next') ytCmd('nextVideo'); else if (c === 'prev') ytCmd('previousVideo'); },
-            playing: p => { ytCmd(p ? 'playVideo' : 'pauseVideo'); MS.ytPlaying = !!p; muStrip(); }, active: () => !!$('mm-ytbox').firstChild }, openAnalysis: gid => { if (opts && opts.onAnalyzeGroup) opts.onAnalyzeGroup(gid); },
-          map: () => S.map, L: () => window.L, me: () => S.me, isActive: () => S.active,
-          currentRoute: () => (S.route && Array.isArray(S.route.coords) && S.route.coords.length > 1 ? { coords: S.route.coords, label: S.route.label } : null),
-          refresh: renderRiders, startGps: startWatch,
-          releaseGps: () => { if (!S.active && !rideActive() && !S.nav && !gpsHeld()) stopWatch(); },
-          flyTo: (lat, lon) => { S.follow = false; paintLocate(); S.map.setView([lat, lon], Math.max(S.map.getZoom(), 15), { animate: true }); },
-          fitPoints: pts => { S.follow = false; paintLocate(); S.map.fitBounds(window.L.latLngBounds(pts), { padding: [60, 60], maxZoom: 17 }); }
-        });
-        if (S.active) S.g.activate();
-        if (S.pendingJoin) { const c = S.pendingJoin; S.pendingJoin = ''; S.g.joinPrompt(c); }
-      };
-      if (window.GroupRide) return start();
-      const sc = document.createElement('script'); sc.src = '/group-ride.js';
-      sc.onload = start; sc.onerror = () => { sc.remove(); };      // grup özelliği yüklenemezse harita yine çalışır
-      document.head.appendChild(sc);
-    }
     /* ---------- Telemetri (public/telemetry-core.js + telemetry.js): sensör verisi sürüş kaydına eş kayıt olarak bağlanır ---------- */
     function initTele() {
       if (S.tele) return;
@@ -1422,7 +1099,7 @@
       el.load.hidden = false; el.retry.hidden = true; el.loadMsg.textContent = 'Harita yükleniyor…';
       const cfgP = fetch('/api/maps/config', { credentials: 'same-origin' }).then(r => { if (!r.ok) throw new Error(r.status === 401 ? 'Oturum süresi dolmuş. Sayfayı yenile.' : 'Harita ayarları alınamadı.'); return r.json(); });
       const ridesP = loadScripts(['/ride-core.js', '/ride-store.js']).then(() => window.RideStore.init());
-      Promise.all([cfgP, loadLeaflet(), ridesP]).then(([cfg]) => { initMap(cfg); initGroup(); initTele(); checkRecovery().catch(() => {}); refreshCounts(); syncNow(); }).catch(err => {
+      Promise.all([cfgP, loadLeaflet(), ridesP]).then(([cfg]) => { initMap(cfg); initTele(); checkRecovery().catch(() => {}); refreshCounts(); syncNow(); }).catch(err => {
         el.loadMsg.textContent = err.message || 'Harita yüklenemedi.'; el.retry.hidden = false;
       });
     }
@@ -1430,10 +1107,9 @@
     boot();
 
     return {
-      activate() { S.active = true; if (S.ready) { S.map.invalidateSize(); measureHead(); startWatch(); } liveActivate(); if (S.g) S.g.activate(); },
-      deactivate() { S.active = false; liveDeactivate(); if (S.g) S.g.deactivate(); if (!rideActive() && !S.nav && !gpsHeld()) stopWatch(); },
-      setRiders, flyToMe, startEvent,
-      joinPrompt(code) { if (S.g) S.g.joinPrompt(code); else S.pendingJoin = code; },   // davet bağlantısı (?grup=KOD)
+      activate() { S.active = true; if (S.ready) { S.map.invalidateSize(); measureHead(); startWatch(); } },
+      deactivate() { S.active = false; if (!rideActive() && !S.nav) stopWatch(); },
+      flyToMe, startEvent,
       // Ayarlar ekranı: tercihleri (ekran açık tut, harita teması, ortalama hız) yeniden okur / sensör sayfasını açar
       prefs() {
         S.keepAwake = store.get('mm_wake', '1') === '1'; const w = $('mm-wake'); if (w && !w.disabled) w.checked = S.keepAwake;
@@ -1444,5 +1120,5 @@
     };
   }
 
-  window.MotoMap = { mount, _core: Core };
+  window.MotoMap = { mount, _core: Core, ICON };
 })();

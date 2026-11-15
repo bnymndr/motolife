@@ -18,7 +18,6 @@ Gereksinim: PHP 8.1 veya üstü (pdo_mysql, curl, openssl, mbstring uzantıları
 ## 3. İsteğe bağlı ayarlar (`api/config.php`)
 - **E-posta (şifre sıfırlama):** `MAIL_FROM` ve gerekirse `SMTP_HOST/PORT/USER/PASS`. Boşsa PHP `mail()` denenir (birçok hostta spam'e düşer; SMTP önerilir).
 - **Rota:** `GEOAPIFY_API_KEY` (motosiklet rotası) veya `ORS_API_KEY`; hiçbiri yoksa herkese açık Valhalla kullanılır (yoğun kullanımda sınırlıdır).
-- **Grup sesi:** farklı ağlardaki kullanıcılar için `GV_TURN_URLS/USER/CREDENTIAL` (TURN sunucusu) gerekebilir; yalnız STUN ile bazı mobil ağlarda ses bağlanmaz.
 - **Cloudflare / ters vekil** arkasındaysan `TRUST_PROXY` = `1`.
 - Sorun giderirken `'DEBUG' => 1` (bitince kaldır).
 
@@ -29,7 +28,7 @@ Gereksinim: PHP 8.1 veya üstü (pdo_mysql, curl, openssl, mbstring uzantıları
 - `config.php` dosya izni 640/600 olsun.
 
 ## 5. Bilinen sınırlar (Node sürümünden farklar)
-- **Gerçek zamanlı özellikler HTTP yoklamasıyla çalışır** (WebSocket yok): canlı konum, mesajlaşma, grup sürüşü ve ses sinyalleşmesi 1–4,5 sn gecikmeli; her kullanıcı sürekli PHP isteği üretir. Hosting "CPU/süreç" sınırı varsa çok sayıda eşzamanlı kullanıcıda yavaşlayabilir.
+- **Gerçek zamanlı özellikler HTTP yoklamasıyla çalışır** (WebSocket yok): mesajlaşma ve grup sürüşü 1–4,5 sn gecikmeli; her kullanıcı sürekli PHP isteği üretir. Hosting "CPU/süreç" sınırı varsa çok sayıda eşzamanlı kullanıcıda yavaşlayabilir.
 - Arka plandaki / ekranı kilitli tarayıcı sekmesinde yoklama yavaşlar; konum paylaşımı aksayabilir.
 - Render'daki eski hesaplar ve parolaları **taşınmaz** (parola özeti biçimi farklı); hesaplar yeniden açılır.
 - Fotoğraflar ve sürüş kayıtları veritabanında saklanır (disk yerine); veritabanı kotasını izle.
@@ -42,3 +41,5 @@ Ayarlar › Konum ve Gizlilik › **Çevrimdışı Haritalar**, kullanıcıları
 4. Dosyaları sunucuda alan adı kökündeki **`offline/`** klasörüne yükle (`public_html/offline/34.pmtiles`). Boyut büyük olabilir (büyük şehirler yüzlerce MB); `--maxzoom` düşürmek boyutu yarılar. `api/config.php` içinde `OFFLINE_DIR` ile başka klasör gösterebilirsin.
 5. Uygulama listeyi `/api/offline/manifest` ile alır; yalnız klasörde bulunan paketler indirilebilir görünür. Veri © OpenStreetMap katkıcıları (ODbL) — atıf gerekir.
 SINIR: şu an paketler indirilir/saklanır/silinir; harita ÇİZİMİ (çevrimdışı gösterim) ve çevrimdışı rota henüz yok.
+
+- **İnterkom (LiveKit):** `config.php` içinde `LIVEKIT_URL` (wss://…), `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` doldurulmazsa interkom kapalıdır (503). Anahtarlar yalnız sunucuda durur; tarayıcıya yalnız 1 saatlik, tek odaya özel belirteç gider. Node sürümünde aynı adlarla ortam değişkeni.

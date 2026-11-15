@@ -26,12 +26,9 @@ CREATE TABLE IF NOT EXISTS ml_rgrides (id CHAR(16) PRIMARY KEY, gid CHAR(16) NOT
 CREATE TABLE IF NOT EXISTS ml_rgrec (id BIGINT AUTO_INCREMENT PRIMARY KEY, rideid CHAR(16) NOT NULL, line MEDIUMTEXT NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE IF NOT EXISTS ml_rgstat (rideid CHAR(16) NOT NULL, uname VARCHAR(40) NOT NULL, n INT NOT NULL DEFAULT 0, first_at BIGINT NOT NULL, last_at BIGINT NOT NULL, PRIMARY KEY (rideid, uname)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE IF NOT EXISTS ml_rglive (gid CHAR(16) NOT NULL, uid CHAR(24) NOT NULL, sid CHAR(16) NOT NULL, lat DOUBLE NULL, lon DOUBLE NULL, acc INT NULL, spd DOUBLE NULL, est DOUBLE NULL, at BIGINT NOT NULL DEFAULT 0, rt_d DOUBLE NULL, rt_along DOUBLE NULL, rt_i INT NULL, fl VARCHAR(10) NULL, pend_f VARCHAR(10) NULL, pend_n INT NOT NULL DEFAULT 0, pend_m DOUBLE NOT NULL DEFAULT 0, PRIMARY KEY (gid, uid)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS ml_rts (sid CHAR(16) PRIMARY KEY, uid CHAR(24) NOT NULL, last BIGINT NOT NULL, created BIGINT NOT NULL, w_lat DOUBLE NULL, w_lon DOUBLE NULL, w_km DOUBLE NULL, w_fo TINYINT NOT NULL DEFAULT 0, w_key TEXT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS ml_rts (sid CHAR(16) PRIMARY KEY, uid CHAR(24) NOT NULL, last BIGINT NOT NULL, created BIGINT NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE IF NOT EXISTS ml_rtr (sid CHAR(16) NOT NULL, room VARCHAR(60) NOT NULL, skey TEXT NULL, PRIMARY KEY (sid, room)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE IF NOT EXISTS ml_rte (id BIGINT AUTO_INCREMENT PRIMARY KEY, sid CHAR(16) NOT NULL, ev VARCHAR(40) NOT NULL, payload MEDIUMTEXT NOT NULL, at BIGINT NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS ml_live (uid CHAR(24) PRIMARY KEY, sid CHAR(16) NOT NULL, name VARCHAR(40) NOT NULL, aud VARCHAR(10) NOT NULL, lat DOUBLE NULL, lon DOUBLE NULL, riding TINYINT NOT NULL DEFAULT 0, at BIGINT NOT NULL DEFAULT 0, seen TINYINT NOT NULL DEFAULT 0) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS ml_gvr (gid CHAR(16) PRIMARY KEY, mode VARCHAR(5) NOT NULL DEFAULT 'ptt', f_sid CHAR(16) NULL, f_uid CHAR(24) NULL, f_name VARCHAR(40) NULL, f_since BIGINT NOT NULL DEFAULT 0, f_until BIGINT NOT NULL DEFAULT 0) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS ml_gvp (sid CHAR(16) PRIMARY KEY, gid CHAR(16) NOT NULL, uid CHAR(24) NOT NULL, name VARCHAR(40) NOT NULL, mic TINYINT NOT NULL DEFAULT 0) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 -- (zaten varsa 'Duplicate key name' hatası verir; yok sayılabilir)
 CREATE INDEX mlx0 ON ml_posts(uid, at);
 -- (zaten varsa 'Duplicate key name' hatası verir; yok sayılabilir)
@@ -63,7 +60,6 @@ CREATE INDEX mlx13 ON ml_rtr(room);
 -- (zaten varsa 'Duplicate key name' hatası verir; yok sayılabilir)
 CREATE INDEX mlx14 ON ml_rte(sid);
 -- (zaten varsa 'Duplicate key name' hatası verir; yok sayılabilir)
-CREATE INDEX mlx15 ON ml_gvp(gid);
 -- (zaten varsa 'Duplicate key name' hatası verir; yok sayılabilir)
 CREATE INDEX mlx16 ON ml_rides(uid, started);
 -- (zaten varsa 'Duplicate key name' hatası verir; yok sayılabilir)

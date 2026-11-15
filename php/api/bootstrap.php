@@ -93,17 +93,14 @@ function ensure_schema(PDO $pdo): void {
         'ml_rgstat' => 'rideid CHAR(16) NOT NULL, uname VARCHAR(40) NOT NULL, n INT NOT NULL DEFAULT 0, first_at BIGINT NOT NULL, last_at BIGINT NOT NULL, PRIMARY KEY (rideid, uname)',
         'ml_rglive' => 'gid CHAR(16) NOT NULL, uid CHAR(24) NOT NULL, sid CHAR(16) NOT NULL, lat DOUBLE NULL, lon DOUBLE NULL, acc INT NULL, spd DOUBLE NULL, est DOUBLE NULL, at BIGINT NOT NULL DEFAULT 0,
             rt_d DOUBLE NULL, rt_along DOUBLE NULL, rt_i INT NULL, fl VARCHAR(10) NULL, pend_f VARCHAR(10) NULL, pend_n INT NOT NULL DEFAULT 0, pend_m DOUBLE NOT NULL DEFAULT 0, PRIMARY KEY (gid, uid)',
-        'ml_rts' => 'sid CHAR(16) PRIMARY KEY, uid CHAR(24) NOT NULL, last BIGINT NOT NULL, created BIGINT NOT NULL, w_lat DOUBLE NULL, w_lon DOUBLE NULL, w_km DOUBLE NULL, w_fo TINYINT NOT NULL DEFAULT 0, w_key TEXT NULL',
+        'ml_rts' => 'sid CHAR(16) PRIMARY KEY, uid CHAR(24) NOT NULL, last BIGINT NOT NULL, created BIGINT NOT NULL',
         'ml_rtr' => 'sid CHAR(16) NOT NULL, room VARCHAR(60) NOT NULL, skey TEXT NULL, PRIMARY KEY (sid, room)',
         'ml_rte' => "id $ai, sid CHAR(16) NOT NULL, ev VARCHAR(40) NOT NULL, payload MEDIUMTEXT NOT NULL, at BIGINT NOT NULL",
-        'ml_live' => 'uid CHAR(24) PRIMARY KEY, sid CHAR(16) NOT NULL, name VARCHAR(40) NOT NULL, aud VARCHAR(10) NOT NULL, lat DOUBLE NULL, lon DOUBLE NULL, riding TINYINT NOT NULL DEFAULT 0, at BIGINT NOT NULL DEFAULT 0, seen TINYINT NOT NULL DEFAULT 0',
-        'ml_gvr' => 'gid CHAR(16) PRIMARY KEY, mode VARCHAR(5) NOT NULL DEFAULT \'ptt\', f_sid CHAR(16) NULL, f_uid CHAR(24) NULL, f_name VARCHAR(40) NULL, f_since BIGINT NOT NULL DEFAULT 0, f_until BIGINT NOT NULL DEFAULT 0',
-        'ml_gvp' => 'sid CHAR(16) PRIMARY KEY, gid CHAR(16) NOT NULL, uid CHAR(24) NOT NULL, name VARCHAR(40) NOT NULL, mic TINYINT NOT NULL DEFAULT 0',
     ];
     foreach ($t as $n => $cols) $pdo->exec("CREATE TABLE IF NOT EXISTS $n ($cols)$eng");
     try { $pdo->exec("ALTER TABLE ml_rgm ADD COLUMN role VARCHAR(8) NOT NULL DEFAULT ''"); } catch (Throwable $e) {}   // eski kurulumlar için (v5); yeni kurulumda sütun zaten var
     $idx = ['ml_posts(uid, at)', 'ml_posts(at)', 'ml_comments(post)', 'ml_images(uid)', 'ml_friends(b)', 'ml_requests(from_uid)', 'ml_requests(to_uid)', 'ml_msgs(pair, at)',
-        'ml_rgm(uid)', 'ml_rgrides(gid)', 'ml_rgrec(rideid)', 'ml_rglive(sid)', 'ml_rts(uid)', 'ml_rtr(room)', 'ml_rte(sid)', 'ml_gvp(gid)', 'ml_rides(uid, started)', 'ml_kv(exp)', 'ml_gp(gid, at)', 'ml_gpc(post)'];
+        'ml_rgm(uid)', 'ml_rgrides(gid)', 'ml_rgrec(rideid)', 'ml_rglive(sid)', 'ml_rts(uid)', 'ml_rtr(room)', 'ml_rte(sid)', 'ml_rides(uid, started)', 'ml_kv(exp)', 'ml_gp(gid, at)', 'ml_gpc(post)'];
     foreach ($idx as $i => $def) { try { $pdo->exec('CREATE INDEX mlx' . $i . ' ON ' . $def); } catch (Throwable $e) {} }
     $pdo->prepare('REPLACE INTO ml_kv (k, v, exp) VALUES (?, ?, 0)')->execute(['schema', SCHEMA_VERSION]);
 }

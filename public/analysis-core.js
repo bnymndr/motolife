@@ -23,9 +23,10 @@
     timeS: t => (t ? new Date(t).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'),
     coord: (lat, lon) => (lat == null || lon == null ? '—' : tr(Math.abs(lat), 4) + '° ' + (lat >= 0 ? 'K' : 'G') + ', ' + tr(Math.abs(lon), 4) + '° ' + (lon >= 0 ? 'D' : 'B')),
     ms2: v => (v == null ? '—' : tr(v, 1) + ' m/s²'),
+    g: v => (v == null ? '—' : tr(Math.abs(v) / 9.81, 2) + ' g'),
     lean: v => (v == null ? '—' : '≈ ' + Math.round(Math.abs(v)) + '° ' + (Math.abs(v) < 2 ? '' : v > 0 ? 'sol' : 'sağ') + ' (tahmini)')
   };
-  const SEV = { b: ['orta', 'sert', 'acil'], a: ['orta', 'sert'] };
+  const SEV = { b: ['orta şiddette', 'sert', 'çok sert (acil)'], a: ['orta şiddette', 'sert'] };
 
   // ---------- Yardımcılar ----------
   function lowerBound(a, x) { let lo = 0, hi = a.length; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m] < x) lo = m + 1; else hi = m; } return lo; }
@@ -88,7 +89,7 @@
     for (const e of evs) {
       const p = e[10] != null && e[11] != null ? { lat: e[10], lon: e[11] } : posAt(S, e[0]);
       const ev = { t: e[0], kind: e[1] === 'b' ? 'brake' : 'accel', sev: e[2], peak: e[3], durMs: e[4], v0: e[5], v1: e[6], src: e[8] === 'i' ? 'imu' : 'gps', flags: e[9], lat: p ? p.lat : null, lon: p ? p.lon : null };
-      ev.label = (e[1] === 'b' ? 'Ani Frenleme' : 'Ani Hızlanma') + ' · ' + SEV[e[1]][e[2] - 1] + ' · ' + (e[1] === 'b' ? '−' : '+') + tr(e[3], 1) + ' m/s²' + (e[5] != null && e[6] != null ? ' · ' + Math.round(e[5] * 3.6) + ' → ' + Math.round(e[6] * 3.6) + ' km/sa' : '') + (e[8] === 'g' ? ' (GPS hız farkı)' : '');
+      ev.label = (e[1] === 'b' ? 'Ani frenleme' : 'Ani hızlanma') + ' · ' + SEV[e[1]][e[2] - 1] + (e[5] != null && e[6] != null ? ' · hız ' + Math.round(e[5] * 3.6) + ' → ' + Math.round(e[6] * 3.6) + ' km/sa' : '') + ' · ' + tr(Math.abs(e[3]) / 9.81, 2) + ' g' + (e[8] === 'g' ? ' (GPS hız farkından)' : '');
       T.evs.push(ev); S.events.push(ev);
     }
     if (T.leanExt.length) {

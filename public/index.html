@@ -113,12 +113,21 @@ try{var _fs=+localStorage.getItem("ml_fs");if(_fs>=88&&_fs<=125&&_fs!==100)docum
   details[open] > summary::after{transform:rotate(180deg)}
   [data-rm] *,[data-rm] *::before,[data-rm] *::after{transition:none!important;animation:none!important}
   .card{border-radius:1.25rem;background:linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.04));box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 8px 22px rgba(0,0,0,.22);padding:.85rem 1rem;min-height:0;overflow:hidden}
-  #bottomNav{background:rgba(3,20,32,.96)}
-  #bottomNav [data-nav]{position:relative}
-  #bottomNav [data-nav] svg{transition:transform .15s,fill .15s}
-  #bottomNav [data-nav=settings][aria-current=page] svg{fill:none}
-  #bottomNav [data-nav][aria-current=page] svg{fill:rgb(var(--a4) / .2);transform:translateY(-1px) scale(1.06)}
-  #bottomNav [data-nav][aria-current=page]:before{content:'';position:absolute;top:0;left:30%;right:30%;height:3px;border-radius:0 0 3px 3px;background:var(--accent)}
+  /* Alt menü: yüzen cam bar + ortada turuncu Harita düğmesi (bar içinde kalır) */
+  #bottomNav{background:linear-gradient(180deg,rgba(3,20,32,0),rgba(3,20,32,.94) 38%);border-top:0;padding:6px 10px calc(env(safe-area-inset-bottom) + 6px);-webkit-backdrop-filter:none;backdrop-filter:none;pointer-events:none}
+  #bottomNav>div{pointer-events:auto;max-width:28rem;height:58px;border-radius:26px;background:rgba(7,31,46,.95);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.11),0 8px 22px rgba(0,0,0,.45);align-items:center}
+  #bottomNav [data-nav]{position:relative;height:58px;justify-content:center;padding-top:0;padding-bottom:0;white-space:nowrap}
+  #bottomNav [data-nav]{color:#a1a1aa}
+  #bottomNav [data-nav][aria-current=page]{color:#fbbf24}
+  #bottomNav [data-nav]>span:not(#socialBadge){font-size:11px;line-height:13px;margin-top:2px}
+  #bottomNav [data-nav] svg{flex:none;position:relative;z-index:1;transition:transform .15s,color .15s}
+  #bottomNav [data-nav]>span:not(#socialBadge){display:none}                    /* isim yalnız seçili sekmenin altında */
+  #bottomNav [data-nav][aria-current=page]>span:not(#socialBadge){display:block}
+  #bottomNav [data-nav][aria-current=page]:not([data-nav=world]):before{content:'';position:absolute;top:50%;left:50%;width:48px;height:32px;margin:-23px 0 0 -24px;border-radius:16px;background:rgb(var(--a4) / .17)}
+  #bottomNav [data-nav][aria-current=page]:not([data-nav=world]) svg{transform:translateY(-1px)}
+  #bottomNav [data-nav=world]{font-weight:600}
+  #bottomNav [data-nav=world] svg{stroke-width:1.9;width:40px;height:40px;padding:7px;margin:0;border-radius:50%;background:var(--accent);color:#031420;box-shadow:0 3px 10px rgb(var(--a4) / .35);transition:transform .15s,box-shadow .15s}
+  #bottomNav [data-nav=world][aria-current=page] svg{box-shadow:0 0 0 2px rgb(var(--a3) / .45),0 3px 12px rgb(var(--a4) / .5)}
   .stat-big{font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
 </style>
 </head>
@@ -214,7 +223,7 @@ try{var _fs=+localStorage.getItem("ml_fs");if(_fs>=88&&_fs<=125&&_fs!==100)docum
 
 
   <p id="authMsg" class="min-h-5 text-sm"></p>
-  <datalist id="brands"><option value="Honda"><option value="Yamaha"><option value="Kawasaki"><option value="Suzuki"><option value="BMW"><option value="Ducati"><option value="KTM"><option value="Triumph"><option value="Harley-Davidson"><option value="Royal Enfield"><option value="Aprilia"><option value="Husqvarna"><option value="Moto Guzzi"><option value="Benelli"><option value="CFMOTO"><option value="Voge"><option value="Vespa"><option value="Piaggio"><option value="SYM"><option value="Kymco"><option value="Bajaj"><option value="TVS"><option value="Kuba"><option value="Mondial"><option value="RKS"><option value="Arora"><option value="Lifan"><option value="Mash"><option value="Hero"><option value="Diğer"></datalist>
+  <datalist id="brands"><option value="Aprilia"><option value="Arora"><option value="Bajaj"><option value="Benelli"><option value="BMW"><option value="CFMOTO"><option value="Ducati"><option value="Harley-Davidson"><option value="Hero"><option value="Honda"><option value="Husqvarna"><option value="Kawasaki"><option value="KTM"><option value="Kuba"><option value="Kymco"><option value="Lifan"><option value="Mash"><option value="Mondial"><option value="Moto Guzzi"><option value="Piaggio"><option value="RKS"><option value="Royal Enfield"><option value="Suzuki"><option value="SYM"><option value="Triumph"><option value="TVS"><option value="Vespa"><option value="Voge"><option value="Yamaha"><option value="Diğer"></datalist>
 </main>
 
 <!-- Profil paneli -->
@@ -395,28 +404,28 @@ try{var _fs=+localStorage.getItem("ml_fs");if(_fs>=88&&_fs<=125&&_fs!==100)docum
 
 <!-- Ana uygulama -->
 
-<nav id="bottomNav" class="hidden fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-ink/90 backdrop-blur" style="padding-bottom:env(safe-area-inset-bottom)">
+<nav id="bottomNav" class="hidden fixed inset-x-0 bottom-0 z-30">
   <div class="mx-auto grid max-w-md grid-cols-5">
     <button type="button" data-nav="home" aria-label="Ana Sayfa" class="flex flex-col items-center justify-start gap-0.5 px-0.5 pb-1.5 pt-2 text-zinc-400">
-      <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-home"/></svg>
-      <span class="text-center text-[11px] font-medium leading-tight">Ana Sayfa</span>
+      <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><use href="#i-home"/></svg>
+      <span class="text-center text-[11px] font-medium leading-tight tracking-wide">Ana Sayfa</span>
     </button>
     <button type="button" data-nav="motor" aria-label="My Moto" class="flex flex-col items-center justify-start gap-0.5 px-0.5 pb-1.5 pt-2 text-zinc-400">
-      <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-moto"/></svg>
-      <span class="text-center text-[11px] font-medium leading-tight">My Moto</span>
+      <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><use href="#i-moto"/></svg>
+      <span class="text-center text-[11px] font-medium leading-tight tracking-wide">My Moto</span>
     </button>
     <button type="button" data-nav="world" aria-label="Harita" class="flex flex-col items-center justify-start gap-0.5 px-0.5 pb-1.5 pt-2 text-zinc-400">
-      <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-map"/></svg>
-      <span class="text-center text-[11px] font-medium leading-tight">Harita</span>
+      <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><use href="#i-map"/></svg>
+      <span class="text-center text-[11px] font-medium leading-tight tracking-wide">Harita</span>
     </button>
     <button type="button" data-nav="social" aria-label="Sosyal" class="relative flex flex-col items-center justify-start gap-0.5 px-0.5 pb-1.5 pt-2 text-zinc-400">
-      <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-social"/></svg>
-      <span class="text-center text-[11px] font-medium leading-tight">Sosyal</span>
+      <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><use href="#i-social"/></svg>
+      <span class="text-center text-[11px] font-medium leading-tight tracking-wide">Sosyal</span>
       <span id="socialBadge" class="absolute right-2 top-1 hidden min-w-[1.1rem] rounded-full bg-rose-500 px-1 text-center text-[10px] font-bold leading-[1.1rem] text-white"></span>
     </button>
     <button type="button" data-nav="settings" aria-label="Ayarlar" class="flex flex-col items-center justify-start gap-0.5 px-0.5 pb-1.5 pt-2 text-zinc-400">
-      <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#gear"/></svg>
-      <span class="text-center text-[11px] font-medium leading-tight">Ayarlar</span>
+      <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><use href="#i-sliders"/></svg>
+      <span class="text-center text-[11px] font-medium leading-tight tracking-wide">Ayarlar</span>
     </button>
   </div>
 </nav>
@@ -430,12 +439,13 @@ try{var _fs=+localStorage.getItem("ml_fs");if(_fs>=88&&_fs<=125&&_fs!==100)docum
     </div>
   </div>
 </div>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="i-home" viewBox="0 0 24 24"><path d="M3.5 10.6 12 3.6l8.5 7v8.4a1.6 1.6 0 0 1-1.6 1.6H15v-5.6H9V20.6H5.1a1.6 1.6 0 0 1-1.6-1.6z"/></symbol>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="i-home" viewBox="0 0 24 24"><path d="M3.5 10.2 12 4l8.5 6.2V20h-17z"/><path d="M7.5 20v-5.5h9V20M7.5 16.9h9M7.5 18.5h9"/></symbol>
+<symbol id="i-sliders" viewBox="0 0 24 24"><path d="M15.6 4.4a4.3 4.3 0 0 0-4.3 5.5l-6.5 6.5a2 2 0 0 0 2.8 2.8l6.5-6.5a4.3 4.3 0 0 0 5.5-4.3l-2.7 2.7-2.4-.6-.6-2.4z"/></symbol>
 <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></symbol>
 <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></symbol>
-<symbol id="i-moto" viewBox="0 0 24 24"><circle cx="5.2" cy="16.8" r="3.2"/><circle cx="18.8" cy="16.8" r="3.2"/><path d="M5.2 16.8 9 10.4h5.6l2.2 3.6M14.6 10.4l-1.2-3.6H16M9 10.4H6.6M12.4 16.8h-3.6l2.4-3.6 3.4.1"/></symbol>
-<symbol id="i-map" viewBox="0 0 24 24"><path d="M9 4 3.5 6.2v13.3L9 17.3l6 2.4 5.5-2.2V4.2L15 6.4z"/><path d="M9 4v13.3M15 6.4v13.3"/></symbol>
-<symbol id="i-social" viewBox="0 0 24 24"><path d="M20.5 11.4a8.2 8.2 0 0 1-8.9 8.2 8.4 8.4 0 0 1-3.5-.8L3.5 20.5l1.7-4.4a8.2 8.2 0 1 1 15.3-4.7z"/><path d="M8.4 11.6h.01M12 11.6h.01M15.6 11.6h.01" stroke-width="2.4"/></symbol>
+<symbol id="i-moto" viewBox="0 0 24 24"><path d="M3.8 17.5a8.7 8.7 0 1 1 16.4 0"/><path d="M12 14.6l3.7-4.8"/><circle cx="12" cy="14.8" r="1.4"/><path d="M5.6 12.4l1 .5M12 6.4v1.2M18.4 12.4l-1 .5"/></symbol>
+<symbol id="i-map" viewBox="0 0 24 24"><path d="M12 3.2 19.3 20 12 16 4.7 20z"/></symbol>
+<symbol id="i-social" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><circle cx="5.3" cy="10.2" r="2.1"/><circle cx="18.7" cy="10.2" r="2.1"/><path d="M6.8 19.2a5.2 5.2 0 0 1 10.4 0"/><path d="M2.4 18a3.6 3.6 0 0 1 3-3.4M21.6 18a3.6 3.6 0 0 0-3-3.4"/></symbol>
 <symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol></svg>
 
 <script src="/socket.io/socket.io.js"></script>
@@ -464,14 +474,8 @@ function renderQuick() {
   if (quick.a) { const i = document.createElement('img'); i.src = quick.a; i.alt = ''; i.className = 'h-full w-full object-cover'; av.appendChild(i); }
   else av.textContent = quick.u.charAt(0).toLocaleUpperCase('tr');
 }
+let icH = null;   // interkom/müzik tutamacı (public/intercom.js)
 let authMode = 'login', me = null, resetToken = new URLSearchParams(location.search).get('reset') || '';
-// Grup sürüşü davet bağlantısı (/?grup=KOD): giriş yapılana kadar sessionStorage'da bekler, adres çubuğu temizlenir
-let pendingGroup = '';
-try {
-  const gq = new URLSearchParams(location.search).get('grup');
-  if (gq) { sessionStorage.setItem('mm_joincode', gq.slice(0, 16)); history.replaceState(null, '', location.pathname); }
-  pendingGroup = sessionStorage.getItem('mm_joincode') || '';
-} catch (e) {}
 async function api(path, body) {
   const r = await fetch('/api/' + path, body === undefined ? {} :
     { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -576,9 +580,15 @@ function openMap() {
   if (!document.getElementById('mapCss')) {
     const l = document.createElement('link'); l.id = 'mapCss'; l.rel = 'stylesheet'; l.href = '/map.css'; document.head.appendChild(l);
   }
+  const loadJs = src => new Promise(res => { const s = document.createElement('script'); s.src = src; s.onload = s.onerror = () => res(); document.head.appendChild(s); });   // hata olsa da devam (interkom/müzik olmadan harita açılır)
   const sc = document.createElement('script');
   sc.src = '/map.js';
-  sc.onload = () => { root.innerHTML = ''; mapH = window.MotoMap.mount(root, { user: me && me.username, socket, onAnalyze: id => goAnalysis(h => h.openRide(id)), onAnalyzeGroup: gid => goAnalysis(h => h.openGroupList(gid)) }); mapLoading = false; mapH.activate(); if (window.__joinGroup) { mapH.joinPrompt(window.__joinGroup); window.__joinGroup = ''; } };
+  sc.onload = async () => {
+    for (const u of ['/audio-core.js', '/media-core.js', '/comm-core.js', '/livekit-adapter.js', '/intercom.js']) await loadJs(u);
+    root.innerHTML = ''; mapH = window.MotoMap.mount(root, { user: me && me.username, onAnalyze: id => goAnalysis(h => h.openRide(id)), onAnalyzeGroup: gid => goAnalysis(h => h.openGroupList(gid)) });
+    try { icH = window.Intercom && window.Intercom.mount(root, { user: me && me.username }); } catch (e) { console.error(e); }
+    mapLoading = false; mapH.activate();
+  };
   sc.onerror = () => { root.innerHTML = '<p class="p-6 text-center text-sm text-red-300">Harita yüklenemedi. Sayfayı yenileyip tekrar dene.</p>'; mapLoading = false; sc.remove(); };
   document.head.appendChild(sc);
 }
@@ -586,7 +596,6 @@ function enterHome(user) {
   me = user; remember(user);
   showScreen('dash');
   if (!socket.connected) socket.connect();
-  if (pendingGroup) { window.__joinGroup = pendingGroup; pendingGroup = ''; try { sessionStorage.removeItem('mm_joincode'); } catch (e) {} showScreen('world'); }   // davet bağlantısıyla gelen: haritayı aç, katılım onayı sor
   setTimeout(openSocial, 1500);   // arka planda hazırla: okunmamış mesaj rozeti baştan çalışsın
 }
 function setAuthMode(m) {

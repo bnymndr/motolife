@@ -1,7 +1,7 @@
 <?php
 // Moto Life API girişi: .htaccess  /api/*  isteklerini buraya yönlendirir.
 declare(strict_types=1);
-foreach (['bootstrap', 'auth', 'social', 'rt', 'live', 'gvoice', 'rgroups', 'ridecore', 'rides', 'weather', 'maps', 'offline'] as $f) require __DIR__ . '/' . $f . '.php';
+foreach (['bootstrap', 'auth', 'social', 'rt', 'rgroups', 'ridecore', 'rides', 'weather', 'assist', 'livekit', 'maps', 'offline'] as $f) require __DIR__ . '/' . $f . '.php';
 
 header('X-Content-Type-Options: nosniff'); header('Referrer-Policy: strict-origin-when-cross-origin'); header('Cache-Control: no-store');
 if (is_https()) header('Strict-Transport-Security: max-age=15552000');
@@ -37,7 +37,7 @@ $routes = [
     ['POST', "/rgroups/$U/posts/$U/like", 'h_rg_post_like'], ['POST', "/rgroups/$U/posts/$U/comments", 'h_rg_post_comment'], ['DELETE', "/rgroups/$U/posts/$U/comments/$U", 'h_rg_comment_delete'],
     ['GET', "/rgroups/$U/events", 'h_rg_events'], ['POST', "/rgroups/$U/events", 'h_rg_event_create'], ['PUT', "/rgroups/$U/events/$U", 'h_rg_event_put'], ['DELETE', "/rgroups/$U/events/$U", 'h_rg_event_delete'],
     ['GET', "/rgroups/$U/rides", 'h_rg_rides'], ['GET', "/rgroups/$U/rides/$U", 'h_rg_ride_get'],
-    ['GET', '/gvoice/ice', 'h_gv_ice'], ['GET', '/weather', 'h_weather'], ['GET', '/maps/config', 'h_maps_config'], ['GET', '/offline/manifest', 'h_offline_manifest'], ['GET', '/geocode', 'h_geocode'], ['GET', '/route', 'h_route'],
+    ['GET', '/weather', 'h_weather'], ['POST', '/assist/summarize', 'h_assist_summarize'], ['POST', '/livekit/token', 'h_livekit_token'], ['GET', '/maps/config', 'h_maps_config'], ['GET', '/offline/manifest', 'h_offline_manifest'], ['GET', '/geocode', 'h_geocode'], ['GET', '/route', 'h_route'],
     ['POST', '/rt', 'h_rt'],
 ];
 foreach ($routes as [$m, $re, $fn]) {

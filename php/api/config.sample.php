@@ -23,11 +23,12 @@ return [
     'VALHALLA_URL' => '',            // boşsa herkese açık sunucu; 'off' = kapat
     'ROUTE_PROVIDER' => 'auto', 'ROUTE_DAILY_LIMIT' => '', 'ROUTE_USER_DAILY' => '',
     'MAP_TILE_URL' => '', 'MAP_TILE_URL_DARK' => '', 'MAP_TILE_ATTRIBUTION' => '',
+    'LIVEKIT_URL' => '', 'LIVEKIT_API_KEY' => '', 'LIVEKIT_API_SECRET' => '',   // İnterkom (LiveKit); yalnız sunucuda. Biri boşsa özellik kapalı (503). URL: wss://…
+    'ANTHROPIC_API_KEY' => '',       // Asistan (grup konuşması özeti); yalnız sunucuda. Boşsa özellik kapalı (503)
+    'ANTHROPIC_MODEL' => '',         // boşsa claude-haiku-5-5
     'WEATHER_CONTACT' => '',         // MET Norway User-Agent iletişim bilgisi (e-posta/alan adı)
 
     // ---- Grup sesi ----
-    'GV_TURN_URLS' => '', 'GV_TURN_USER' => '', 'GV_TURN_CREDENTIAL' => '',   // TURN (gerekirse), örn. turn:turn.alanadin.com:3478
-    'GV_MAX' => 6,
 
     // 'DEBUG' => 1,                 // hata ayrıntısını yanıtta göster (yalnızca sorun giderirken)
 ];
