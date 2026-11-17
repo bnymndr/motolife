@@ -1,7 +1,7 @@
 <?php
 // Moto Life API girişi: .htaccess  /api/*  isteklerini buraya yönlendirir.
 declare(strict_types=1);
-foreach (['bootstrap', 'auth', 'social', 'rt', 'rgroups', 'ridecore', 'rides', 'weather', 'assist', 'livekit', 'meshvoice', 'maps', 'offline'] as $f) require __DIR__ . '/' . $f . '.php';
+foreach (['bootstrap', 'auth', 'social', 'rt', 'rgroups', 'ridecore', 'rides', 'weather', 'assist', 'livekit', 'grouproom', 'meshvoice', 'maps', 'offline'] as $f) require __DIR__ . '/' . $f . '.php';
 
 header('X-Content-Type-Options: nosniff'); header('Referrer-Policy: strict-origin-when-cross-origin'); header('Cache-Control: no-store');
 if (is_https()) header('Strict-Transport-Security: max-age=15552000');
@@ -33,6 +33,9 @@ $routes = [
     ['POST', "/rgroups/$U/leave", 'h_rg_leave'], ['POST', "/rgroups/$U/kick", 'h_rg_kick'], ['POST', "/rgroups/$U/leader", 'h_rg_leader'], ['POST', "/rgroups/$U/code", 'h_rg_code'], ['POST', "/rgroups/$U/role", 'h_rg_role'], ['PUT', "/rgroups/$U/pic/$U", 'h_rg_pic_put'], ['GET', "/rgroups/$U/pic/$U", 'h_rg_pic_get'],
     ['POST', "/rgroups/$U/start", 'h_rg_start'], ['POST', "/rgroups/$U/end", 'h_rg_end'],
     ['PUT', "/rgroups/$U/route", 'h_rg_route_put'], ['GET', "/rgroups/$U/route", 'h_rg_route_get'], ['DELETE', "/rgroups/$U/route", 'h_rg_route_delete'],
+    ['GET', "/rgroups/$U/rooms", 'h_rooms_list'], ['POST', "/rgroups/$U/rooms", 'h_room_create'], ['GET', "/rgroups/$U/rooms/$U", 'h_room_get'], ['POST', "/rgroups/$U/rooms/$U/join", 'h_room_join'], ['POST', "/rgroups/$U/rooms/$U/leave", 'h_room_leave'], ['POST', "/rgroups/$U/rooms/$U/close", 'h_room_close'],
+    ['POST', "/rgroups/$U/rooms/$U/kick", 'h_room_kick'], ['POST', "/rgroups/$U/rooms/$U/invite", 'h_room_invite'], ['POST', "/rgroups/$U/rooms/$U/user", 'h_room_user'], ['POST', "/rgroups/$U/rooms/$U/source", 'h_room_source'], ['DELETE', "/rgroups/$U/rooms/$U/source", 'h_room_source_del'],
+    ['POST', "/rgroups/$U/rooms/$U/ride/start", 'h_room_ride_start'], ['POST', "/rgroups/$U/rooms/$U/ride/end", 'h_room_ride_end'], ['POST', "/rgroups/$U/rooms/$U/ride/number", 'h_room_ride_number'],
     ['GET', "/rgroups/$U/posts", 'h_rg_posts'], ['POST', "/rgroups/$U/posts", 'h_rg_post_create'], ['DELETE', "/rgroups/$U/posts/$U", 'h_rg_post_delete'],
     ['POST', "/rgroups/$U/posts/$U/like", 'h_rg_post_like'], ['POST', "/rgroups/$U/posts/$U/comments", 'h_rg_post_comment'], ['DELETE', "/rgroups/$U/posts/$U/comments/$U", 'h_rg_comment_delete'],
     ['GET', "/rgroups/$U/events", 'h_rg_events'], ['POST', "/rgroups/$U/events", 'h_rg_event_create'], ['PUT', "/rgroups/$U/events/$U", 'h_rg_event_put'], ['DELETE', "/rgroups/$U/events/$U", 'h_rg_event_delete'],

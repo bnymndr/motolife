@@ -191,6 +191,7 @@
       </div>
       <div class="mm-chiprow">
         <div class="mm-chip" id="mm-gps" data-s="warn">GPS aranıyor…</div>
+        <div class="mm-chip" id="mm-grp" data-s="warn" hidden></div>
       </div>
     </div>
 
@@ -476,6 +477,7 @@
         if (f.acc <= 50) S.hadGood = true;
         paintLocate();
       }
+      if (S.grp) grpSend(f);                                            // grup sürüşünde konum odadaki sürücülere gider
       if (rideActive()) { recordFix(f); paintRide(); }                  // kayıt HAM noktalarla (kendi filtreleri ride-core'da)
       if (sm && S.nav) updateNav(S.me);
       if (S.nav) paintPill();
@@ -1024,6 +1026,7 @@
       r.end(at || Date.now());
       const sm = r.summary(r.endedAt), id = r.id, hasData = r.track.length > 0;
       S.rec = null; el.ride.hidden = true; el.start.hidden = false; emit('mm:ride', { on: false });
+      if (S.grp) grpStop();                                              // kişisel sürüş bitince grup konum paylaşımı da kapanır
       if (!S.active && !S.nav) stopWatch();
       if (r.track.length > 1) S.map.fitBounds(r.track, { paddingTopLeft: [40, 100], paddingBottomRight: [40, 330], maxZoom: 17 });
       S.follow = false; paintLocate(); S.sumId = id; paintRot();
@@ -1106,10 +1109,76 @@
     el.retry.addEventListener('click', boot);
     boot();
 
+    // ---------- Grup sürüşü modu (Sosyal › İnterkom ve Sürüş › «Haritada Aç») ----------
+    // Aynı sürüş sistemi (kayıt, hız, ortalama hız, mesafe, güzergâh); ek olarak odadaki sürücüler NUMARALI canlı işaretle görünür ve konum odaya paylaşılır.
+    // Sunucu: grp:watch/grp:share/grp:update → grp:state (ridegroups.js). Yalnız sürüş odasındakiler izler/paylaşır.
+    const GRP_TXT = { behind: 'geride kaldı', away: 'gruptan uzaklaştı', off: 'güzergâh dışında' };
+    function grpChip() {
+      const c = $('mm-grp'); if (!c) return; const g = S.grp;
+      if (!g) { c.hidden = true; return; }
+      const n = (g.rows || []).filter(r => r.lat != null && !r.lost).length;
+      c.hidden = false; c.dataset.s = g.sharing ? 'ok' : 'warn'; c.textContent = 'Grup · No ' + g.n + ' · ' + Math.max(n, 1) + ' sürücü';
+    }
+    function riderIcon(r) {
+      return window.L.divIcon({ className: 'mm-icon mm-rider', iconSize: [34, 34], iconAnchor: [17, 17],
+        html: '<b class="mm-rn' + (r.lead ? ' lead' : '') + '">' + (Number(r.n) || '?') + '</b>' + (r.spd != null && isFinite(r.spd) ? '<i>' + Math.round(Number(r.spd)) + '</i>' : '') });
+    }
+    function grpPaint(m) {
+      const g = S.grp; if (!g || !m || m.gid !== g.gid || !S.map) return;
+      g.rows = m.members || []; const seen = new Set();
+      for (const r of g.rows) {
+        if (r.lat == null || r.lost || r.n === g.n) continue;                  // kendi işaretimiz zaten çiziliyor
+        const k = String(r.n || r.u); seen.add(k); let mk = g.mk.get(k);
+        if (!mk) { mk = window.L.marker([r.lat, r.lon], { icon: riderIcon(r), title: r.u + (r.n ? ' · No ' + r.n : ''), keyboard: false, zIndexOffset: 500 }).addTo(S.map); g.mk.set(k, mk); }
+        else { mk.setLatLng([r.lat, r.lon]); mk.setIcon(riderIcon(r)); }
+      }
+      for (const [k, mk] of [...g.mk]) if (!seen.has(k)) { mk.remove(); g.mk.delete(k); }
+      grpChip();
+    }
+    function grpSend(f) {
+      const g = S.grp; if (!g || !g.sharing || !g.sock) return;
+      const t = Date.now(), last = g.last, far = !last || Math.abs(f.lat - last.lat) + Math.abs(f.lon - last.lon) > 0.00008;   // ≈8 m
+      if (last && (t - last.at < 4000 || (!far && t - last.at < 20000))) return;
+      g.last = { at: t, lat: f.lat, lon: f.lon };
+      g.sock.emit('grp:update', { gid: g.gid, lat: f.lat, lon: f.lon, acc: f.acc, spd: f.speed });
+    }
+    function grpJoin() {
+      const g = S.grp; if (!g) return;
+      g.sock.emit('grp:watch', { gid: g.gid }, r => { if (r && r.error) { toast(r.error, 6000); grpStop(true); } });
+      g.sock.emit('grp:share', { gid: g.gid, on: true, consent: true }, r => {
+        if (!S.grp) return;
+        if (r && r.error) { toast(r.error, 6000); S.grp.sharing = false; } else S.grp.sharing = true; grpChip();
+      });
+    }
+    function grpStop(silent) {
+      const g = S.grp; if (!g) return; S.grp = null;
+      try { g.sock.emit('grp:share', { gid: g.gid, on: false }, () => {}); g.sock.emit('grp:unwatch', { gid: g.gid }); } catch {}
+      for (const [, f] of g.hs) { try { g.sock.off(f[0], f[1]); } catch {} }
+      for (const mk of g.mk.values()) mk.remove();
+      grpChip(); if (!silent) toast('Grup paylaşımı kapandı.');
+    }
+    function grpStart(cfg) {
+      if (!cfg || !cfg.sock || !cfg.gid || !cfg.n) return toast('Grup sürüşü için önce sürüş numaranı yaz.');
+      if (!S.ready) return toast('Harita henüz hazır değil.');
+      if (S.grp) grpStop(true);
+      const g = S.grp = { gid: cfg.gid, n: cfg.n, sock: cfg.sock, mk: new Map(), rows: [], sharing: false, last: null, hs: [] };
+      const on = (ev, fn) => { g.sock.on(ev, fn); g.hs.push([ev, [ev, fn]]); };
+      on('grp:state', grpPaint);
+      on('grp:alert', m => { if (m && m.gid === g.gid) toast(m.u + ' ' + (GRP_TXT[m.f] || 'uyarı'), 5000); });
+      on('grp:taken', m => { if (m && m.gid === g.gid) { toast('Grup paylaşımı başka bir cihaza geçti.'); grpStop(true); } });
+      on('grp:changed', m => {
+        if (!m || m.gid !== g.gid) return;
+        if (m.kind === 'ride-end') { toast('Grup sürüşü bitti.', 6000); const open = rideOpen(); grpStop(true); if (open) endRide(Date.now()); }
+        else if (m.kind === 'removed') grpStop(true);
+      });
+      on('connect', grpJoin);                                                  // bağlantı koparsa yeniden izle/paylaş
+      if (!rideOpen()) startRide();                                            // kişisel sürüş kaydı: ana ekrandaki sürüş sistemiyle aynı
+      startWatch(); grpJoin(); grpChip();
+    }
     return {
       activate() { S.active = true; if (S.ready) { S.map.invalidateSize(); measureHead(); startWatch(); } },
       deactivate() { S.active = false; if (!rideActive() && !S.nav) stopWatch(); },
-      flyToMe, startEvent,
+      flyToMe, startEvent, groupRide: grpStart, groupRideStop: () => grpStop(), groupRideOn: () => !!S.grp,
       // Ayarlar ekranı: tercihleri (ekran açık tut, harita teması, ortalama hız) yeniden okur / sensör sayfasını açar
       prefs() {
         S.keepAwake = store.get('mm_wake', '1') === '1'; const w = $('mm-wake'); if (w && !w.disabled) w.checked = S.keepAwake;

@@ -17,6 +17,7 @@ function h_livekit_token(): never {
     if ($url === '' || $key === '' || $secret === '') fail(503, 'İnterkom yapılandırılmadı.');
     $g = rg_member_group(body()['gid'] ?? '', $u);
     if (!$g) fail(404, 'Grup bulunamadı.');
+    if (!room_in($g['id'], (string)$u['id'])) fail(403, 'Önce interkom odasına şifreyle gir.');
     $room = 'ml-' . $g['id'];
     header('Cache-Control: no-store');
     out(['url' => $url, 'room' => $room, 'identity' => (string)$u['id'], 'token' => lk_token($key, $secret, (string)$u['id'], uname($u), $room)]);

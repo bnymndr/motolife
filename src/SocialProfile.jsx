@@ -916,6 +916,244 @@ function GroupPhoto({ g, size = 48, className = '' }) {
     : <span style={{ width: size, height: size, fontSize: size * 0.4 }} className={cx('flex shrink-0 items-center justify-center rounded-2xl bg-amber-400 font-bold text-[#031420]', className)}>{g.name.trim().charAt(0).toLocaleUpperCase('tr')}</span>;
 }
 
+/* ---------- Grup İnterkom Odası (motor: public/room.js, uygulama düzeyinde; oda ekran değişse de sürer) ---------- */
+function VolRow({ p, onSet }) {
+  const [v, setV] = useState(p.vol), t = useRef(null);
+  useEffect(() => { setV(p.vol); }, [p.vol]);
+  const change = x => { setV(x); clearTimeout(t.current); t.current = setTimeout(() => onSet({ vol: x }), 400); };
+  return (
+    <div className="flex items-center gap-2 pt-2">
+      <span className="w-14 shrink-0 text-xs text-slate-500 dark:text-[#93A4B2]">Ses %{v}</span>
+      <input type="range" min="0" max="100" step="5" value={v} onChange={e => change(Number(e.target.value))} aria-label={p.name + ' ses düzeyi'} className="h-8 min-w-0 flex-1 accent-amber-400" />
+    </div>
+  );
+}
+const fmtLeft = ms => { if (ms <= 0) return 'Süresi doldu'; const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000); return h ? h + ' sa ' + m + ' dk' : Math.max(1, m) + ' dk'; };
+const fmtElapsed = ms => { const t = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60); return (h ? h + ' sa ' : '') + m + ' dk'; };
+function useNow(ms) { const [n, setN] = useState(Date.now()); useEffect(() => { const t = setInterval(() => setN(Date.now()), ms || 15000); return () => clearInterval(t); }, [ms]); return n; }
+function GroupIntercom({ g, gid }) {
+  const [eng, setEng] = useState(null), [, tickN] = useState(0);
+  useEffect(() => {
+    let off = null, dead = false;
+    window.getRoomEngine().then(e => { if (dead) return; setEng(e); off = e.subscribe(() => tickN(n => n + 1)); e.watch(gid); }).catch(() => {});
+    return () => { dead = true; if (off) off(); if (window.MLRoom) window.MLRoom.unwatch(); };
+  }, [gid]);
+  if (!eng) return <p className={cx('py-8 text-center text-sm', MUTED)}>Yükleniyor…</p>;
+  const S = eng.state, here = S.act && S.actGid === gid, other = S.act && S.actGid !== gid;
+  if (other) return <div className="space-y-3"><Empty icon="chat" title="Başka Bir Grubun Odasındasın" text="Önce bulunduğun interkom odasından ayrıl; aynı anda tek odada olunur." /><button type="button" className={cx(DANGER, 'w-full')} onClick={() => eng.leave()}>Mevcut Odadan Ayrıl</button></div>;
+  const rm = here ? S.rooms[S.act] : null;
+  if (here && rm && rm.in) return <RoomShell eng={eng} g={g} gid={gid} rm={rm} />;
+  return <RoomList eng={eng} g={g} gid={gid} />;
+}
+/* Oda listesi: grubun açık odaları (24 saat yaşar) + yeni oda kur */
+function RoomList({ eng, g, gid }) {
+  const S = eng.state, L = S.lists[gid], now = useNow(20000), [mk, setMk] = useState(false), [name, setName] = useState(''), [pw, setPw] = useState(''), [pick, setPick] = useState(''), [jpw, setJpw] = useState('');
+  const busy = S.busy, err = S.err;
+  const Err = () => err ? <p role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-400/15 dark:text-rose-300" onClick={() => eng.clearErr()}>{err}</p> : null;
+  if (!L) return <p className={cx('py-8 text-center text-sm', MUTED)}>Yükleniyor…</p>;
+  const rooms = L.rooms, full = rooms.length >= L.max;
+  return (
+    <div className="space-y-3">
+      <section className={cx(CARD, 'space-y-1 p-4')}>
+        <h3 className="text-base font-bold">İnterkom Odaları</h3>
+        <p className={cx('text-sm', MUTED)}>Grubundaki herhangi bir üye oda kurabilir. Odaya oda lideri şifresiyle girilir; her oda kurulduktan 24 saat sonra otomatik kapanır ve silinir.</p>
+      </section>
+      {rooms.length === 0 && <p className={cx('rounded-2xl py-6 text-center text-sm', MUTED)}>Bu grupta açık oda yok. İlk odayı sen kur.</p>}
+      {rooms.map(r => (
+        <section key={r.rid} className={cx(CARD, 'space-y-2 p-3')}>
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0"><p className="truncate text-sm font-bold">{r.name}</p><p className={cx('text-xs', MUTED)}>{r.leaderName ? 'Lider @' + r.leaderName : 'Lider yok'} · {r.count} kişi · Kalan {fmtLeft(r.exp - (now + (L.skew || 0)))}</p></div>
+            {r.in ? <button type="button" disabled={busy} className={cx(PRIMARY, '!px-3 !py-2 !text-xs')} onClick={() => eng.join(gid, g.name, r.rid, '')}>Odaya Dön</button>
+              : r.banned ? <span className={cx('text-xs', MUTED)}>Çıkarıldın</span>
+              : <button type="button" className={cx(GHOST, '!px-3 !py-2 !text-xs')} aria-expanded={pick === r.rid} onClick={() => { setPick(pick === r.rid ? '' : r.rid); setJpw(''); }}>{r.invited ? 'Davetlisin · Katıl' : 'Katıl'}</button>}
+          </div>
+          {pick === r.rid && !r.in && (
+            <div className="flex gap-2">
+              <input className={FIELD} placeholder="Oda Şifresi" type="password" maxLength={64} value={jpw} onChange={e => setJpw(e.target.value)} autoComplete="off" />
+              <button type="button" disabled={busy || jpw.length < 4} className={PRIMARY} onClick={() => eng.join(gid, g.name, r.rid, jpw).then(ok => { if (ok) { setJpw(''); setPick(''); } })}>Gir</button>
+            </div>
+          )}
+        </section>
+      ))}
+      <Err />
+      <section className={cx(CARD, 'p-4')}>
+        <button type="button" className="flex w-full items-center justify-between text-sm font-bold" aria-expanded={mk} onClick={() => setMk(!mk)}>Yeni Oda Kur<span>{mk ? '▴' : '▾'}</span></button>
+        {mk && (
+          <div className="mt-3 space-y-3">
+            {full ? <p className={cx('text-sm', MUTED)}>Bir grupta en çok {L.max} oda olabilir.</p> : (
+              <>
+                <p className={cx('text-sm', MUTED)}>Oda adı ve şifre belirle; şifreyi yalnızca grup arkadaşlarınla paylaş. Odayı kuran kişi oda lideridir.</p>
+                <input className={FIELD} placeholder="Oda Adı" maxLength={30} value={name} onChange={e => setName(e.target.value)} autoComplete="off" />
+                <input className={FIELD} placeholder="Şifre" type="password" maxLength={64} value={pw} onChange={e => setPw(e.target.value)} autoComplete="off" />
+                <button type="button" disabled={busy || !name.trim() || pw.length < 4} className={cx(PRIMARY, 'w-full !py-3')} onClick={() => eng.create(gid, g.name, name, pw).then(ok => { if (ok) { setPw(''); setName(''); setMk(false); } })}>Oda Kur</button>
+              </>
+            )}
+          </div>
+        )}
+      </section>
+      <p className={cx('text-xs', MUTED)}>Konuşma yalnızca odadakiler arasındadır. Mikrofon izni istenir; mikrofon kapalı başlar. Aynı grupta aynı anda tek odada bulunulur.</p>
+    </div>
+  );
+}
+/* Odaya girildikten sonra: üstte İnterkom Odası | Sürüş Başlat — ikisi tek sistemin parçası (aynı oda, aynı katılımcılar) */
+function RoomShell({ eng, g, gid, rm }) {
+  const S = eng.state, [sub, setSub] = useState('room'), [num, setNum] = useState('');
+  const err = S.err, ride = rm.ride;
+  const Err = () => err ? <p role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-400/15 dark:text-rose-300" onClick={() => eng.clearErr()}>{err}</p> : null;
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-200/70 p-1 dark:bg-white/[.07]" role="tablist">
+        {[['room', 'İnterkom Odası'], ['ride', 'Sürüş Başlat']].map(([k, t]) => (
+          <button key={k} type="button" role="tab" aria-selected={sub === k} onClick={() => setSub(k)} className={cx('relative rounded-lg px-2 py-2.5 text-sm font-semibold', sub === k ? 'bg-white text-slate-900 shadow dark:bg-amber-400 dark:text-[#031420]' : 'text-slate-600 dark:text-[#93A4B2]')}>
+            {t}{k === 'ride' && ride && <span className="ml-1.5 inline-block h-2 w-2 rounded-full bg-emerald-400 align-middle" aria-label="Sürüş sürüyor" />}
+          </button>
+        ))}
+      </div>
+      {S.blocked && (
+        <button type="button" onClick={() => eng.resumeAudio()} className={cx(PRIMARY, 'w-full !py-3 text-base')}>🔊 Sesi Başlat</button>
+      )}
+      {ride && !ride.mine && (
+        <section className={cx(CARD, 'space-y-3 border-2 border-amber-400 p-4')} aria-label="Sürüş Numarası">
+          <h3 className="text-base font-bold">Sürüş numaranı yaz</h3>
+          <p className={cx('text-sm', MUTED)}>Grup sürüşü başladı. Haritada ve listede bu numarayla görüneceksin (1-99). Boş bırakırsan ilk boş numara verilir.</p>
+          <div className="flex gap-2">
+            <input className={FIELD} placeholder="Numara (1-99)" inputMode="numeric" maxLength={2} value={num} onChange={e => setNum(e.target.value.replace(/\D/g, ''))} aria-label="Sürüş numarası" />
+            <button type="button" disabled={S.busy} className={PRIMARY} onClick={() => eng.rideNumber(num).then(ok => { if (ok) setNum(''); })}>Tamam</button>
+          </div>
+          <Err />
+        </section>
+      )}
+      {sub === 'room' ? <RoomBody eng={eng} g={g} gid={gid} rm={rm} /> : <RideTab eng={eng} g={g} gid={gid} rm={rm} Err={Err} />}
+    </div>
+  );
+}
+function RideTab({ eng, g, gid, rm, Err }) {
+  const S = eng.state, now = useNow(15000), ride = rm.ride, lead = rm.lead, [num, setNum] = useState('');
+  if (!ride) {
+    return (
+      <div className="space-y-3">
+        <section className={cx(CARD, 'space-y-3 p-4')}>
+          <h3 className="text-base font-bold">Grup Sürüşü</h3>
+          <p className={cx('text-sm', MUTED)}>Sürüşü oda lideri başlatır. Başlayınca odadaki herkese «Sürüş numaranı yaz» sorusu çıkar; sürüşte herkes haritada numarasıyla ve canlı konumuyla görünür. Gidilen yol, hız, ortalama hız ve mesafe ana ekrandaki sürüş sistemiyle aynı şekilde kaydedilir.</p>
+          {lead ? <button type="button" disabled={S.busy} className={cx(PRIMARY, 'w-full !py-3')} onClick={() => eng.rideStart()}>Grup Sürüşünü Başlat</button>
+            : <p className={cx('rounded-xl bg-slate-100 px-3 py-3 text-sm dark:bg-white/[.06]', MUTED)}>Oda lideri sürüşü başlatınca burada görünecek.</p>}
+          <Err />
+        </section>
+      </div>
+    );
+  }
+  const nums = ride.nums || {}, rows = rm.parts.map(p => ({ ...p, n: nums[p.uid] || 0 })).sort((a, b) => (a.n ? 0 : 1) - (b.n ? 0 : 1) || a.n - b.n || a.name.localeCompare(b.name, 'tr'));
+  return (
+    <div className="space-y-3">
+      <section className={cx(CARD, 'space-y-3 p-4')}>
+        <div className="flex items-center justify-between gap-2">
+          <div><h3 className="text-base font-bold">Sürüş Sürüyor</h3><p className={cx('text-xs', MUTED)}>{fmtElapsed(now - ride.startedAt)} · {rows.length} sürücü{ride.mine ? ' · Numaran ' + ride.mine : ''}</p></div>
+          <span className="h-3 w-3 shrink-0 animate-pulse rounded-full bg-emerald-400" aria-hidden="true" />
+        </div>
+        <button type="button" disabled={!ride.mine} className={cx(PRIMARY, 'w-full !py-3 text-base')} onClick={() => window.openGroupRide({ gid, n: ride.mine, name: g.name })}>Haritada Aç</button>
+        {!ride.mine && <p className={cx('text-xs', MUTED)}>Haritayı açmadan önce yukarıdaki soruya sürüş numaranı yaz.</p>}
+        <p className={cx('text-xs', MUTED)}>Haritada açınca konumun yalnızca bu odadaki sürücülerle paylaşılır; sürüşü bitirince ya da odadan ayrılınca paylaşım kapanır.</p>
+        <Err />
+      </section>
+      <section className={cx(CARD, 'divide-y divide-slate-200 px-3 dark:divide-white/10')} aria-label="Sürücüler">
+        {rows.map(p => (
+          <div key={p.uid} className="flex items-center gap-3 py-2.5">
+            <span className={cx('flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base font-extrabold', p.n ? 'bg-amber-400 text-[#031420]' : 'bg-slate-200 text-slate-500 dark:bg-white/10 dark:text-[#93A4B2]')}>{p.n || '?'}</span>
+            <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">@{p.name}{p.you ? ' (Sen)' : ''}</p><p className={cx('text-xs', MUTED)}>{[p.lead ? 'Oda Lideri' : '', p.n ? '' : 'Numara bekleniyor'].filter(Boolean).join(' · ') || 'Sürücü'}</p></div>
+          </div>
+        ))}
+      </section>
+      {ride.mine && (
+        <section className={cx(CARD, 'space-y-2 p-3')}>
+          <p className="text-sm font-semibold">Numarayı Değiştir</p>
+          <div className="flex gap-2"><input className={FIELD} placeholder="Yeni numara (1-99)" inputMode="numeric" maxLength={2} value={num} onChange={e => setNum(e.target.value.replace(/\D/g, ''))} aria-label="Yeni sürüş numarası" /><button type="button" disabled={S.busy || !num} className={GHOST} onClick={() => eng.rideNumber(num).then(ok => { if (ok) setNum(''); })}>Kaydet</button></div>
+        </section>
+      )}
+      {lead && <ConfirmButton onConfirm={() => eng.rideEnd()} confirmLabel="Sürüş Biter!" className={cx(DANGER, 'w-full !py-3')}>Sürüşü Bitir</ConfirmButton>}
+    </div>
+  );
+}
+function RoomBody({ eng, g, gid, rm }) {
+  const S = eng.state, [yt, setYt] = useState(''), [rq, setRq] = useState(''), [open, setOpen] = useState('');
+  const busy = S.busy, err = S.err, now = useNow(30000), L = S.lists[gid];
+  const Err = () => err ? <p role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-400/15 dark:text-rose-300" onClick={() => eng.clearErr()}>{err}</p> : null;
+  const lead = rm.lead, forced = S.forced, speaking = n => S.speakers.includes(n);
+  const src = rm.src;
+  const radios = (S.radios || []).filter(c => !rq || c.name.toLocaleLowerCase('tr').includes(rq.toLocaleLowerCase('tr')));
+  return (
+    <div className="space-y-3">
+      <section className={cx(CARD, 'space-y-3 p-4')}>
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0"><h3 className="truncate text-base font-bold">{rm.name}</h3><p className={cx('text-xs', MUTED)}>{S.conn === 'on' ? 'Bağlı' : 'Bağlanıyor…'} · {rm.count} kişi{lead ? ' · Oda lideri sensin' : ''} · Kalan {fmtLeft(rm.exp - (now + ((L && L.skew) || 0)))}</p></div>
+          <span className={cx('h-3 w-3 shrink-0 rounded-full', S.conn === 'on' ? 'bg-emerald-400' : 'bg-amber-400')} aria-hidden="true" />
+        </div>
+        <button type="button" onClick={() => eng.toggleMic()} disabled={forced || S.conn !== 'on'} aria-label={S.mic ? 'Mikrofonu Kapat' : 'Mikrofonu Aç'}
+                className={cx('flex h-20 w-full items-center justify-center gap-3 rounded-2xl text-lg font-bold transition active:scale-[.98] disabled:opacity-50', S.mic ? 'bg-emerald-400 text-[#031420]' : 'bg-slate-100 text-slate-800 dark:bg-white/10 dark:text-[#F4EFE6]')}>
+          {forced ? 'Lider Mikrofonunu Kapattı' : S.mic ? 'Mikrofon Açık' : 'Mikrofon Kapalı'}
+        </button>
+        <Err />
+      </section>
+      <section className={cx(CARD, 'divide-y divide-slate-200 px-3 dark:divide-white/10')} aria-label="Odadakiler">
+        {rm.parts.map(p => (
+          <div key={p.uid} className="py-2.5">
+            <div className="flex items-center gap-2">
+              <span className={cx('flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold', speaking(p.name) ? 'bg-emerald-400 text-[#031420]' : 'bg-slate-200 text-slate-700 dark:bg-white/10 dark:text-[#F4EFE6]')}>{(p.name || '?').charAt(0).toLocaleUpperCase('tr')}</span>
+              <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">@{p.name}{p.you ? ' (Sen)' : ''}</p><p className={cx('text-xs', MUTED)}>{[p.lead ? 'Oda Lideri' : '', p.muted ? 'Konuşması kapalı' : '', speaking(p.name) ? 'Konuşuyor' : ''].filter(Boolean).join(' · ') || 'Katılımcı'}</p></div>
+              {lead && !p.you && (
+                <>
+                  <button type="button" onClick={() => eng.setUser(p.uid, { muted: !p.muted })} aria-label={p.muted ? 'Konuşmasını Aç' : 'Konuşmasını Kapat'} className={cx(GHOST, '!px-2.5 !py-1.5 !text-xs')}>{p.muted ? 'Aç' : 'Sustur'}</button>
+                  <ConfirmButton onConfirm={() => eng.kick(p.uid)} confirmLabel="At?" className={cx(DANGER, '!px-2.5 !py-1.5 !text-xs')}>At</ConfirmButton>
+                </>
+              )}
+            </div>
+            {lead && !p.you && <VolRow p={p} onSet={x => eng.setUser(p.uid, x)} />}
+          </div>
+        ))}
+      </section>
+      {lead && rm.members && rm.members.length > 0 && (
+        <section className={cx(CARD, 'p-3')}>
+          <button type="button" className="flex w-full items-center justify-between text-sm font-semibold" onClick={() => setOpen(open === 'inv' ? '' : 'inv')} aria-expanded={open === 'inv'}>Gruptan Davet Et<span>{open === 'inv' ? '▴' : '▾'}</span></button>
+          {open === 'inv' && <div className="mt-2 divide-y divide-slate-200 dark:divide-white/10">{rm.members.map(m => (
+            <div key={m.uid} className="flex items-center justify-between gap-2 py-2"><span className="truncate text-sm">@{m.name}</span><button type="button" disabled={m.invited || busy} onClick={() => eng.invite(m.uid)} className={cx(GHOST, '!px-3 !py-1.5 !text-xs')}>{m.invited ? 'Davet Edildi' : 'Davet Et'}</button></div>
+          ))}</div>}
+        </section>
+      )}
+      <section className={cx(CARD, 'space-y-3 p-4')}>
+        <h3 className="text-sm font-bold">Oda Yayını</h3>
+        {src ? <p className="text-sm">{src.type === 'radio' ? '📻 ' : src.type === 'yt' ? '▶ ' : '♪ '}{src.title}{S.local && !lead ? '' : ''}</p> : <p className={cx('text-sm', MUTED)}>{lead ? 'Henüz yayın paylaşmadın.' : 'Lider şu an yayın paylaşmıyor.'}</p>}
+        {!lead && src && (
+          <>
+            <label className="flex items-center justify-between gap-3 text-sm"><span>Liderin yayınını dinle</span><input type="checkbox" checked={S.listen} onChange={e => eng.setListen(e.target.checked)} className="h-6 w-6 accent-amber-400" /></label>
+            <p className={cx('text-xs', MUTED)}>Kapatırsan interkom sürer; kendi müziğini Harita ekranındaki ♪ düğmesinden açabilirsin. Radyo ve YouTube her cihazda ayrı çalar, saniyesi birebir aynı olmayabilir.</p>
+          </>
+        )}
+        {lead && (
+          <div className="space-y-3">
+            {src && src.type === 'file' && <div className="flex gap-2"><button type="button" className={cx(GHOST, 'flex-1')} onClick={() => eng.filePlayPause()}>⏯ Duraklat / Devam</button><button type="button" className={cx(GHOST, 'flex-1')} onClick={() => eng.fileNext()}>⏭ Sonraki</button></div>}
+            <div className="space-y-2">
+              <div className="flex gap-2"><input className={FIELD} placeholder="YouTube video bağlantısı" inputMode="url" value={yt} onChange={e => setYt(e.target.value)} /><button type="button" disabled={busy || !yt} className={PRIMARY} onClick={() => eng.shareYT(yt).then(ok => ok && setYt(''))}>Paylaş</button></div>
+              <label className={cx(GHOST, 'w-full cursor-pointer')}>♪ Müzik Dosyası Paylaş<input type="file" accept="audio/*" multiple className="hidden" onChange={e => { eng.shareFiles(e.target.files); e.target.value = ''; }} /></label>
+              <button type="button" className={cx(GHOST, 'w-full')} onClick={() => { setOpen(open === 'rad' ? '' : 'rad'); eng.loadRadios(); }} aria-expanded={open === 'rad'}>📻 Radyo Paylaş {open === 'rad' ? '▴' : '▾'}</button>
+              {open === 'rad' && (
+                <div className="space-y-2">
+                  <input className={FIELD} placeholder="Kanal Ara" value={rq} onChange={e => setRq(e.target.value)} />
+                  {!S.radios && <p className={cx('text-sm', MUTED)}>{S.radioErr || 'Kanallar yükleniyor…'}</p>}
+                  <ul className="max-h-48 divide-y divide-slate-200 overflow-y-auto rounded-xl ring-1 ring-slate-200 dark:divide-white/10 dark:ring-white/10">{radios.map(c => <li key={c.url}><button type="button" className="w-full px-3 py-2.5 text-left text-sm" onClick={() => eng.shareRadio(c.url, c.name).then(ok => ok && setOpen(''))}>{c.name}</button></li>)}</ul>
+                </div>
+              )}
+              {src && <button type="button" className={cx(DANGER, 'w-full')} onClick={() => eng.stopShare()}>⏹ Yayını Durdur</button>}
+            </div>
+          </div>
+        )}
+      </section>
+      <div className="flex gap-2">
+        <ConfirmButton onConfirm={() => eng.leave()} confirmLabel="Ayrıl?" className={cx(DANGER, 'flex-1 !py-3')}>Odadan Ayrıl</ConfirmButton>
+        {lead && <ConfirmButton onConfirm={() => eng.close()} confirmLabel="Oda Kapanır!" className={cx(DANGER, 'flex-1 !py-3')}>Odayı Kapat</ConfirmButton>}
+      </div>
+      {lead && <p className={cx('text-xs', MUTED)}>Ayrılırsan liderlik odadaki en eski katılımcıya geçer. Oda boşalsa da 24 saat dolana dek açık kalır.</p>}
+    </div>
+  );
+}
 function GroupMembers({ g, onOpenUser, act }) {
   const leader = g.role === 'leader', staff = isStaff(g);
   return (
@@ -1160,7 +1398,7 @@ function GroupPage({ self, gid, version, onBack, onOpenUser, toast }) {
   });
   if (err && !g) return <div className="space-y-3"><button type="button" onClick={onBack} className={GHOST}><Icon name="back" className="h-4 w-4" />Gruplarım</button><Empty icon="x" title="Grup Açılamadı" text={err} /></div>;
   if (!g) return <p className={cx('py-8 text-center text-sm', MUTED)}>Yükleniyor…</p>;
-  const subs = [['posts', 'Gönderiler'], ['members', 'Üyeler (' + g.members.length + ')'], ['events', 'Etkinlik'], ['info', 'Bilgi']];
+  const subs = [['posts', 'Gönderiler'], ['members', 'Üyeler (' + g.members.length + ')'], ['intercom', 'İnterkom ve Sürüş'], ['events', 'Etkinlik'], ['info', 'Bilgi']];
   return (
     <div className="space-y-3">
       <section className={cx(CARD, 'overflow-hidden')}>
@@ -1180,10 +1418,10 @@ function GroupPage({ self, gid, version, onBack, onOpenUser, toast }) {
           </div>
         </div>
       </section>
-      <div className="grid grid-cols-4 gap-1 rounded-xl bg-slate-200/70 p-1 dark:bg-white/[.07]" role="tablist">
+      <div className="grid grid-cols-5 gap-1 rounded-xl bg-slate-200/70 p-1 dark:bg-white/[.07]" role="tablist">
         {subs.map(([id, label]) => (
           <button key={id} type="button" role="tab" aria-selected={sub === id} onClick={() => setSub(id)}
-                  className={cx('rounded-lg px-1 py-2 text-xs font-semibold min-[380px]:text-sm', sub === id ? 'bg-amber-400 text-[#031420]' : 'text-slate-600 dark:text-[#C9D0D6]')}>{label}</button>
+                  className={cx('rounded-lg px-0.5 py-2 text-[11px] font-semibold min-[380px]:text-xs min-[430px]:text-sm', sub === id ? 'bg-amber-400 text-[#031420]' : 'text-slate-600 dark:text-[#C9D0D6]')}>{label}</button>
         ))}
       </div>
       {sub === 'posts' && (
@@ -1193,6 +1431,7 @@ function GroupPage({ self, gid, version, onBack, onOpenUser, toast }) {
         </div>
       )}
       {sub === 'members' && <GroupMembers g={g} onOpenUser={onOpenUser} act={(p, b) => act(p, b).catch(x => toast(x.message))} />}
+      {sub === 'intercom' && <GroupIntercom g={g} gid={gid} />}
       {sub === 'events' && <GroupEvents g={g} gid={gid} version={version} toast={toast} />}
       {sub === 'info' && <GroupInfo g={g} act={act} patch={patch} onLeft={onBack} toast={toast} />}
     </div>

@@ -564,12 +564,25 @@ window.openEventNav = ev => {
   goTab('world'); let n = 0;
   const t = setInterval(() => { if (mapH && mapH.startEvent) { clearInterval(t); mapH.startEvent(ev); } else if (++n > 80) clearInterval(t); }, 200);
 };
+// Sosyal › Gruplarım › grup › İnterkom ve Sürüş › Sürüş Başlat › «Haritada Aç»: haritayı grup sürüşü modunda açar (numaralı canlı sürücüler, konum paylaşımı)
+window.openGroupRide = cfg => {
+  goTab('world'); let n = 0;
+  const t = setInterval(() => { if (mapH && mapH.groupRide) { clearInterval(t); mapH.groupRide(Object.assign({ sock: socket }, cfg)); } else if (++n > 80) clearInterval(t); }, 200);
+};
 // Haritadaki grup sayfasından Sosyal › Gruplarım'a geçiş (gid verilirse o grubun sayfası açılır)
 window.openSocialGroups = gid => {
   goTab('social');
   window.__socialGoto = { tab: 'groups', gid: gid || null };      // bileşen henüz yüklenmediyse açılışta okunur
   window.dispatchEvent(new CustomEvent('ml:social-goto', { detail: window.__socialGoto }));
 };
+// Grup interkom odası motoru (uygulama düzeyi: Sosyal ↔ Harita geçişinde oda sürer). Betikler ilk kullanımda yüklenir.
+let roomP = null;
+window.getRoomEngine = () => roomP || (roomP = (async () => {
+  for (const [u, g] of [['/audio-core.js', 'AudioCore'], ['/comm-core.js', 'CommCore'], ['/mesh-adapter.js', 'MeshAdapter'], ['/room.js', 'RoomEngine']]) await loadJs(u, () => !!window[g]);
+  window.MLRoom = window.MLRoom || window.RoomEngine.create({ socket });
+  return window.MLRoom;
+})().catch(e => { roomP = null; throw e; }));
+window.addEventListener('ml:room-invite', e => { const d = e.detail || {}; const t = document.createElement('div'); t.setAttribute('role', 'status'); t.style.cssText = 'position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 12px);z-index:9999;background:#0b2233;border:1px solid #EA8621;color:#fff;border-radius:14px;padding:12px 14px;font-size:14px;text-align:center'; t.textContent = (d.from || 'Biri') + ' seni «' + (d.group || 'grup') + '» interkom odasına davet etti. Sosyal › Gruplarım › İnterkom ve Sürüş'; document.body.appendChild(t); setTimeout(() => t.remove(), 6000); });
 // Harita ekranı: /map.css ve /map.js ilk açılışta yüklenir (Leaflet, map.js içinden yüklenir)
 function openMap() {
   if (mapH) return mapH.activate();
@@ -584,7 +597,7 @@ function openMap() {
   const sc = document.createElement('script');
   sc.src = '/map.js';
   sc.onload = async () => {
-    for (const u of ['/audio-core.js', '/media-core.js', '/comm-core.js', '/livekit-adapter.js', '/mesh-adapter.js', '/intercom.js']) await loadJs(u);
+    for (const u of ['/audio-core.js', '/media-core.js', '/intercom.js']) await loadJs(u);
     root.innerHTML = ''; mapH = window.MotoMap.mount(root, { user: me && me.username, onAnalyze: id => goAnalysis(h => h.openRide(id)), onAnalyzeGroup: gid => goAnalysis(h => h.openGroupList(gid)) });
     try { icH = window.Intercom && window.Intercom.mount(root, { user: me && me.username, socket }); } catch (e) { console.error(e); }
     mapLoading = false; mapH.activate();
@@ -596,6 +609,7 @@ function enterHome(user) {
   me = user; remember(user);
   showScreen('dash');
   if (!socket.connected) socket.connect();
+  setTimeout(() => { window.getRoomEngine().catch(() => {}); }, 2500);   // grup interkom odası: davetler baştan gelsin
   setTimeout(openSocial, 1500);   // arka planda hazırla: okunmamış mesaj rozeti baştan çalışsın
 }
 function setAuthMode(m) {

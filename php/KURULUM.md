@@ -5,7 +5,7 @@ Gereksinim: PHP 8.1 veya üstü (pdo_mysql, curl, openssl, mbstring uzantıları
 ## 1. Veritabanı
 1. cPanel › **MySQL® Veritabanları**: yeni veritabanı oluştur (örn. `kullanici_motolife`).
 2. Yeni MySQL kullanıcısı oluştur, güçlü şifre ver, kullanıcıyı veritabanına **TÜM AYRICALIKLARLA** ekle.
-3. Tablolar ilk istekte otomatik oluşur (`ml_` önekli, 23 tablo). İstersen elle kur: phpMyAdmin › veritabanını seç › **İçe Aktar** › paketteki `veritabani.sql` dosyası. (İndeks satırlarında «Duplicate key name» hatası çıkarsa yok sayılabilir.)
+3. Tablolar ilk istekte otomatik oluşur (`ml_` önekli, 29 tablo). İstersen elle kur: phpMyAdmin › veritabanını seç › **İçe Aktar** › paketteki `veritabani.sql` dosyası. (İndeks satırlarında «Duplicate key name» hatası çıkarsa yok sayılabilir.)
 
 ## 2. Dosyaları yükle
 1. Zip içeriğini **alan adının kök klasörüne** (`public_html`) çıkar. Uygulama `/api/...` mutlak yollarını kullandığı için alt klasörde ÇALIŞMAZ; gerekirse alt alan adı (`moto.alanadin.com`) aç ve onun köküne yükle.
@@ -44,3 +44,5 @@ SINIR: şu an paketler indirilir/saklanır/silinir; harita ÇİZİMİ (çevrimd�
 
 - **İnterkom (LiveKit):** `config.php` içinde `LIVEKIT_URL` (wss://…), `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` doldurulmazsa interkom kapalıdır (503). Anahtarlar yalnız sunucuda durur; tarayıcıya yalnız 1 saatlik, tek odaya özel belirteç gider. Node sürümünde aynı adlarla ortam değişkeni.
 - **İnterkom yedeği (hesap gerektirmez):** LiveKit alanları boşsa interkom otomatik olarak üyeler arası doğrudan WebRTC (mesh, en çok 6 kişi) ile çalışır; sunucu yalnız sinyal aktarır (ses sunucudan geçmez). Bazı operatör ağlarında doğrudan bağlantı kurulamaz; bunun için isteğe bağlı TURN: `GV_TURN_URLS` (virgülle), `GV_TURN_USER`, `GV_TURN_CREDENTIAL`, oda sınırı `GV_MAX` (2–8). İlk istekte tablo `ml_gvp` otomatik oluşur (şema sürümü 7); elle kuruyorsan `veritabani.sql` içindedir.
+- **Grup interkom odası:** Sosyal › Gruplarım › grup › İnterkom. İlk istekte `ml_room`, `ml_roomp`, `ml_roomx` tabloları otomatik oluşur (şema sürümü 8); elle kuruyorsan `veritabani.sql` içindedir. Oda ses için mesh kullanır; ek ayar gerekmez (TURN isteğe bağlı, yukarıya bak).
+- **Çoklu oda + sürüş (şema sürümü 9):** `ml_rm`, `ml_rmp`, `ml_rmx` tabloları ilk istekte otomatik oluşur (elle kuruyorsan `veritabani.sql`). Eski `ml_room`, `ml_roomp`, `ml_roomx` tabloları artık kullanılmaz; silmek istersen kendin sil (otomatik silinmez). Odalar 24 saat sonra kendiliğinden silinir.

@@ -14,14 +14,23 @@ function gv_remove_peer(string $sid, string $why): void {
     rt_leave($sid, 'gv:' . $gid);
     if (!val('SELECT 1 FROM ml_gvp WHERE gid = ? LIMIT 1', [$gid])) rt_leave_all('gv:' . $gid);
 }
-function gv_tick(string $gid): void {            // gruptan çıkarılan üyeleri sesten at
-    foreach (all('SELECT sid, uid FROM ml_gvp WHERE gid = ?', [$gid]) as $r) {
-        if (!rg_is_member($gid, $r['uid'])) { rt_to_sid($r['sid'], 'gv:kicked', new stdClass); gv_remove_peer($r['sid'], 'kicked'); }
+function gv_kick_uid(string $gid, string $uid, string $why): void {          // oda liderinin attığı / odadan çıkan kişiyi sesten düşür
+    foreach (all('SELECT sid FROM ml_gvp WHERE gid = ? AND uid = ?', [$gid, $uid]) as $r) {
+        if (in_array($why, ['kicked', 'closed', 'gone'], true)) rt_to_sid($r['sid'], 'gv:kicked', new stdClass);
+        gv_remove_peer($r['sid'], $why);
+    }
+}
+function gv_tick(string $key): void {            // gruptan çıkarılan üyeleri / süresi dolan ya da kapanan odanın katılımcılarını sesten at
+    $gid = rm_gid($key);
+    foreach (all('SELECT sid, uid FROM ml_gvp WHERE gid = ?', [$key]) as $r) {
+        if (!$gid || !rg_is_member($gid, $r['uid']) || !room_in_rid($key, $r['uid'])) { rt_to_sid($r['sid'], 'gv:kicked', new stdClass); gv_remove_peer($r['sid'], 'kicked'); }
     }
 }
 function gv_join(array $S, array $u, array $p): array {
-    $gid = (string)($p['gid'] ?? '');
-    if (!preg_match('/^[0-9a-f]{16}$/', $gid) || !rg_is_member($gid, $u['id'])) return gv_err('Bu grubun üyesi değilsin.', 'forbidden');
+    $gid = (string)($p['room'] ?? '');                        // ses anahtarı = oda kimliği (ml_gvp.gid sütunu bunu tutar)
+    $grp = preg_match('/^[0-9a-f]{12}$/', $gid) ? rm_gid($gid) : null;
+    if (!$grp || !rg_is_member($grp, $u['id'])) return gv_err('Bu oda yok ya da süresi doldu.', 'forbidden');
+    if (!room_in_rid($gid, (string)$u['id'])) return gv_err('Önce interkom odasına şifreyle gir.', 'noroom');
     $cur = one('SELECT gid FROM ml_gvp WHERE sid = ?', [$S['sid']]);
     if ($cur && $cur['gid'] !== $gid) gv_remove_peer($S['sid'], 'switch');
     foreach (all('SELECT sid FROM ml_gvp WHERE gid = ? AND uid = ? AND sid <> ?', [$gid, $u['id'], $S['sid']]) as $o) {   // aynı kullanıcı başka sekme/cihazda: eskisi düşer

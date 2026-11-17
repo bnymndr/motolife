@@ -29,6 +29,9 @@ CREATE TABLE IF NOT EXISTS ml_rglive (gid CHAR(16) NOT NULL, uid CHAR(24) NOT NU
 CREATE TABLE IF NOT EXISTS ml_rts (sid CHAR(16) PRIMARY KEY, uid CHAR(24) NOT NULL, last BIGINT NOT NULL, created BIGINT NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE IF NOT EXISTS ml_rtr (sid CHAR(16) NOT NULL, room VARCHAR(60) NOT NULL, skey TEXT NULL, PRIMARY KEY (sid, room)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE IF NOT EXISTS ml_gvp (sid CHAR(16) PRIMARY KEY, gid CHAR(16) NOT NULL, uid CHAR(24) NOT NULL, name VARCHAR(40) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS ml_rm (rid CHAR(12) PRIMARY KEY, gid CHAR(16) NOT NULL, name VARCHAR(40) NOT NULL, pw VARCHAR(255) NOT NULL, leader CHAR(24) NULL, src TEXT NULL, ver INT NOT NULL DEFAULT 1, created BIGINT NOT NULL, exp BIGINT NOT NULL, ride TEXT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS ml_rmp (rid CHAR(12) NOT NULL, gid CHAR(16) NOT NULL, uid CHAR(24) NOT NULL, name VARCHAR(40) NOT NULL, joined BIGINT NOT NULL, seen BIGINT NOT NULL, vol INT NOT NULL DEFAULT 100, muted TINYINT NOT NULL DEFAULT 0, PRIMARY KEY (rid, uid)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS ml_rmx (rid CHAR(12) NOT NULL, uid CHAR(24) NOT NULL, kind CHAR(3) NOT NULL, until BIGINT NOT NULL DEFAULT 0, PRIMARY KEY (rid, uid)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE IF NOT EXISTS ml_rte (id BIGINT AUTO_INCREMENT PRIMARY KEY, sid CHAR(16) NOT NULL, ev VARCHAR(40) NOT NULL, payload MEDIUMTEXT NOT NULL, at BIGINT NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 -- (zaten varsa 'Duplicate key name' hatası verir; yok sayılabilir)
 CREATE INDEX mlx0 ON ml_posts(uid, at);
@@ -70,7 +73,9 @@ CREATE INDEX mlx18 ON ml_gp(gid, at);
 -- (zaten varsa 'Duplicate key name' hatası verir; yok sayılabilir)
 CREATE INDEX mlx19 ON ml_gpc(post);
 CREATE INDEX mlx20 ON ml_gvp(gid);
+CREATE INDEX mlx21 ON ml_rm(gid);
+CREATE INDEX mlx22 ON ml_rmp(gid);
 
-REPLACE INTO ml_kv (k, v, exp) VALUES ('schema', '7', 0);
+REPLACE INTO ml_kv (k, v, exp) VALUES ('schema', '9', 0);
 
 -- Eski kurulumu yükseltiyorsan (v5): ALTER TABLE ml_rgm ADD COLUMN role VARCHAR(8) NOT NULL DEFAULT '';  (uygulama ilk istekte bunu kendisi de dener)

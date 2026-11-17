@@ -113,24 +113,43 @@ function rg_stop_share(string $gid, string $uid, ?string $why = null): bool {
     rg_ev($gid, 'share-off', rg_name($uid), $why);
     return true;
 }
+function rg_ride_room(array $g): ?array {          // odaya bağlı sürüş: bu grubun sürüşünü taşıyan oda satırı (+ '_ride' = {id, nums})
+    if (!$g['ride_id']) return null;
+    foreach (all('SELECT * FROM ml_rm WHERE gid = ? AND ride IS NOT NULL', [$g['id']]) as $r) { $x = json_decode((string)$r['ride'], true); if ($x && ($x['id'] ?? '') === $g['ride_id']) return $r + ['_ride' => $x]; }
+    return null;
+}
+function rg_in_ride(array $g, string $uid): bool { $rr = rg_ride_room($g); return !$rr || room_in_rid($rr['rid'], $uid); }
+function rg_set_number(array $g, string $uid, $raw): array {          // 1-99, her sürüşte benzersiz; boş bırakılırsa ilk boş numara
+    $rr = rg_ride_room($g); if (!$rr) return ['error' => 'Bu odada aktif sürüş yok.'];
+    $x = $rr['_ride']; $nums = $x['nums'] ?? []; $taken = []; foreach ($nums as $k => $v) if ((string)$k !== $uid) $taken[(int)$v] = true;
+    $t = trim((string)($raw ?? ''));
+    if ($t === '') { $n = 1; while (isset($taken[$n])) $n++; }
+    else { if (!preg_match('/^\d{1,2}$/', $t) || (int)$t < 1) return ['error' => 'Numara 1 ile 99 arasında olmalı.']; $n = (int)$t; if (isset($taken[$n])) return ['error' => 'Bu numara başkasında; başka bir numara yaz.', 'code' => 'taken']; }
+    if ($n > 99) return ['error' => 'Boş numara kalmadı.'];
+    $nums[$uid] = $n; $x['nums'] = $nums;
+    q('UPDATE ml_rm SET ride = ? WHERE rid = ?', [json_encode($x), $rr['rid']]);
+    rg_rec($g, ['e', now_ms(), 'number', rg_name($uid), $n]); rg_notify($g, 'ride-number');
+    return ['n' => $n];
+}
 function rg_compute_state(array $g): array {
     $now = now_ms(); $live = all('SELECT * FROM ml_rglive WHERE gid = ?', [$g['id']]); $rows = []; $le = null;
     foreach ($live as $e) if ($e['uid'] === $g['leader']) $le = $e;
     $lf = (bool)($le && $le['lat'] !== null && $now - (int)$le['at'] <= RG_STALE_MS);
+    $rr = rg_ride_room($g); $nums = $rr ? ($rr['_ride']['nums'] ?? []) : [];
     foreach ($live as $e) {
-        $u = rg_name($e['uid']); $lead = $e['uid'] === $g['leader'];
-        if ($e['lat'] === null) { $rows[] = ['u' => $u, 'lead' => $lead, 'wait' => true]; continue; }
+        $u = rg_name($e['uid']); $lead = $e['uid'] === $g['leader']; $nn = isset($nums[$e['uid']]) ? (int)$nums[$e['uid']] : null;
+        if ($e['lat'] === null) { $rows[] = ['u' => $u] + ($nn ? ['n' => $nn] : []) + ['lead' => $lead, 'wait' => true]; continue; }
         $age = $now - (int)$e['at'];
-        if ($age > RG_LOST_MS) { $rows[] = ['u' => $u, 'lead' => $lead, 'lost' => true, 'age' => (int)jsround($age / 1000)]; continue; }
+        if ($age > RG_LOST_MS) { $rows[] = ['u' => $u] + ($nn ? ['n' => $nn] : []) + ['lead' => $lead, 'lost' => true, 'age' => (int)jsround($age / 1000)]; continue; }
         $kmh = $e['spd'] !== null ? (float)$e['spd'] * 3.6 : ($e['est'] !== null ? (float)$e['est'] * 3.6 : null);
-        $r = ['u' => $u, 'lead' => $lead, 'lat' => r5((float)$e['lat']), 'lon' => r5((float)$e['lon']), 'spd' => $kmh === null ? null : (int)jsround($kmh),
+        $r = ['u' => $u] + ($nn ? ['n' => $nn] : []) + ['lead' => $lead, 'lat' => r5((float)$e['lat']), 'lon' => r5((float)$e['lon']), 'spd' => $kmh === null ? null : (int)jsround($kmh),
             'est' => $e['spd'] === null && $e['est'] !== null, 'age' => (int)jsround($age / 1000)];
         if ($age <= RG_STALE_MS && $e['fl']) $r['f'] = $e['fl'];
         if ($lf && !$lead) $r['dl'] = (int)jsround(rg_hav((float)$e['lat'], (float)$e['lon'], (float)$le['lat'], (float)$le['lon']));
         $rows[] = $r;
     }
     usort($rows, fn($a, $b) => ((int)$b['lead'] <=> (int)$a['lead']) ?: strcmp($a['u'], $b['u']));
-    $key = ($g['ride_id'] ? 1 : 0) . '|' . (int)$g['route_v'] . '|' . (int)$g['gap'] . '|' . (int)$lf . '|' . implode(';', array_map(fn($r) => implode(',', [$r['u'], $r['lat'] ?? '', $r['lon'] ?? '', $r['spd'] ?? '', $r['f'] ?? '', !empty($r['lost']) ? 1 : 0, $r['lead'] ? 1 : 0, !empty($r['wait']) ? 1 : 0]), $rows));
+    $key = ($g['ride_id'] ? 1 : 0) . '|' . (int)$g['route_v'] . '|' . (int)$g['gap'] . '|' . (int)$lf . '|' . implode(';', array_map(fn($r) => implode(',', [$r['u'], $r['n'] ?? '', $r['lat'] ?? '', $r['lon'] ?? '', $r['spd'] ?? '', $r['f'] ?? '', !empty($r['lost']) ? 1 : 0, $r['lead'] ? 1 : 0, !empty($r['wait']) ? 1 : 0]), $rows));
     return ['rows' => $rows, 'ref' => $lf, 'key' => $key];
 }
 function rg_payload(array $g, array $s): array { return ['gid' => $g['id'], 'rv' => (int)$g['route_v'], 'ref' => $s['ref'], 'gap' => (int)$g['gap'], 'ride' => (bool)$g['ride_id'], 'members' => $s['rows'], 't' => now_ms()]; }
@@ -192,7 +211,7 @@ function rg_eval_flags(array $g, int $now): void {
 }
 
 // ---------- Sürüş başlat / bitir, üyelik ----------
-function rg_start_ride(array $g, array $u): void {
+function rg_start_ride(array $g, array $u, ?string $room = null): void {
     $id = rid(); $t = now_ms(); $rc = rg_route($g);
     q('UPDATE ml_rg SET ride_id = ?, ride_started = ?, ride_by = ?, ride_idle = ?, rec_bytes = 0, rec_full = 0 WHERE id = ?', [$id, $t, $u['id'], $t, $g['id']]);
     $g = rg_group($g['id']);
@@ -201,6 +220,10 @@ function rg_start_ride(array $g, array $u): void {
     q('INSERT INTO ml_rgrec (rideid, line) VALUES (?, ?)', [$id, $hdr]);
     q('UPDATE ml_rg SET rec_bytes = ? WHERE id = ?', [strlen($hdr), $g['id']]);
     rg_rec($g, ['e', $t, 'start', uname($u), null]);
+    if ($room) {                                            // sürüş odaya bağlanır; oda dışındakiler canlı konumu izleyemez
+        q('UPDATE ml_rm SET ride = ? WHERE rid = ?', [json_encode(['id' => $id, 'nums' => new stdClass, 'by' => $u['id']]), $room]);
+        foreach (rg_members($g['id']) as $m) if (!room_in_rid($room, $m['uid'])) foreach (all('SELECT sid FROM ml_rts WHERE uid = ?', [$m['uid']]) as $x) rt_leave($x['sid'], 'rg:' . $g['id']);
+    }
     rg_notify($g, 'ride-start');
 }
 function rg_end_ride(array $g, ?array $by, ?string $why): void {
@@ -212,6 +235,7 @@ function rg_end_ride(array $g, ?array $by, ?string $why): void {
     $sum = json_encode(['v' => 1, 'rideId' => $rid, 'groupId' => $g['id'], 'name' => $g['name'], 'startedAt' => (int)$g['ride_started'], 'endedAt' => $t, 'endedBy' => $by ? uname($by) : null,
         'reason' => $why, 'recFull' => (bool)$g['rec_full'], 'route' => (int)$g['route_v'] > 0 ? ['len' => (int)$g['route_len'], 'v' => (int)$g['route_v']] : null, 'members' => $members], JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
     q('INSERT INTO ml_rgrides (id, gid, started, ended, sum) VALUES (?, ?, ?, ?, ?)', [$rid, $g['id'], (int)$g['ride_started'], $t, $sum]);
+    q('UPDATE ml_rm SET ride = NULL WHERE gid = ? AND ride IS NOT NULL', [$g['id']]);
     q('UPDATE ml_rg SET ride_id = NULL, ride_started = 0, ride_by = NULL, ride_idle = 0 WHERE id = ?', [$g['id']]);
     q('DELETE FROM ml_rgstat WHERE rideid = ?', [$rid]);
     foreach (all('SELECT id FROM ml_rgrides WHERE gid = ? ORDER BY started DESC LIMIT 1000 OFFSET 50', [$g['id']]) as $old) { q('DELETE FROM ml_rgrec WHERE rideid = ?', [$old['id']]); q('DELETE FROM ml_rgrides WHERE id = ?', [$old['id']]); }
@@ -251,6 +275,7 @@ function rg_disconnect(string $sid, array $u): void { foreach (all('SELECT gid F
 function rg_member_group($gid, array $u): ?array { $gid = (string)$gid; if (!preg_match('/^[0-9a-f]{16}$/', $gid) || !rg_is_member($gid, $u['id'])) return null; return rg_group($gid); }
 function grp_watch(array $S, array $u, array $p): array {
     $g = rg_member_group($p['gid'] ?? '', $u); if (!$g) return ['error' => 'Grup bulunamadı.'];
+    if (!rg_in_ride($g, $u['id'])) return ['error' => 'Bu sürüş bir interkom odasına bağlı; önce odaya gir.'];
     rt_join($S['sid'], 'rg:' . $g['id']);
     rg_tick($g); $g = rg_group($g['id']) ?? $g;
     $s = rg_compute_state($g);
@@ -264,6 +289,8 @@ function grp_share(array $S, array $u, array $p): array {
     if (($p['on'] ?? null) !== true) { rg_stop_share($g['id'], $u['id'], 'kullanıcı'); return ['ok' => true, 'sharing' => false]; }
     if (($p['consent'] ?? null) !== true) return ['error' => 'Paylaşım için açık onay gerekli.'];
     if (!$g['ride_id']) return ['error' => 'Aktif grup sürüşü yok.'];
+    if (!rg_in_ride($g, $u['id'])) return ['error' => 'Bu sürüş bir interkom odasına bağlı; önce odaya gir.'];
+    $rr = rg_ride_room($g); if ($rr && empty($rr['_ride']['nums'][$u['id']])) return ['error' => 'Önce sürüş numaranı yaz.', 'code' => 'nonum'];
     $old = one('SELECT * FROM ml_rglive WHERE gid = ? AND uid = ?', [$g['id'], $u['id']]);
     if ($old && $old['sid'] !== $S['sid'] && val('SELECT 1 FROM ml_rts WHERE sid = ?', [$old['sid']])) rt_to_sid($old['sid'], 'grp:taken', ['gid' => $g['id']]);
     if (!$old) rg_rec($g, ['e', now_ms(), 'share-on', uname($u), null]);
@@ -275,7 +302,7 @@ function grp_share(array $S, array $u, array $p): array {
     return ['ok' => true, 'sharing' => true];
 }
 function grp_update(array $S, array $u, array $p): void {
-    $g = rg_member_group($p['gid'] ?? '', $u); if (!$g || !$g['ride_id']) return;
+    $g = rg_member_group($p['gid'] ?? '', $u); if (!$g || !$g['ride_id'] || !rg_in_ride($g, $u['id'])) return;
     $e = one('SELECT * FROM ml_rglive WHERE gid = ? AND uid = ?', [$g['id'], $u['id']]);
     if (!$e || $e['sid'] !== $S['sid']) return;
     $lat = lv_num($p['lat'] ?? null); $lon = lv_num($p['lon'] ?? null); $acc = array_key_exists('acc', $p) && $p['acc'] !== null ? lv_num($p['acc']) : 0.0;
@@ -563,4 +590,16 @@ function h_rg_comment_delete(string $id, string $pid, string $cid): never {
     if (!$c) fail(404, 'Yorum bulunamadı.');
     if ($c['uid'] !== $u['id'] && $g['leader'] !== $u['id']) fail(403, 'Bu yorumu silemezsin.');
     q('DELETE FROM ml_gpc WHERE id = ?', [$cid]); out(['ok' => true]);
+}
+
+// ---------- İnterkom odası bağlantıları (grouproom.php çağırır) ----------
+function rm_ride_closed(?array $g, array $r, string $why): void {          // oda kapandı/süresi doldu: odaya bağlı sürüş biter
+    if (!$g || empty($r['ride'])) return; $x = json_decode((string)$r['ride'], true); $g = rg_group($g['id']);
+    if ($g && $g['ride_id'] && $x && ($x['id'] ?? '') === $g['ride_id']) rg_end_ride($g, null, $why === 'expired' ? 'oda süresi doldu' : 'oda kapandı');
+}
+function rm_ride_left(array $g, array $r, string $uid): void {            // kişi odadan çıktı: sürüş paylaşımı ve canlı izleme kapanır
+    if (empty($r['ride'])) return; $x = json_decode((string)$r['ride'], true); $g = rg_group($g['id']);
+    if (!$g || !$g['ride_id'] || !$x || ($x['id'] ?? '') !== $g['ride_id']) return;
+    rg_stop_share($g['id'], $uid, 'odadan ayrıldı');
+    foreach (all('SELECT sid FROM ml_rts WHERE uid = ?', [$uid]) as $s) rt_leave($s['sid'], 'rg:' . $g['id']);
 }
