@@ -311,9 +311,11 @@ require('./accountdel')({ app, io, users, userFromCookie, uname, checkPassword, 
 // Hava durumu: sunucu vekili + önbellek + yedek sağlayıcı
 require('./weather')({ app, userFromCookie });
 require('./assist')({ app, userFromCookie });
-require('./livekit')({ app, userFromCookie, uname, rg: rgApi });
+const room = require('./grouproom')({ app, io, userFromCookie, uname, nameOf: uid => { const x = users.get(uid); return x ? uname(x) : 'silinmis'; }, rg: rgApi, ttl: Number(process.env.ROOM_TTL_MS) > 0 ? Number(process.env.ROOM_TTL_MS) : undefined });
+require('./livekit')({ app, userFromCookie, uname, rg: rgApi, gate: room.isIn });
 // İnterkom yedeği: LiveKit yokken üyeler arası WebRTC (yalnız sinyalleşme)
-require('./meshvoice')({ app, io, userFromCookie, uname, rg: rgApi });
+rgApi.setRoomHooks(room.hooks);
+room.attach(require('./meshvoice')({ app, io, userFromCookie, uname, rg: rgApi, gate: room.isInRoom, resolve: room.resolve }));
 
 // Harita servisleri: istemci yapılandırması, hedef arama, rota
 require('./maps')({ app, userFromCookie });

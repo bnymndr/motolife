@@ -6,7 +6,9 @@ const path = require('path');
 const out = path.resolve(process.argv[2] || 'dist-php');
 const copy = (from, to) => { if (fs.statSync(from).isDirectory()) { for (const f of fs.readdirSync(from)) copy(path.join(from, f), path.join(to, f)); return; } fs.mkdirSync(path.dirname(to), { recursive: true }); fs.copyFileSync(from, to); };
 fs.rmSync(out, { recursive: true, force: true });
-for (const f of fs.readdirSync('public')) copy(path.join('public', f), path.join(out, f));
+// Arayüzde (index.html) yüklenmeyen, yalnız testte kullanılan çekirdekler canlı pakete girmez (kaynakta durur)
+const SKIP = new Set(['missed-core.js', 'power-core.js', 'route-probe.js', 'tts-core.js', 'livekit-adapter.js']);
+for (const f of fs.readdirSync('public')) if (!SKIP.has(f)) copy(path.join('public', f), path.join(out, f));
 const idx = path.join(out, 'index.html');
 let html = fs.readFileSync(idx, 'utf8');
 const tag = '<script src="/socket.io/socket.io.js"></script>';

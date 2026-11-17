@@ -92,5 +92,33 @@ let app = null, routes = {}; app = { get(p2, fn) { routes[p2] = fn; } };
   let er = null; try { await te.connect(); } catch (e) { er = e.message; } ok(/Mikrofon izni/.test(er || ''), 'istemci: mikrofon izni yoksa anlaşılır hata');
   const sg = io2.connect({ id: 'ux' }); const tg = createMeshTransport({ sock: sg, gid: GID, RTC, fetch: async () => { throw new Error('ağ'); }, getMedia: mb.get, makeAudio: mkAudio, meter: meterF, tick: () => 0, untick: () => {} });
   er = null; try { await tg.connect(); } catch (e) { er = e.message; } ok(/üyesi değilsin/.test(er || ''), 'istemci: üye olmayan «Bu grubun üyesi değilsin» hatası alır (ICE alınamasa da STUN ile denedi)');
+  // ---- oda kapısı (grouproom): odaya girmeyen sese giremez; lider atınca düşer
+  { const io3 = fakeIO(); let allow = false; const m3 = mountMesh({ app: { get() {} }, io: io3, userFromCookie: c => (c ? { id: c } : null), uname: u => 'N' + u.id, rg: { groupOf: g => (g === GID ? grp : null) }, gate: (gid, uid) => allow && gid === GID, env: {}, timers: false });
+    const c1 = io3.connect({ id: 'u1' }), c2 = io3.connect({ id: 'u2' }); let k = 0; c2.on('gv:kicked', () => k++);
+    let rr = await call(c1, 'gv:join', { gid: GID }); ok(rr.code === 'noroom', 'oda kapısı: odaya şifreyle girmeyen grup üyesi sese giremez');
+    allow = true; rr = await call(c1, 'gv:join', { gid: GID }); await call(c2, 'gv:join', { gid: GID }); ok(rr.ok && m3._rooms.get(GID).size === 2, 'oda kapısı: odadaki üye sese girer');
+    m3.kickUid(GID, 'u2', 'kicked'); await wait(20); ok(k === 1 && m3._rooms.get(GID).size === 1, 'kickUid: atılan kişiye gv:kicked gider ve sesten düşer');
+    m3.kickUid(GID, 'u1', 'left'); ok(!m3._rooms.has(GID), 'kickUid: son kişi çıkınca oda silinir'); }
+  // ---- oda kimliği (rid) ses anahtarı: resolve + gate
+  { const io4 = fakeIO(); const RID = 'abcdef012345'; const inRoom = new Set(['u1', 'u2']); let alive = true;
+    const m4 = mountMesh({ app: { get() {} }, io: io4, userFromCookie: c => (c ? { id: c } : null), uname: u => 'N' + u.id, rg: { groupOf: g => (g === GID ? grp : null) }, gate: (rid, uid) => rid === RID && inRoom.has(uid), resolve: rid => (alive && rid === RID ? GID : null), env: {}, timers: false });
+    const c1 = io4.connect({ id: 'u1' }), c2 = io4.connect({ id: 'u2' }), c3 = io4.connect({ id: 'u3' });
+    let rr = await call(c1, 'gv:join', { room: 'yok' }); ok(rr.code === 'forbidden', 'oda anahtarı: olmayan oda reddedilir');
+    rr = await call(c3, 'gv:join', { room: RID }); ok(rr.code === 'noroom', 'oda anahtarı: grup üyesi ama odada değilse sese giremez');
+    rr = await call(c1, 'gv:join', { room: RID }); await call(c2, 'gv:join', { room: RID }); ok(rr.ok && m4._rooms.get(RID).size === 2, 'oda anahtarı: iki oda üyesi aynı sesli odaya girer (anahtar = oda kimliği)');
+    rr = await call(c1, 'gv:join', { gid: GID }); ok(rr.error, 'oda anahtarı: eski grup kimliğiyle girilemez');
+    let kk4 = 0; c2.on('gv:kicked', () => kk4++); alive = false; m4.sweepMembers(); await wait(20); ok(kk4 === 1 && !m4._rooms.has(RID), 'oda kapanınca/süresi dolunca sesteki herkes düşer'); }
+  // ---- iOS/Safari: ses otomatik başlamazsa (NotAllowedError) kullanıcıya haber verilir, dokununca başlar
+  { const io5 = fakeIO(); mountMesh({ app: { get() {} }, io: io5, userFromCookie: () => null, uname: u => u.id, rg: { groupOf: () => grp }, env: {}, timers: false });
+    class R5 { constructor() { this.tr = []; this.connectionState = 'new'; } addTrack() {} async createOffer() { return { type: 'offer', sdp: 'O' }; } async createAnswer() { return { type: 'answer', sdp: 'A' }; } async setLocalDescription(d) { this.localDescription = d; } async setRemoteDescription() {} async addIceCandidate() {} close() {} }
+    const pcs = []; const RT = function () { const x = new R5(); pcs.push(x); return x; };
+    let allow = false, plays = 0, blockedN = 0; const au = { muted: false, volume: 1, srcObject: null, play() { plays++; return allow ? Promise.resolve() : Promise.reject(Object.assign(new Error('The request is not allowed by the user agent or the platform in the current context, possibly because the user denied permission.'), { name: 'NotAllowedError' })); }, pause() {} };
+    const s1 = io5.connect({ id: 'u1' }), s2 = io5.connect({ id: 'u2' }); const mm = mkMedia(), m2 = mkMedia();
+    const t1 = createMeshTransport({ sock: s1, gid: GID, RTC: RT, fetch: fetchOk, getMedia: mm.get, makeAudio: () => au, meter: () => null, tick: () => 0, untick: () => {}, onBlocked: () => blockedN++ });
+    const t2 = createMeshTransport({ sock: s2, gid: GID, RTC: RT, fetch: fetchOk, getMedia: m2.get, makeAudio: () => ({ muted: false, volume: 1, play() { return Promise.resolve(); }, pause() {} }), meter: () => null, tick: () => 0, untick: () => {} });
+    await t1.connect(); await t2.connect(); await wait(30);
+    const pc = pcs.find(x => x.ontrack); pc.ontrack({ streams: [{ id: 'ms5' }] }); await wait(20);
+    ok(blockedN === 1 && t1.blocked === true, 'iOS: ses otomatik başlamazsa onBlocked çağrılır (ham hata kullanıcıya gitmez)');
+    allow = true; t1.resumeAudio(); await wait(20); ok(plays === 2 && t1.blocked === false, 'iOS: dokununca resumeAudio sesi başlatır'); }
   console.log(`SONUÇ: ${p} geçti, ${f} başarısız`); process.exit(f ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

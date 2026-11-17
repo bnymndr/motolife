@@ -233,16 +233,20 @@ const T0 = Date.now() - 3600e3;
   r = await A.req('DELETE', '/api/rgroups/' + gid + '/events/' + evId); ok(r.s === 200 && r.j.events.length === 0, 'etkinlik silinir');
   // ---------- İnterkom yedeği: WebRTC mesh sinyalleşmesi (gv:*) ----------
   { A.clear(); B.clear(); await A.rt(); await B.rt(); await D.rt();
-    let g1 = await D.emit('gv:join', { gid }); ok(g1 && g1.code === 'forbidden', 'gv: üye olmayan sesli odaya giremez');
-    g1 = await A.emit('gv:join', { gid }); ok(g1 && g1.ok && g1.peers.length === 0 && g1.max >= 2, 'gv: ilk üye girer');
-    A.clear(); B.clear(); const g2 = await B.emit('gv:join', { gid }); ok(g2 && g2.ok && g2.peers.length === 1 && g2.peers[0].id === A.sid, 'gv: ikinci üye mevcut eşi görür');
+    let g1 = await D.emit('gv:join', { room: 'ffffffffffff' }); ok(g1 && g1.code === 'forbidden', 'gv: olmayan odaya girilemez');
+    r = await A.post('/api/rgroups/' + gid + '/rooms', { name: 'Ekip', password: 'sifre1' }); ok(r.s === 200 && r.j.room.lead && /^[0-9a-f]{12}$/.test(r.j.room.rid), 'oda: üye kurar, lider olur'); var rid = r.j.room.rid;
+    g1 = await D.emit('gv:join', { room: rid }); ok(g1 && g1.code === 'forbidden', 'gv: grup üyesi olmayan sesli odaya giremez');
+    g1 = await B.emit('gv:join', { room: rid }); ok(g1 && g1.code === 'noroom', 'gv: odaya girmeyen grup üyesi sese giremez (şifre kapısı)');
+    r = await B.post('/api/rgroups/' + gid + '/rooms/' + rid + '/join', { password: 'sifre1' }); ok(r.s === 200 && r.j.room.in, 'oda: doğru şifreyle girer');
+    g1 = await A.emit('gv:join', { room: rid }); ok(g1 && g1.ok && g1.peers.length === 0 && g1.max >= 2, 'gv: ilk üye girer');
+    A.clear(); B.clear(); const g2 = await B.emit('gv:join', { room: rid }); ok(g2 && g2.ok && g2.peers.length === 1 && g2.peers[0].id === A.sid, 'gv: ikinci üye mevcut eşi görür');
     await A.rt(); ok(A.evs('gv:peer-joined').some(e => e.data.id === B.sid), 'gv: mevcut üye yeni gelenden haberdar edilir');
     A.clear(); B.clear(); const sg = await B.emit('gv:signal', { to: A.sid, data: { t: 'offer', sdp: { type: 'offer', sdp: 'x' } } }); await A.rt();
     ok(sg && sg.ok && A.evs('gv:signal').length === 1 && A.evs('gv:signal')[0].data.from === B.sid && A.evs('gv:signal')[0].data.data.t === 'offer', 'gv: sinyal hedefe aktarılır');
     ok((await B.emit('gv:signal', { to: 'ffffffffffffffff', data: { t: 'x' } })).code === 'nopeer', 'gv: odada olmayan hedefe sinyal gitmez');
     ok((await D.emit('gv:signal', { to: A.sid, data: { t: 'x' } })).code === 'notin', 'gv: odada olmayan sinyal gönderemez');
     ok((await B.emit('gv:signal', { to: A.sid, data: { t: 'x', pad: 'a'.repeat(20000) } })).code === 'bad', 'gv: aşırı büyük sinyal reddedilir');
-    A.clear(); const B3 = new C('burak'); B3.ck = B.ck; await B3.rt(); const g3 = await B3.emit('gv:join', { gid }); await B.rt(); ok(g3 && g3.ok && B.evs('gv:taken').length === 1, 'gv: aynı kullanıcı ikinci sekmeden girerse eskisi düşer');
+    A.clear(); const B3 = new C('burak'); B3.ck = B.ck; await B3.rt(); const g3 = await B3.emit('gv:join', { room: rid }); await B.rt(); ok(g3 && g3.ok && B.evs('gv:taken').length === 1, 'gv: aynı kullanıcı ikinci sekmeden girerse eskisi düşer');
     A.clear(); await B3.emit('gv:leave', {}); await A.rt(); ok(A.evs('gv:peer-left').some(e => e.data.id === B3.sid), 'gv: ayrılan eş odadakilere bildirilir');
     r = await A.get('/api/gvoice/ice'); ok(r.s === 200 && r.j.iceServers.length >= 1 && /^stun:/.test(r.j.iceServers[0].urls) && r.j.turn === false, 'gv: ICE (STUN) oturumlu üyeye verilir');
     r = await new C().get('/api/gvoice/ice'); ok(r.s === 401, 'gv: ICE oturumsuz verilmez');
@@ -253,6 +257,37 @@ const T0 = Date.now() - 3600e3;
   r = await A.post('/api/livekit/token', { gid: 'zz' }); ok(r.s === 404, 'livekit: geçersiz grup 404');
   r = await A.post('/api/livekit/token', { gid }); { const tk = r.j && r.j.token, pp = (tk || '').split('.'); const pl = pp.length === 3 ? JSON.parse(Buffer.from(pp[1], 'base64url')) : {};
     ok(r.s === 200 && r.j.url === 'wss://lk.example' && r.j.room === 'ml-' + gid && pl.iss === 'APIkey1' && pl.video.room === 'ml-' + gid && pl.video.roomJoin === true && pl.exp - pl.nbf > 3000 && pp[2] === crypto.createHmac('sha256', 'secret-lk-test').update(pp[0] + '.' + pp[1]).digest('base64url') && !JSON.stringify(r.j).includes('secret-lk-test'), 'livekit: üyeye imzalı belirteç (oda=grup, HS256 doğrulanır, sır sızmaz)'); }
+  // ---------- Grup interkom odası ----------
+  { const R = '/api/rgroups/' + gid + '/rooms/' + rid;
+    r = await A.get(R); const uA = r.j.room.parts.find(x => x.you).uid, uB = r.j.room.parts.find(x => !x.you).uid;
+    ok(!/pw|hash|sifre1/.test(JSON.stringify(r.j)), 'oda: şifre/özet yanıtta yok');
+    r = await D.get(R); ok(r.s === 404, 'oda: üye olmayan göremez');
+    r = await B.post('/api/rgroups/' + gid + '/rooms', { name: 'ekip', password: 'abcd' }); ok(r.s === 409, 'oda: aynı adda ikinci oda kurulamaz');
+    r = await B.post('/api/rgroups/' + gid + '/rooms', { name: 'Başka Oda', password: 'abcd' }); ok(r.s === 200 && r.j.room.lead && r.j.room.rid !== rid, 'oda: başka üye kendi odasını kurar (çoklu oda)'); const rid2 = r.j.room.rid;
+    r = await A.get('/api/rgroups/' + gid + '/rooms'); ok(r.s === 200 && r.j.rooms.length === 2 && r.j.mine === rid && r.j.rooms.every(x => x.exp > Date.now() + 23 * 3600000) && !/pw|hash|sifre1/.test(JSON.stringify(r.j)), 'oda: liste (2 oda, 24 saat, şifre yok)');
+    r = await B.post('/api/rgroups/' + gid + '/rooms/' + rid + '/join', { password: 'sifre1' }); ok(r.s === 200, 'oda: B ilk odaya geçer (diğerinden düşer)');
+    r = await B.get('/api/rgroups/' + gid + '/rooms/' + rid2); ok(r.j.room.in === false && r.j.room.count === 0, 'oda: ayrılınca boş oda silinmez, 24 saat sürer');
+    r = await B.post('/api/rgroups/' + gid + '/rooms/' + rid2 + '/join', { password: 'abcd' }); ok(r.s === 200 && r.j.room.lead, 'oda: boş odaya ilk giren lider olur');
+    r = await B.post('/api/rgroups/' + gid + '/rooms/' + rid + '/join', { password: 'sifre1' }); ok(r.s === 200, 'oda: B geri döner');
+    r = await B.post(R + '/kick', { uid: uA }); ok(r.s === 403, 'oda: lider olmayan atamaz');
+    r = await A.post(R + '/user', { uid: uB, vol: 30, muted: true }); ok(r.s === 200 && r.j.room.parts.find(x => x.uid === uB).vol === 30 && r.j.room.parts.find(x => x.uid === uB).muted === true, 'oda: lider kişi sesini kısar + susturur');
+    r = await A.post(R + '/user', { uid: uB, vol: 900 }); ok(r.j.room.parts.find(x => x.uid === uB).vol === 100, 'oda: ses 0-100 sıkıştırılır');
+    r = await A.post(R + '/source', { type: 'radio', url: 'http://r/x', title: 'R' }); ok(r.s === 400, 'oda: http radyo reddedilir');
+    r = await A.post(R + '/source', { type: 'yt', id: 'dQw4w9WgXcQ', title: 'V' }); ok(r.s === 200 && r.j.room.src.id === 'dQw4w9WgXcQ', 'oda: YouTube paylaşımı');
+    r = await B.get(R + '?hb=1'); ok(r.j.room.src && r.j.room.src.type === 'yt', 'oda: üye paylaşılan yayını görür');
+    r = await A.req('DELETE', R + '/source'); ok(r.j.room.src === null, 'oda: yayın durdurulur');
+    r = await A.post(R + '/invite', { uid: uB }); ok(r.s === 400, 'oda: odadaki davet edilemez');
+    r = await A.post(R + '/kick', { uid: uB }); ok(r.s === 200, 'oda: lider atar');
+    r = await B.post(R + '/join', { password: 'sifre1' }); ok(r.s === 403, 'oda: atılan şifreyle de giremez');
+    r = await A.post(R + '/invite', { uid: uB }); ok(r.s === 200, 'oda: yeniden davet');
+    r = await B.get(R); ok(r.j.room.invited === true && r.j.room.name === 'Ekip', 'oda: davetli adı görür');
+    r = await B.post(R + '/join', { password: 'yanlis' }); ok(r.s === 403, 'oda: yanlış şifre');
+    r = await B.post(R + '/join', { password: 'sifre1' }); ok(r.s === 200, 'oda: davetli doğru şifreyle girer');
+    r = await A.post(R + '/leave'); ok(r.s === 200, 'oda: lider ayrılır');
+    r = await B.get(R); ok(r.j.room.in && r.j.room.lead && r.j.room.parts.length === 1, 'oda: liderlik en eski üyeye geçer');
+    r = await B.post(R + '/close'); ok(r.s === 200, 'oda: lider kapatır');
+    r = await A.get(R); ok(r.s === 404, 'oda: kapandı');
+    await B.post('/api/rgroups/' + gid + '/rooms/' + rid2 + '/join', { password: 'abcd' }); r = await B.post('/api/rgroups/' + gid + '/rooms/' + rid2 + '/close'); ok(r.s === 200, 'oda: ikinci oda kapatılır'); }
   // ---------- Sürüş kaydı (grup) ----------
   r = await B.post('/api/rgroups/' + gid + '/end'); ok(r.s === 403, 'sürüşü yalnız lider bitirir');
   B.clear(); r = await A.post('/api/rgroups/' + gid + '/end'); ok(r.s === 200 && r.j.group.ride === null, 'sürüş biter');
@@ -260,6 +295,35 @@ const T0 = Date.now() - 3600e3;
   r = await B.get('/api/rgroups/' + gid + '/rides/' + rideId); const lines = r.text.toString().trim().split('\n').map(JSON.parse);
   ok(r.s === 200 && /ndjson/.test(r.headers.get('content-type')) && lines[0].k === 'h' && lines[0].route.length === 3 && lines.some(l => l[0] === 'f' && l[2] === 'ayse') && lines.some(l => l[0] === 'e' && l[2] === 'end'), 'NDJSON kaydı: başlık + konumlar + olaylar');
   ok(lines.some(l => l[0] === 'e' && l[2] === 'share-on') && lines.some(l => l[0] === 'e' && l[2] === 'share-off'), 'NDJSON: paylaşım olayları');
+  // ---------- Odaya bağlı grup sürüşü + 24 saat dolumu ----------
+  { const RB = '/api/rgroups/' + gid + '/rooms'; r = await A.post(RB, { name: 'Sürüş', password: 'sifre2' }); const sr = r.j.room.rid; const RR = RB + '/' + sr; await B.post(RR + '/join', { password: 'sifre2' });
+    r = await B.post(RR + '/ride/start'); ok(r.s === 403, 'sürüş: yalnız oda lideri başlatır');
+    r = await B.post(RR + '/ride/number', { n: 5 }); ok(r.s === 409, 'sürüş: sürüş yokken numara yazılamaz');
+    r = await A.post(RR + '/ride/start'); ok(r.s === 200 && r.j.room.ride && r.j.room.ride.mine === null, 'sürüş: lider başlatır; numara sorusu bekler');
+    r = await B.get(RR); ok(r.j.room.ride && r.j.room.ride.mine === null, 'sürüş: üye de görür');
+    r = await A.post(RR + '/ride/start'); ok(r.s === 409, 'sürüş: zaten sürüyor');
+    r = await B.post(RR + '/ride/number', { n: 'x' }); ok(r.s === 400, 'sürüş: sayı olmayan numara reddedilir');
+    r = await B.post(RR + '/ride/number', { n: 100 }); ok(r.s === 400, 'sürüş: 100 reddedilir');
+    r = await B.post(RR + '/ride/number', { n: 7 }); ok(r.s === 200 && r.j.n === 7 && r.j.room.ride.mine === 7, 'sürüş: üye numarasını yazar');
+    r = await A.post(RR + '/ride/number', { n: 7 }); ok(r.s === 409, 'sürüş: aynı numara iki kişide olamaz');
+    r = await A.post(RR + '/ride/number', { n: '' }); ok(r.s === 200 && r.j.n === 1, 'sürüş: boş bırakılırsa ilk boş numara');
+    r = await D.post(RR + '/ride/number', { n: 3 }); ok(r.s === 404, 'sürüş: grup dışı yazamaz');
+    r = await A.get('/api/rgroups/' + gid); ok(r.j.group.ride && r.j.group.ride.id, 'sürüş: grup sürüşü başladı');
+    // canlı konum yalnız oda katılımcılarına ve numara yazanlara
+    A.clear(); B.clear(); let sh = await B.emit('grp:share', { gid, on: true, consent: true }); ok(sh && sh.ok && sh.sharing, 'sürüş: numarası olan odadaki üye konum paylaşır');
+    await B.emit('grp:update', { gid, lat: 41.01, lon: 29.0, acc: 5, spd: 10 }); A.clear(); await A.emit('grp:watch', { gid }); await A.rt(); const stt = A.evs('grp:state').pop();
+    ok(stt && stt.data.members.some(m => m.u === 'burak' && m.n === 7), 'sürüş: canlı durumda satırlar sürüş numarasını taşır');
+    r = await A.post(RR + '/ride/end'); ok(r.s === 200 && r.j.room.ride === null, 'sürüş: lider bitirir');
+    await A.post(RR + '/ride/start'); r = await B.post(RR + '/close'); ok(r.s === 403, 'sürüş: lider olmayan odayı kapatamaz');
+    r = await A.post(RR + '/close'); ok(r.s === 200, 'sürüş: lider odayı kapatır');
+    r = await A.get('/api/rgroups/' + gid); ok(!r.j.group.ride, 'sürüş: oda kapanınca bağlı sürüş biter');
+    // 24 saat dolumu: bitiş zamanı geçmiş oda listede görünmez ve sürüşü biter
+    r = await A.post(RB, { name: 'Eskiyen', password: 'sifre3' }); const xr = r.j.room.rid; await A.post(RB + '/' + xr + '/ride/start');
+    sq("UPDATE ml_rm SET exp = " + (Date.now() - 1000) + " WHERE rid = '" + xr + "'");
+    r = await A.get(RB); ok(r.s === 200 && !r.j.rooms.some(x => x.rid === xr), '24 saat dolumu: süresi dolan oda listeden silinir');
+    r = await A.get(RB + '/' + xr); ok(r.s === 404, '24 saat dolumu: odaya erişilemez');
+    r = await A.get('/api/rgroups/' + gid); ok(!r.j.group.ride, '24 saat dolumu: bağlı sürüş de biter');
+    ok(JSON.parse(sq("SELECT COUNT(*) AS n FROM ml_rmp WHERE rid = '" + xr + "'"))[0].n == 0, '24 saat dolumu: katılımcı kayıtları temizlenir'); }
   r = await D.get('/api/rgroups/' + gid + '/rides/' + rideId); ok(r.s === 404, 'kayıt üye olmayana kapalı');
   A.clear(); r = await A.post('/api/rgroups/' + gid + '/leader', { username: 'burak' }); ok(r.s === 200 && r.j.group.role === 'member' && r.j.group.leader === 'burak', 'liderlik devredilir');
   r = await A.post('/api/rgroups/' + gid + '/kick', { username: 'burak' }); ok(r.s === 403, 'yeni lider olmayan çıkaramaz'); r = await B.post('/api/rgroups/' + gid + '/code'); ok(r.s === 200 && r.j.code !== code, 'davet kodu yenilenir'); r = await D.post('/api/rgroups/join', { code }); ok(r.s === 404, 'eski kod geçersiz olur');

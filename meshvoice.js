@@ -4,11 +4,12 @@
 // Yayın: gv:peer-joined, gv:peer-left, gv:signal, gv:taken, gv:kicked. Oda üst sınırı GV_MAX (varsayılan 6, en çok 8).
 // ICE: Google STUN + isteğe bağlı TURN (GV_TURN_URLS virgülle, GV_TURN_USER, GV_TURN_CREDENTIAL); yalnız giriş yapmış üyeye /api/gvoice/ice ile verilir.
 const SIG_MAX = 16384, RATE_N = 300, RATE_MS = 10000, MEMBER_SWEEP_MS = 30000;
-module.exports = function mountMeshVoice({ app, io, userFromCookie, uname, rg, now = () => Date.now(), env = process.env, timers = true }) {
+module.exports = function mountMeshVoice({ app, io, userFromCookie, uname, rg, gate, resolve, now = () => Date.now(), env = process.env, timers = true }) {
   const max = Math.min(8, Math.max(2, parseInt(env.GV_MAX, 10) || 6));
   const rooms = new Map();   // gid → Map(sid → {uid,name})
   const sio = gid => 'gv:' + gid;
-  const grp = gid => (rg && rg.groupOf ? rg.groupOf(String(gid)) : null);
+  const gidOf = key => (resolve ? resolve(String(key)) : String(key));          // ses anahtarı (oda kimliği) → grup
+  const grp = key => { const gid = gidOf(key); return gid && rg && rg.groupOf ? rg.groupOf(String(gid)) : null; };
   const isMember = (g, uid) => !!g && g.members.some(m => m.uid === uid);
   const err = (cb, error, code) => typeof cb === 'function' && cb({ error, code });
 
@@ -32,8 +33,9 @@ module.exports = function mountMeshVoice({ app, io, userFromCookie, uname, rg, n
     const hits = []; const limited = () => { const t = now(); while (hits.length && t - hits[0] > RATE_MS) hits.shift(); if (hits.length >= RATE_N) return true; hits.push(t); return false; };
     socket.on('gv:join', (p, cb) => {
       if (limited()) return err(cb, 'Çok sık istek.', 'rate');
-      const gid = String((p && p.gid) || ''), g = grp(gid);
-      if (!g || !isMember(g, u.id)) return err(cb, 'Bu grubun üyesi değilsin.', 'forbidden');
+      const gid = String((p && (p.room || p.gid)) || ''), g = grp(gid);
+      if (!g || !isMember(g, u.id)) return err(cb, resolve ? 'Bu oda yok ya da süresi doldu.' : 'Bu grubun üyesi değilsin.', 'forbidden');
+      if (gate && !gate(gid, u.id)) return err(cb, 'Önce interkom odasına şifreyle gir.', 'noroom');
       if (socket.data.gvGid && socket.data.gvGid !== gid) removePeer(socket, 'switch');
       let r = rooms.get(gid); if (!r) rooms.set(gid, r = new Map());
       for (const [sid, pr] of [...r]) if (pr.uid === u.id && sid !== socket.id) {          // aynı kullanıcı başka sekme/cihazda: eskisi düşer
@@ -62,5 +64,10 @@ module.exports = function mountMeshVoice({ app, io, userFromCookie, uname, rg, n
       if (!r.size) rooms.delete(gid); }
   }
   let t = null; if (timers) { t = setInterval(sweepMembers, MEMBER_SWEEP_MS); t.unref && t.unref(); }
-  return { _rooms: rooms, sweepMembers, max, stop() { clearInterval(t); } };
+  function kickUid(gid, uid, why) {          // oda liderinin attığı / odadan çıkan kişiyi sesten düşür
+    const r = rooms.get(String(gid)); if (!r) return;
+    for (const [sid, p] of [...r]) if (p.uid === uid) { const s = io.sockets && io.sockets.sockets && io.sockets.sockets.get(sid); if (s) { if (why === 'kicked' || why === 'closed' || why === 'gone') s.emit('gv:kicked', {}); removePeer(s, why || 'left'); } else { r.delete(sid); io.to(sio(gid)).emit('gv:peer-left', { id: sid, why: why || 'left' }); } }
+    if (!r.size) rooms.delete(String(gid));
+  }
+  return { kickUid, _rooms: rooms, sweepMembers, max, stop() { clearInterval(t); } };
 };

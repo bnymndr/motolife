@@ -10,7 +10,7 @@ function makeToken({ apiKey, apiSecret, identity, name, room, ttlS = 3600, now =
   const body = b64u(JSON.stringify({ iss: apiKey, sub: identity, name, nbf: t - 5, exp: t + ttlS, video: { room, roomJoin: true, canPublish: true, canSubscribe: true, canPublishData: false } }));
   return head + '.' + body + '.' + crypto.createHmac('sha256', apiSecret).update(head + '.' + body).digest('base64url');
 }
-module.exports = function mountLiveKit({ app, userFromCookie, uname, rg, env = process.env, now = () => Date.now() }) {
+module.exports = function mountLiveKit({ app, userFromCookie, uname, rg, gate, env = process.env, now = () => Date.now() }) {
   const hits = new Map(), cfg = () => ({ url: env.LIVEKIT_URL || '', apiKey: env.LIVEKIT_API_KEY || '', apiSecret: env.LIVEKIT_API_SECRET || '' });
   app.post('/api/livekit/token', (req, res) => {
     const u = userFromCookie(req.headers.cookie); if (!u) return res.status(401).json({ error: 'Oturum gerekli.' });
@@ -18,6 +18,7 @@ module.exports = function mountLiveKit({ app, userFromCookie, uname, rg, env = p
     const c = cfg(); if (!c.url || !c.apiKey || !c.apiSecret) return res.status(503).json({ error: 'İnterkom yapılandırılmadı.' });
     const gid = String((req.body && req.body.gid) || ''), g = /^[0-9a-f]{16}$/.test(gid) ? rg.groupOf(gid) : null;
     if (!g || !g.members.some(m => m.uid === u.id)) return res.status(404).json({ error: 'Grup bulunamadı.' });
+    if (gate && !gate(gid, u.id)) return res.status(403).json({ error: 'Önce interkom odasına şifreyle gir.' });
     const room = 'ml-' + gid, identity = String(u.id);
     res.set('Cache-Control', 'no-store');
     res.json({ url: c.url, room, identity, token: makeToken({ apiKey: c.apiKey, apiSecret: c.apiSecret, identity, name: uname(u), room, now }) });

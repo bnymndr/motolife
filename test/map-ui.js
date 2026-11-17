@@ -52,7 +52,7 @@ const FAKE = () => {
     map(el) { const m = { removeLayer(l) { l.gone = true; window.__removed = (window.__removed || 0) + 1; }, _z: 5, _c: [39, 35], setView(c, z) { m._c = c; if (z) m._z = z; C.push(['setView', c, z]); return m; }, panTo(c) { m._c = c; C.push(['panTo', c]); }, fitBounds(b, o) { C.push(['fit', b, o]); }, getZoom: () => m._z, getSize: () => ({ x: 390, y: 844 }),
       latLngToContainerPoint: ll => ({ x: 195 + (ll[1] - m._c[1]) * 1e5, y: 422 - (ll[0] - m._c[0]) * 1e5 }), _h: {}, on(e, fn) { (m._h[e] = m._h[e] || []).push(fn); }, invalidateSize() {}, zoomIn() {}, zoomOut() {} }; window.__map = m; window.__fire = e => (m._h[e] || []).forEach(fn => fn({})); return m; },
     tileLayer(u) { const t = { _url: u, options: {}, _h: {}, addTo() { return this; }, setUrl(x) { this._url = x; }, on(e, fn) { (t._h[e] = t._h[e] || []).push(fn); } }; window.__tiles = t; return t; }, divIcon: o => o,
-    marker(ll, o) { const e = document.createElement('div'); e.innerHTML = o.icon && o.icon.html || ''; document.body.appendChild(e); const k = { ll, el: e, addTo() { return this; }, setLatLng(x) { k.ll = x; C.push(['marker', x]); }, getElement: () => k.el, remove() { e.remove(); }, bindTooltip() {} }; window.__me = window.__me || k; return k; },
+    marker(ll, o) { const e = document.createElement('div'); e.innerHTML = o.icon && o.icon.html || ''; document.body.appendChild(e); const k = { ll, el: e, addTo() { return this; }, setLatLng(x) { k.ll = x; C.push(['marker', x]); }, getElement: () => k.el, remove() { e.remove(); }, bindTooltip() {}, setIcon(o) { k.el.innerHTML = o && o.html || ''; } }; window.__me = window.__me || k; return k; },
     circle(ll, o) { const k = { ll, r: o.radius, addTo() { return this; }, setLatLng(x) { k.ll = x; }, setRadius(r) { k.r = r; }, remove() { k.gone = true; } }; window.__circle = k; return k; },
     polyline(pts) { return { addTo() { return this; }, remove() {}, addLatLng() {} }; }, layerGroup() { return layer(); }
   };
@@ -281,6 +281,29 @@ srv.listen(0, async () => {
     await fixM(41.05, 29.05); await fixM(41.08, 29.08);
     ok(/Mola: Kumköy/.test(await ep2.textContent('#mm-navto')), 'eklenen yeni mola sırada yer alır');
     global.__dynRoute = false; await ep2.context().close();
+  }
+
+  { // GRUP SÜRÜŞÜ: oda sürüşü haritada numaralı canlı işaretler (soket SAHTE)
+    const gp = await open();
+    await gp.evaluate(() => {
+      const H = {}, em = []; window.__gsock = { em, H, on(e, f) { (H[e] = H[e] || []).push(f); }, off(e, f) { H[e] = (H[e] || []).filter(x => x !== f); }, emit(e, d, cb) { em.push([e, d]); if (typeof cb === 'function') setTimeout(() => cb({ ok: true }), 1); } };
+      window.__gfire = (e, d) => (H[e] || []).slice().forEach(f => f(d));
+      window.__mm.groupRide({ gid: 'g1', n: 3, sock: window.__gsock });
+    });
+    await gp.waitForTimeout(100);
+    ok(await gp.evaluate(() => window.__mm.groupRideOn()) && await gp.evaluate(() => window.__gsock.em.some(x => x[0] === 'grp:watch') && window.__gsock.em.some(x => x[0] === 'grp:share' && x[1].on && x[1].consent)), 'grup sürüşü: izleme + konum paylaşımı başlar');
+    ok(await gp.evaluate(() => window.__mm.groupRide({ gid: 'g1', n: 0, sock: window.__gsock }) === undefined), 'numarasız grup sürüşü başlatılmaz');
+    await gp.evaluate(() => window.__gfire('grp:state', { gid: 'g1', members: [{ u: 'ben', n: 3, lat: 41, lon: 29 }, { u: 'veli', n: 7, lat: 41.001, lon: 29.001, spd: 62 }, { u: 'kaan', n: 12, lat: 41.002, lon: 29.002 }] }));
+    const mk = await gp.$$eval('.mm-rn', es => es.map(e => e.textContent)); ok(mk.includes('7') && mk.includes('12') && !mk.includes('3'), 'diğer sürücüler numaralı işaretle görünür (kendi işaretim tekrarlanmaz)');
+    ok(/Grup · No 3 · 3 sürücü/.test(await gp.textContent('#mm-grp')), 'grup etiketi: numara + sürücü sayısı');
+    await gp.evaluate(() => window.__gfire('grp:state', { gid: 'g1', members: [{ u: 'kaan', n: 12, lat: 41.003, lon: 29.003 }] }));
+    ok(!(await gp.$$eval('.mm-rn', es => es.map(e => e.textContent))).includes('7'), 'gruptan ayrılan sürücünün işareti kalkar');
+    await gp.evaluate(() => { window.__gsock.em.length = 0; }); await gp.evaluate(() => window.__fix(41, 29, 5, 10)); await gp.waitForTimeout(150);
+    await gp.evaluate(() => window.__fix(41.00001, 29, 5, 10)); await gp.waitForTimeout(150);
+    const ups = await gp.evaluate(() => window.__gsock.em.filter(x => x[0] === 'grp:update').length); ok(ups <= 1, 'konum gönderimi kısılır (≥4 sn): ' + ups);
+    await gp.evaluate(() => window.__gfire('grp:changed', { gid: 'g1', kind: 'ride-end' })); await gp.waitForTimeout(150);
+    ok(!(await gp.evaluate(() => window.__mm.groupRideOn())) && await gp.evaluate(() => window.__gsock.em.some(x => x[0] === 'grp:share' && x[1].on === false)), 'lider sürüşü bitirince paylaşım durur ve grup modu kapanır');
+    await gp.context().close();
   }
   await b.close(); srv.close(); console.log(`SONUÇ: ${p} geçti, ${f} başarısız`); process.exit(f ? 1 : 0);
 });

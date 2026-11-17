@@ -109,6 +109,7 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
 
   // ---------- Sürüş kaydı (NDJSON, ek yazım) ----------
   const recs = new Map();                                      // gid → { id, file, buf, bytes, full, members: Map }
+  let roomHooks = null;                                          // grouproom.js: { alive(rid), isIn(rid, uid) } — odaya bağlı sürüşte yalnız oda katılımcıları izler/paylaşır
   const liveG = new Map();                                     // gid → { m: Map(uid→giriş), key, alerts: Map, }
   const recDir = g => path.join(REC, g.id);
   function openRec(g, header) {
@@ -181,17 +182,17 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
     const L = liveG.get(g.id), now = Date.now(), rows = [];
     const le = L && L.m.get(g.leader), lf = !!(le && le.lat != null && now - le.at <= STALE_MS);
     if (L) for (const [uid, e] of L.m) {
-      const u = nameOf(uid), lead = uid === g.leader;
-      if (e.lat == null) { rows.push({ u, lead, wait: true }); continue; }   // paylaşım açık ama henüz konum gelmedi
+      const u = nameOf(uid), lead = uid === g.leader, n = (g.ride && g.ride.nums && g.ride.nums[uid]) || undefined;
+      if (e.lat == null) { rows.push({ u, n, lead, wait: true }); continue; }   // paylaşım açık ama henüz konum gelmedi
       const age = now - e.at;
-      if (age > LOST_MS) { rows.push({ u, lead, lost: true, age: Math.round(age / 1000) }); continue; }   // eski konum canlı gösterilmez
+      if (age > LOST_MS) { rows.push({ u, n, lead, lost: true, age: Math.round(age / 1000) }); continue; }   // eski konum canlı gösterilmez
       const kmh = e.spd != null ? e.spd * 3.6 : e.est != null ? e.est * 3.6 : null;
-      rows.push({ u, lead, lat: r5(e.lat), lon: r5(e.lon), spd: kmh == null ? null : Math.round(kmh), est: e.spd == null && e.est != null,
+      rows.push({ u, n, lead, lat: r5(e.lat), lon: r5(e.lon), spd: kmh == null ? null : Math.round(kmh), est: e.spd == null && e.est != null,
         age: Math.round(age / 1000), f: age <= STALE_MS && e.fl ? e.fl : undefined,   // bayat konumla uyarı gösterilmez
         dl: lf && !lead ? Math.round(hav(e.lat, e.lon, le.lat, le.lon)) : undefined });
     }
     rows.sort((a, b) => (b.lead ? 1 : 0) - (a.lead ? 1 : 0) || a.u.localeCompare(b.u));
-    return { rows, ref: lf, key: lf + '|' + rows.map(r => [r.u, r.lat, r.lon, r.spd, r.f || '', r.lost ? 1 : 0, r.lead ? 1 : 0, r.wait ? 1 : 0].join(',')).join(';') };
+    return { rows, ref: lf, key: lf + '|' + rows.map(r => [r.u, r.n || '', r.lat, r.lon, r.spd, r.f || '', r.lost ? 1 : 0, r.lead ? 1 : 0, r.wait ? 1 : 0].join(',')).join(';') };
   }
   const payload = (g, s) => ({ gid: g.id, rv: g.route ? g.route.v : 0, ref: s.ref, gap: g.gap, ride: !!g.ride, members: s.rows, t: Date.now() });
   function emitState(g, force) {
@@ -235,6 +236,7 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
     for (const g of Object.values(db.groups)) {
       if (!g.ride) continue;
       const L = liveG.get(g.id); if (!L) continue;
+      if (g.ride.room && roomHooks && !roomHooks.alive(g.ride.room)) { endRide(g, null, 'oda kapandı'); continue; }       // odası silinmiş/süresi dolmuş (ör. sunucu yeniden başladı)
       evalFlags(g, now);
       emitState(g, false);
       if (L.m.size) g.ride.idleSince = now;
@@ -243,14 +245,15 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
   }, TICK_MS).unref();
 
   // ---------- Sürüş başlat / bitir, üyelik ----------
-  function startRide(g, u) {
+  function startRide(g, u, extra) {
     const id = rid(), t = Date.now();
-    g.ride = { id, startedAt: t, by: u.id, idleSince: t };
+    g.ride = { id, startedAt: t, by: u.id, idleSince: t, room: (extra && extra.room) || null, nums: {} };       // room: sürüş bir interkom odasına bağlıysa oda kimliği; nums: kişi → sürüş numarası
     liveG.set(g.id, { m: new Map(), key: '', alerts: new Map() });
     const rc = routeOf(g);
     openRec(g, { v: 1, k: 'h', rideId: id, groupId: g.id, groupName: g.name, startedAt: t, leader: nameOf(g.leader), gap: g.gap,
       members: g.members.map(m => nameOf(m.uid)), route: rc ? rc.pts : null });
     rec(g, ['e', t, 'start', uname(u), null]);
+    if (g.ride.room && roomHooks) for (const m of g.members) if (!roomHooks.isIn(g.ride.room, m.uid)) io.in('u:' + m.uid).socketsLeave('rg:' + g.id);   // oda dışındakiler canlı konumu izleyemez
     save(); notify(g, 'ride-start');
   }
   function endRide(g, by, why) {
@@ -270,6 +273,21 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
     (g.rides = g.rides || []).unshift({ id: R.id, startedAt: R.startedAt, endedAt: t });
     g.rides.length = Math.min(g.rides.length, 50);
     save(); notify(g, 'ride-end');
+  }
+  const inRide = (g, uid) => !g.ride || !g.ride.room || !roomHooks || roomHooks.isIn(g.ride.room, uid);
+  function setNumber(g, uid, raw) {                                           // 1-99, her sürüşte benzersiz; boş bırakılırsa ilk boş numara
+    if (!g.ride) return { error: 'Aktif grup sürüşü yok.' };
+    const nums = g.ride.nums = g.ride.nums || {}, taken = new Set(Object.entries(nums).filter(([k]) => k !== uid).map(([, v]) => v));
+    let n;
+    if (raw == null || String(raw).trim() === '') { n = 1; while (taken.has(n)) n++; }
+    else { if (!/^\d{1,2}$/.test(String(raw).trim())) return { error: 'Numara 1 ile 99 arasında olmalı.' }; n = Number(String(raw).trim()); if (n < 1 || n > 99) return { error: 'Numara 1 ile 99 arasında olmalı.' }; if (taken.has(n)) return { error: 'Bu numara başkasında; başka bir numara yaz.', code: 'taken' }; }
+    if (n > 99) return { error: 'Boş numara kalmadı.' };
+    nums[uid] = n; rec(g, ['e', Date.now(), 'number', nameOf(uid), n]); save(); emitState(g, true); notify(g, 'ride-number');
+    return { n };
+  }
+  function roomLeft(g, uid) {                                                 // kişi odadan çıktı: sürüş paylaşımı ve canlı izleme kapanır
+    if (!g || !g.ride || !g.ride.room) return;
+    stopShare(g, uid, 'odadan ayrıldı'); io.in('u:' + uid).socketsLeave('rg:' + g.id);
   }
   function destroyGroup(g, kind) {
     if (g.ride) endRide(g, null, 'grup silindi');
@@ -562,6 +580,7 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
       cb = ok(cb);
       const g = memberOf(p && p.gid); if (!g) return cb({ error: 'Grup bulunamadı.' });
       if (tooFast('watch', 800)) return cb({ error: 'Çok sık deneme.' });
+      if (!inRide(g, u.id)) return cb({ error: 'Bu sürüş bir interkom odasına bağlı; önce odaya gir.' });
       socket.join('rg:' + g.id);
       socket.emit('grp:state', payload(g, computeState(g)));
       cb({ ok: true, ride: !!g.ride });
@@ -577,6 +596,8 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
       if (p.consent !== true) return cb({ error: 'Paylaşım için açık onay gerekli.' });
       const L = liveG.get(g.id);
       if (!g.ride || !L) return cb({ error: 'Aktif grup sürüşü yok.' });
+      if (!inRide(g, u.id)) return cb({ error: 'Bu sürüş bir interkom odasına bağlı; önce odaya gir.' });
+      if (g.ride.room && !(g.ride.nums && g.ride.nums[u.id])) return cb({ error: 'Önce sürüş numaranı yaz.', code: 'nonum' });
       const old = L.m.get(u.id);
       if (old && old.sid !== socket.id) { const o = io.sockets.sockets.get(old.sid); if (o) { o.emit('grp:taken', { gid: g.id }); if (o.data.gshare) o.data.gshare.delete(g.id); } }
       if (!old) rec(g, ['e', Date.now(), 'share-on', uname(u), null]);
@@ -591,7 +612,7 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
 
     socket.on('grp:update', (p = {}) => {
       const g = memberOf(p && p.gid), L = g && liveG.get(g.id), e = L && L.m.get(u.id);
-      if (!g || !g.ride || !e || e.sid !== socket.id) return;
+      if (!g || !g.ride || !e || e.sid !== socket.id || !inRide(g, u.id)) return;
       const lat = num(p.lat), lon = num(p.lon), acc = p.acc == null ? 0 : num(p.acc);
       if (lat == null || lon == null || Math.abs(lat) > 90 || Math.abs(lon) > 180 || acc == null || acc > MAX_ACC) return;
       const now = Date.now();
@@ -614,5 +635,5 @@ module.exports = function mountRideGroups({ app, express, io, users, userFromCoo
 
   // Hesap silinirken: kullanıcı tüm gruplardan çıkar (lider ise devir, son üye ise grup kapanır)
   function removeUser(uid) { for (const g of Object.values(db.groups)) if (isMember(g, uid)) removeMember(g, uid, 'leave'); }
-  return { removeUser, groupOf: gid => db.groups[String(gid)] || null, _db: db, _liveG: liveG, _recs: recs, _routeOf: routeOf, _tick: () => { const now = Date.now(); for (const g of Object.values(db.groups)) if (g.ride) { evalFlags(g, now); emitState(g, false); } }, _flush: () => { flushAllRecs(); flush(); } };
+  return { removeUser, groupOf: gid => db.groups[String(gid)] || null, startRideFor: startRide, endRide, setNumber, roomLeft, setRoomHooks: h => { roomHooks = h; }, _db: db, _liveG: liveG, _recs: recs, _routeOf: routeOf, _tick: () => { const now = Date.now(); for (const g of Object.values(db.groups)) if (g.ride) { evalFlags(g, now); emitState(g, false); } }, _flush: () => { flushAllRecs(); flush(); } };
 };
